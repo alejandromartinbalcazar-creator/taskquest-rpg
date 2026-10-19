@@ -660,30 +660,54 @@ export class TerrainManager {
       if (checkCircleCollision(p.x, p.y, p.radius, obs.x, obs.y, obs.radius)) {
         obs.hp -= p.damage;
 
-        // RUPTURA DE ESTACAS DE PERMAFROST:
-        // Si golpea una estaca de permafrost con Fuego o Tierra -> ¡EXPLOSIÓN DE METRALLA RADIAL!
+        // RUPTURA / SUBLIMACIÓN DE ESTACAS DE PERMAFROST:
         if (obs.obstacleType === 'permafrost_spike') {
-          const isFire = p.spellType === 'fire_shot' || p.spellType === 'fire_inferno' || p.spellType === 'thermal_shock';
+          const isFire = p.spellType === 'fire_shot' || p.spellType === 'fire_inferno' || p.spellType === 'thermal_shock' || p.spellType === 'magma_eruption';
           const isEarth = p.spellType === 'earth_toss' || p.spellType === 'earth_megalith';
 
-          if (isFire || isEarth) {
+          if (isFire) {
+            obs.hp = 0;
+            elementalSound.playThermalShock();
+            this.spawnSteamBlast(obs.x, obs.y, 75);
+
+            // Daño radial por golpe térmico a enemigos alrededor
+            enemies.forEach((enemy) => {
+              const dist = Math.hypot(enemy.x - obs.x, enemy.y - obs.y);
+              if (dist <= 75) {
+                enemy.hp -= 42;
+                enemy.hitFlash = 10;
+              }
+            });
+
+            floatingTexts.push({
+              id: `sublime-${Date.now()}`,
+              x: obs.x,
+              y: obs.y - 18,
+              text: '♨️ ¡SUBLIMACIÓN EXPLOSIVA!',
+              color: '#f43f5e',
+              fontSize: 13,
+              opacity: 1,
+              vy: -1.5,
+              life: 35,
+            });
+          } else if (isEarth) {
             obs.hp = 0;
             elementalSound.playPermafrostShatter();
 
-            // Libera 6 esquirlas de hielo y piedra en 360 grados
+            // Libera 6 esquirlas perforantes de hielo y piedra en 360 grados
             for (let s = 0; s < 6; s++) {
               const ang = (Math.PI * 2 / 6) * s;
               projectiles.push({
                 id: `shrapnel-${Date.now()}-${s}`,
                 x: obs.x,
                 y: obs.y,
-                vx: Math.cos(ang) * 6.5,
-                vy: Math.sin(ang) * 6.5,
+                vx: Math.cos(ang) * 7.0,
+                vy: Math.sin(ang) * 7.0,
                 radius: 6,
                 color: '#38bdf8',
                 secondaryColor: '#65a30d',
-                damage: 32,
-                knockback: 4.5,
+                damage: 35,
+                knockback: 4.8,
                 life: 30,
                 maxLife: 30,
                 pierce: 1,
@@ -700,6 +724,56 @@ export class TerrainManager {
               y: obs.y - 18,
               text: '💥 ¡FRACTURA DE PERMAFROST!',
               color: '#38bdf8',
+              fontSize: 13,
+              opacity: 1,
+              vy: -1.4,
+              life: 35,
+            });
+          }
+        }
+
+        // DETONACIÓN DE CRISTALES ENERGIZADOS POR FUEGO O TIERRA:
+        if (obs.obstacleType === 'energized_crystal') {
+          const isFire = p.spellType === 'fire_shot' || p.spellType === 'fire_inferno' || p.spellType === 'magma_eruption';
+          const isEarth = p.spellType === 'earth_toss' || p.spellType === 'earth_megalith';
+
+          if (isFire || isEarth) {
+            obs.hp = 0;
+            elementalSound.playLightningBolt();
+            elementalSound.playAoEExplosion();
+
+            // Descarga eléctrica radial que electrocuta enemigos cercanos
+            enemies.forEach((enemy) => {
+              const dist = Math.hypot(enemy.x - obs.x, enemy.y - obs.y);
+              if (dist <= 85) {
+                enemy.hp -= 46;
+                enemy.hitFlash = 12;
+                enemy.stunnedTimer = 35;
+              }
+            });
+
+            // Chispas de alta energía
+            for (let s = 0; s < 16; s++) {
+              const spkAng = Math.random() * Math.PI * 2;
+              particles.push({
+                id: `crspk-${Date.now()}-${s}`,
+                x: obs.x,
+                y: obs.y,
+                vx: Math.cos(spkAng) * (3 + Math.random() * 4),
+                vy: Math.sin(spkAng) * (3 + Math.random() * 4),
+                radius: 2,
+                color: Math.random() > 0.4 ? '#facc15' : '#e0f2fe',
+                alpha: 1,
+                life: 18,
+              });
+            }
+
+            floatingTexts.push({
+              id: `cry-overload-${Date.now()}`,
+              x: obs.x,
+              y: obs.y - 20,
+              text: '⚡ ¡SOBRECARGA DE CRISTAL!',
+              color: '#facc15',
               fontSize: 13,
               opacity: 1,
               vy: -1.4,

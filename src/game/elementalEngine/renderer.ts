@@ -26,6 +26,11 @@ export class IsometricRenderer {
       animFrame: number;
       hitFlash: number;
       staffOrbColor: string;
+      isDashing?: boolean;
+      dashTimer?: number;
+      dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
+      isCharging?: boolean;
+      chargeRatio?: number;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -388,10 +393,68 @@ export class IsometricRenderer {
       animFrame: number;
       hitFlash: number;
       staffOrbColor: string;
+      isDashing?: boolean;
+      dashTimer?: number;
+      dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
+      isCharging?: boolean;
+      chargeRatio?: number;
     }
   ) {
+    // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
+    if (wizard.dashTrail && wizard.dashTrail.length > 0) {
+      wizard.dashTrail.forEach((trail) => {
+        ctx.save();
+        ctx.translate(trail.x, trail.y);
+        ctx.globalAlpha = Math.max(0, trail.alpha * 0.45);
+        drawWizardSprite({
+          ctx,
+          x: 0,
+          y: 0,
+          scale: 1.15,
+          facingAngle: trail.facingAngle,
+          isMoving: true,
+        });
+        ctx.restore();
+      });
+    }
+
     ctx.save();
     ctx.translate(wizard.x, wizard.y);
+
+    // 2. Aura y Runa de Carga Mágica a los pies del mago
+    if (wizard.isCharging) {
+      const ratio = wizard.chargeRatio || 0;
+      const isReady = ratio >= 1.0;
+      ctx.save();
+      const auraColor = isReady ? '#facc15' : wizard.staffOrbColor || '#38bdf8';
+      ctx.strokeStyle = auraColor;
+      ctx.lineWidth = isReady ? 3.5 : 2;
+      ctx.shadowColor = auraColor;
+      ctx.shadowBlur = isReady ? 18 : 8;
+
+      // Anillo rúnico en el suelo
+      ctx.beginPath();
+      ctx.ellipse(0, 8, 22 + ratio * 10, 11 + ratio * 5, Date.now() * 0.003, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Círculo secundario interior
+      ctx.beginPath();
+      ctx.ellipse(0, 8, 12 + ratio * 6, 6 + ratio * 3, -Date.now() * 0.004, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Destellos mágicos que convergen hacia el báculo
+      const numSparks = isReady ? 6 : 4;
+      for (let i = 0; i < numSparks; i++) {
+        const ang = Date.now() * 0.006 + (i * Math.PI * 2) / numSparks;
+        const progress = ((Date.now() * 0.004 + i * 0.25) % 1);
+        const r = (1 - progress) * 28;
+        ctx.fillStyle = isReady ? '#ffffff' : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * r, -10 + Math.sin(ang) * r * 0.4, 2 + (isReady ? 1.5 : 0), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     if (wizard.hitFlash > 0) {
       ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
@@ -603,7 +666,7 @@ export class IsometricRenderer {
       ctx.translate(p.x, p.y);
 
       const angle = Math.atan2(p.vy, p.vx);
-      ctx.rotate(angle);
+      ctx.rotate(p.rotation !== undefined ? p.rotation : angle);
 
       // A. FUEGO: Cometa de llamas incandescentes de gran escala con flamas vivas
       if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
@@ -841,10 +904,18 @@ export class IsometricRenderer {
     particles.forEach((pt) => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, pt.alpha);
-      ctx.fillStyle = pt.color;
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
-      ctx.fill();
+      if (pt.type === 'ring') {
+        ctx.strokeStyle = pt.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     });
   }

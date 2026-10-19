@@ -156,6 +156,132 @@ function generateLightningBolt(
   };
 }
 
+// Detonador de explosión radial en área (AoE) con interacción física elemental
+function triggerAoEExplosion(
+  p: Projectile,
+  enemies: GameEnemy[],
+  enemyManager: EnemyManager,
+  terrainManager: TerrainManager,
+  particles: Particle[],
+  floatingTexts: FloatingText[],
+  onShake: (amt: number) => void
+) {
+  if (!p.areaOfEffect) return;
+  const aoeRadius = p.areaOfEffect;
+  onShake(Math.max(6, Math.min(14, aoeRadius / 7)));
+  elementalSound.playAoEExplosion();
+
+  // 1. Anillo de onda de choque expansivo
+  particles.push({
+    id: `ring-${Date.now()}-${Math.random()}`,
+    x: p.x,
+    y: p.y,
+    vx: 0,
+    vy: 0,
+    radius: 12,
+    color: p.color,
+    alpha: 1,
+    life: 14,
+    maxLife: 14,
+    type: 'ring',
+  });
+
+  // 2. Chispas radiales
+  const sparkColor = p.spellType === 'explosive_overload' ? '#c084fc' : p.color;
+  for (let s = 0; s < 14; s++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 2.5 + Math.random() * 4.0;
+    particles.push({
+      id: `aoespk-${Date.now()}-${s}`,
+      x: p.x,
+      y: p.y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd,
+      radius: 2 + Math.random() * 2,
+      color: sparkColor,
+      alpha: 1,
+      life: 16,
+    });
+  }
+
+  // 3. Daño y estados a enemigos en radio
+  enemies.forEach((enemy) => {
+    const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+    if (dist <= aoeRadius + enemy.radius) {
+      let dmg = p.damage;
+
+      // Reacción Choque Térmico (Fuego a enemigos congelados)
+      const isFrozen = enemyManager.hasStatus(enemy, 'frozen');
+      if (
+        isFrozen &&
+        (p.spellType === 'thermal_shock' || p.spellType === 'fire_shot' || p.spellType === 'fire_inferno')
+      ) {
+        dmg *= 2.5;
+        enemyManager.removeStatus(enemy, 'frozen');
+        floatingTexts.push({
+          id: `shatter-${Date.now()}-${enemy.id}`,
+          x: enemy.x,
+          y: enemy.y - 25,
+          text: '💥 ¡CHOQUE TÉRMICO! x2.5',
+          color: '#f43f5e',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.6,
+          life: 40,
+        });
+      }
+
+      enemy.hp -= dmg;
+      enemy.hitFlash = 8;
+
+      if (dist > 0) {
+        const pushAng = Math.atan2(enemy.y - p.y, enemy.x - p.x);
+        enemy.x += Math.cos(pushAng) * (p.knockback || 3.5);
+        enemy.y += Math.sin(pushAng) * (p.knockback || 3.5);
+      }
+
+      if (p.statusToApply) {
+        enemyManager.applyStatus(enemy, p.statusToApply, 140);
+      }
+      if (p.spellType === 'explosive_overload') {
+        enemy.stunnedTimer = 45;
+      }
+
+      floatingTexts.push({
+        id: `aoedmg-${Date.now()}-${enemy.id}`,
+        x: enemy.x,
+        y: enemy.y - 12,
+        text: `-${Math.round(dmg)}`,
+        color: p.color,
+        fontSize: 12,
+        opacity: 1,
+        vy: -1.2,
+        life: 28,
+      });
+    }
+  });
+
+  // 4. Terreno y obstáculos
+  if (p.onHitSpawn === 'magma_fissure') {
+    terrainManager.spawnMagmaFissure(p.x, p.y, aoeRadius);
+  } else if (p.onHitSpawn === 'steam_blast') {
+    terrainManager.spawnSteamBlast(p.x, p.y, aoeRadius);
+  }
+
+  // Si es fuego y hay hielo derretible en el radio de la explosión, lo derrite
+  if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno' || p.spellType === 'thermal_shock') {
+    terrainManager.obstacles.forEach((obs) => {
+      if (obs.meltable && obs.obstacleType === 'ice_wall') {
+        const d = Math.hypot(obs.x - p.x, obs.y - p.y);
+        if (d <= aoeRadius + obs.radius) {
+          obs.hp = 0;
+          terrainManager.spawnWaterPuddle(obs.x, obs.y, 45);
+        }
+      }
+    });
+  }
+}
+
 export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   player,
   floor,
@@ -183,6 +309,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [relicModalOpen, setRelicModalOpen] = useState(false);
   const [equippedRelics, setEquippedRelics] = useState<RelicReward[]>([]);
 
+  // Estados visuales de Esquiva y Carga
+  const [dashCooldownRatio, setDashCooldownRatio] = useState(0);
+  const [isChargingUi, setIsChargingUi] = useState(false);
+  const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
+  const lastCdRatioRef = useRef(0);
+
   // Hechizo activo identificado
   const activeRecipe = identifyRecipe(elementQueue);
 
@@ -197,6 +329,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       animFrame: 0,
       hitFlash: 0,
       staffOrbColor: '#94a3b8',
+      isDashing: false,
+      dashTimer: 0,
+      dashCooldown: 0,
+      dashCooldownMax: 90,
+      dashVx: 0,
+      dashVy: 0,
+      dashTrail: [] as Array<{ x: number; y: number; facingAngle: number; alpha: number }>,
+      isCharging: false,
+      chargeStartTime: 0,
+      chargeRatio: 0,
+      chargeSoundPlayed: false,
     },
     camera: { x: 550, y: 560 },
     joystick: {
@@ -342,439 +485,626 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     });
   };
 
-  // Lanzamiento de Hechizo
-  const handleAttack = useCallback(() => {
+  // Esquiva Rápida (Dash / Glide)
+  const handleDash = useCallback(() => {
     if (isDefeated || isVictorious) return;
-    const now = Date.now();
     const g = gameStateRef.current;
-
-    if (now - g.lastAttackTime < activeRecipe.cooldownMs) return;
-    g.lastAttackTime = now;
-
     const wizard = g.wizard;
-    const recipe = activeRecipe;
+    if (wizard.dashCooldown > 0 || wizard.isDashing) return;
 
-    // Reproducir sonido característico de cada hechizo
-    if (recipe.id === 'basic_spark') elementalSound.playBasicSpark();
-    else if (recipe.id === 'fire_shot' || recipe.id === 'fire_inferno') elementalSound.playFireShot();
-    else if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') elementalSound.playLightningBolt();
-    else if (recipe.id === 'ice_shard' || recipe.id === 'ice_lance') elementalSound.playIceShard();
-    else if (recipe.id === 'earth_toss' || recipe.id === 'earth_megalith') elementalSound.playEarthToss();
-    else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
-    else if (recipe.id === 'magma_eruption') elementalSound.playMagmaEruption();
-    else if (recipe.id === 'crystal_field') elementalSound.playCrystalField();
-    else if (recipe.id === 'cryo_storm') elementalSound.playCryoStorm();
-    else if (recipe.id === 'permafrost_prison') elementalSound.playPermafrostPrison();
-    else if (recipe.id === 'explosive_overload' || recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
-    else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
-    else elementalSound.playFireShot();
+    elementalSound.playDash();
+    wizard.isDashing = true;
+    wizard.dashTimer = 11;
+    wizard.dashCooldown = wizard.dashCooldownMax;
 
-    // Auto-apuntar al enemigo más cercano o disparar hacia la dirección del mago
-    let aimAngle = wizard.facingAngle;
-    let closestDist = 420;
-    let targetX = wizard.x + Math.cos(aimAngle) * 110;
-    let targetY = wizard.y + Math.sin(aimAngle) * 110;
-
-    for (const enemy of g.enemyManager.enemies) {
-      const dx = enemy.x - wizard.x;
-      const dy = enemy.y - wizard.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < closestDist) {
-        closestDist = dist;
-        aimAngle = Math.atan2(dy, dx);
-        targetX = enemy.x;
-        targetY = enemy.y;
-      }
+    // Si se está moviendo con el joystick, dashea en esa dirección; si no, hacia facingAngle
+    let dashAngle = wizard.facingAngle;
+    if (g.joystick.active && (g.joystick.vx !== 0 || g.joystick.vy !== 0)) {
+      dashAngle = Math.atan2(g.joystick.vy, g.joystick.vx);
+      wizard.facingAngle = dashAngle;
     }
+    const dashSpeed = 13.5;
+    wizard.dashVx = Math.cos(dashAngle) * dashSpeed;
+    wizard.dashVy = Math.sin(dashAngle) * dashSpeed;
 
-    wizard.facingAngle = aimAngle;
-    wizard.staffOrbColor = recipe.color;
+    // Chispas de velocidad en el punto inicial
+    for (let s = 0; s < 8; s++) {
+      const ang = dashAngle + Math.PI + (Math.random() - 0.5) * 0.9;
+      g.particles.push({
+        id: `dash-${Date.now()}-${s}`,
+        x: wizard.x,
+        y: wizard.y,
+        vx: Math.cos(ang) * (3 + Math.random() * 3),
+        vy: Math.sin(ang) * (3 + Math.random() * 3),
+        radius: 2,
+        color: '#67e8f9',
+        alpha: 1,
+        life: 14,
+      });
+    }
+  }, [isDefeated, isVictorious]);
 
-    // COMPORTAMIENTOS ESPECÍFICOS Y FÍSICOS DE LAS HABILIDADES:
-
-    // 0. RAYO PURO / TORMENTA DE RAYOS (DESCARGA ELÉCTRICA INSTANTÁNEA, RAMIFICADA Y EN CADENA)
-    if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') {
-      const isStorm = recipe.id === 'lightning_storm';
-      g.screenShake = isStorm ? 9 : 5;
-      elementalSound.playLightningBolt();
-
-      const startX = wizard.x + Math.cos(aimAngle) * 22;
-      const startY = wizard.y + Math.sin(aimAngle) * 22;
-
-      // Si no hay enemigo en rango, la descarga viaja a máxima distancia en la dirección apuntada
-      let hitTargetX = targetX;
-      let hitTargetY = targetY;
-      if (closestDist >= 420) {
-        hitTargetX = wizard.x + Math.cos(aimAngle) * 400;
-        hitTargetY = wizard.y + Math.sin(aimAngle) * 400;
+  // Soporte de Teclado (Espacio o Shift para Esquivar)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        e.preventDefault();
+        handleDash();
       }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleDash]);
 
-      const bolt = generateLightningBolt(
-        startX,
-        startY,
-        hitTargetX,
-        hitTargetY,
-        recipe.color || '#facc15',
-        recipe.secondaryColor || '#ffffff'
-      );
+  // Lanzamiento de Hechizo (con soporte para variante Cargada)
+  const handleAttack = useCallback(
+    (isCharged: boolean = false) => {
+      if (isDefeated || isVictorious) return;
+      const now = Date.now();
+      const g = gameStateRef.current;
 
-      // Buscar si algún enemigo fue alcanzado directamente por el rayo
-      let struckEnemy: GameEnemy | null = null;
-      let minEnemyDist = Infinity;
+      if (now - g.lastAttackTime < activeRecipe.cooldownMs) return;
+      g.lastAttackTime = now;
+
+      const wizard = g.wizard;
+      const recipe = activeRecipe;
+
+      // Reproducir sonido característico de cada hechizo
+      if (recipe.id === 'basic_spark') elementalSound.playBasicSpark();
+      else if (recipe.id === 'fire_shot' || recipe.id === 'fire_inferno') elementalSound.playFireShot();
+      else if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') elementalSound.playLightningBolt();
+      else if (recipe.id === 'ice_shard' || recipe.id === 'ice_lance') elementalSound.playIceShard();
+      else if (recipe.id === 'earth_toss' || recipe.id === 'earth_megalith') elementalSound.playEarthToss();
+      else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
+      else if (recipe.id === 'magma_eruption') elementalSound.playMagmaEruption();
+      else if (recipe.id === 'crystal_field') elementalSound.playCrystalField();
+      else if (recipe.id === 'cryo_storm') elementalSound.playCryoStorm();
+      else if (recipe.id === 'permafrost_prison') elementalSound.playPermafrostPrison();
+      else if (recipe.id === 'explosive_overload' || recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
+      else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
+      else elementalSound.playFireShot();
+
+      // Auto-apuntar al enemigo más cercano o disparar hacia la dirección del mago
+      let aimAngle = wizard.facingAngle;
+      let closestDist = 420;
+      let targetX = wizard.x + Math.cos(aimAngle) * 110;
+      let targetY = wizard.y + Math.sin(aimAngle) * 110;
+
       for (const enemy of g.enemyManager.enemies) {
-        const dist = Math.hypot(enemy.x - hitTargetX, enemy.y - hitTargetY);
-        if (dist <= enemy.radius + 32 && dist < minEnemyDist) {
-          minEnemyDist = dist;
-          struckEnemy = enemy;
+        const dx = enemy.x - wizard.x;
+        const dy = enemy.y - wizard.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < closestDist) {
+          closestDist = dist;
+          aimAngle = Math.atan2(dy, dx);
+          targetX = enemy.x;
+          targetY = enemy.y;
         }
       }
 
+      wizard.facingAngle = aimAngle;
+      wizard.staffOrbColor = recipe.color;
+
+      const chargeMultiplier = isCharged ? 1.65 : 1.0;
       const statBonus = Math.floor(player.stats.attack * 0.45 + player.stats.knowledge * 0.45);
-      const baseDmg = (recipe.damage + statBonus) * (isStorm ? 1.35 : 1.0);
 
-      if (struckEnemy) {
-        struckEnemy.hp -= baseDmg;
-        struckEnemy.hitFlash = 12;
-        struckEnemy.stunnedTimer = isStorm ? 45 : 30; // Interrupción inmediata de sus ataques
-        g.enemyManager.applyStatus(struckEnemy, 'shocked', 150);
-
-        // Retroceso físico instantáneo
-        const knock = (recipe.knockback || 1.5) * 3.5;
-        struckEnemy.x += Math.cos(aimAngle) * knock;
-        struckEnemy.y += Math.sin(aimAngle) * knock;
-
+      if (isCharged) {
+        g.screenShake = Math.max(g.screenShake, 8);
         g.floatingTexts.push({
-          id: `lightning-hit-${now}`,
-          x: struckEnemy.x,
-          y: struckEnemy.y - 18,
-          text: `⚡ -${Math.round(baseDmg)} [ELECTROCUTADO]`,
-          color: '#facc15',
+          id: `charged-${now}`,
+          x: wizard.x,
+          y: wizard.y - 28,
+          text: '⚡ ¡HECHIZO CARGADO! x1.65',
+          color: '#fef08a',
           fontSize: 13,
           opacity: 1,
-          vy: -1.4,
+          vy: -1.5,
           life: 35,
         });
+      }
 
-        // Chispas de alta energía en el punto de impacto
-        for (let s = 0; s < 14; s++) {
-          const sparkAng = Math.random() * Math.PI * 2;
-          const spd = 2 + Math.random() * 4.5;
-          g.particles.push({
-            id: `spark-${now}-${s}`,
-            x: struckEnemy.x,
-            y: struckEnemy.y,
-            vx: Math.cos(sparkAng) * spd,
-            vy: Math.sin(sparkAng) * spd,
-            radius: 1.5 + Math.random() * 2,
-            color: Math.random() > 0.4 ? '#facc15' : '#e0f2fe',
-            alpha: 1,
-            life: 18,
-          });
+      // COMPORTAMIENTOS ESPECÍFICOS Y FÍSICOS DE LAS HABILIDADES:
+
+      // 0. RAYO (DESCARGA ELÉCTRICA INSTANTÁNEA, RAMIFICADA Y EN CADENA)
+      if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') {
+        const isStorm = recipe.id === 'lightning_storm';
+        g.screenShake = (isStorm ? 9 : 5) * (isCharged ? 1.5 : 1.0);
+        elementalSound.playLightningBolt();
+
+        const startX = wizard.x + Math.cos(aimAngle) * 22;
+        const startY = wizard.y + Math.sin(aimAngle) * 22;
+
+        let hitTargetX = targetX;
+        let hitTargetY = targetY;
+        if (closestDist >= 420) {
+          hitTargetX = wizard.x + Math.cos(aimAngle) * 400;
+          hitTargetY = wizard.y + Math.sin(aimAngle) * 400;
         }
 
-        // CADENA DE RAYOS (Chain Lightning a enemigos cercanos)
-        const maxChains = isStorm ? 4 : 2;
-        let chainsCount = 0;
-        for (const other of g.enemyManager.enemies) {
-          if (other.id === struckEnemy.id) continue;
-          const chainDist = Math.hypot(other.x - struckEnemy.x, other.y - struckEnemy.y);
-          if (chainDist < 210 && chainsCount < maxChains) {
-            chainsCount++;
-            bolt.chainLines.push({
-              x1: struckEnemy.x,
-              y1: struckEnemy.y,
-              x2: other.x,
-              y2: other.y,
+        const bolt = generateLightningBolt(
+          startX,
+          startY,
+          hitTargetX,
+          hitTargetY,
+          recipe.color || '#facc15',
+          recipe.secondaryColor || '#ffffff'
+        );
+
+        let struckEnemy: GameEnemy | null = null;
+        let minEnemyDist = Infinity;
+        for (const enemy of g.enemyManager.enemies) {
+          const dist = Math.hypot(enemy.x - hitTargetX, enemy.y - hitTargetY);
+          if (dist <= enemy.radius + 32 && dist < minEnemyDist) {
+            minEnemyDist = dist;
+            struckEnemy = enemy;
+          }
+        }
+
+        const baseDmg = (recipe.damage + statBonus) * (isStorm ? 1.35 : 1.0) * chargeMultiplier;
+
+        if (struckEnemy) {
+          struckEnemy.hp -= baseDmg;
+          struckEnemy.hitFlash = 12;
+          struckEnemy.stunnedTimer = isCharged ? 50 : isStorm ? 45 : 30;
+          g.enemyManager.applyStatus(struckEnemy, 'shocked', 150);
+
+          const knock = (recipe.knockback || 1.5) * (isCharged ? 5.0 : 3.5);
+          struckEnemy.x += Math.cos(aimAngle) * knock;
+          struckEnemy.y += Math.sin(aimAngle) * knock;
+
+          g.floatingTexts.push({
+            id: `lightning-hit-${now}`,
+            x: struckEnemy.x,
+            y: struckEnemy.y - 18,
+            text: `⚡ -${Math.round(baseDmg)} [ELECTROCUTADO]`,
+            color: '#facc15',
+            fontSize: 13,
+            opacity: 1,
+            vy: -1.4,
+            life: 35,
+          });
+
+          for (let s = 0; s < 14; s++) {
+            const sparkAng = Math.random() * Math.PI * 2;
+            const spd = 2 + Math.random() * 4.5;
+            g.particles.push({
+              id: `spark-${now}-${s}`,
+              x: struckEnemy.x,
+              y: struckEnemy.y,
+              vx: Math.cos(sparkAng) * spd,
+              vy: Math.sin(sparkAng) * spd,
+              radius: 1.5 + Math.random() * 2,
+              color: Math.random() > 0.4 ? '#facc15' : '#e0f2fe',
+              alpha: 1,
+              life: 18,
             });
+          }
 
-            const chainDmg = Math.round(baseDmg * 0.65);
-            other.hp -= chainDmg;
-            other.hitFlash = 10;
-            other.stunnedTimer = 25;
-            g.enemyManager.applyStatus(other, 'shocked', 130);
+          const maxChains = isCharged ? 5 : isStorm ? 4 : 2;
+          let chainsCount = 0;
+          for (const other of g.enemyManager.enemies) {
+            if (other.id === struckEnemy.id) continue;
+            const chainDist = Math.hypot(other.x - struckEnemy.x, other.y - struckEnemy.y);
+            if (chainDist < 230 && chainsCount < maxChains) {
+              chainsCount++;
+              bolt.chainLines.push({
+                x1: struckEnemy.x,
+                y1: struckEnemy.y,
+                x2: other.x,
+                y2: other.y,
+              });
 
-            // Empuje leve por la descarga en cadena
-            const chainAngle = Math.atan2(other.y - struckEnemy.y, other.x - struckEnemy.x);
-            other.x += Math.cos(chainAngle) * 3;
-            other.y += Math.sin(chainAngle) * 3;
+              const chainDmg = Math.round(baseDmg * 0.65);
+              other.hp -= chainDmg;
+              other.hitFlash = 10;
+              other.stunnedTimer = isCharged ? 35 : 25;
+              g.enemyManager.applyStatus(other, 'shocked', 130);
 
-            g.floatingTexts.push({
-              id: `chain-hit-${now}-${chainsCount}`,
-              x: other.x,
-              y: other.y - 14,
-              text: `⚡ -${chainDmg}`,
-              color: '#38bdf8',
-              fontSize: 12,
-              opacity: 1,
-              vy: -1.2,
-              life: 30,
-            });
+              const chainAngle = Math.atan2(other.y - struckEnemy.y, other.x - struckEnemy.x);
+              other.x += Math.cos(chainAngle) * 3.5;
+              other.y += Math.sin(chainAngle) * 3.5;
 
-            // Chispas en el enemigo secundario
-            for (let cs = 0; cs < 6; cs++) {
-              const cAng = Math.random() * Math.PI * 2;
-              g.particles.push({
-                id: `cspark-${now}-${chainsCount}-${cs}`,
+              g.floatingTexts.push({
+                id: `chain-hit-${now}-${chainsCount}`,
                 x: other.x,
-                y: other.y,
-                vx: Math.cos(cAng) * 3,
-                vy: Math.sin(cAng) * 3,
-                radius: 1.6,
+                y: other.y - 14,
+                text: `⚡ -${chainDmg}`,
                 color: '#38bdf8',
-                alpha: 1,
-                life: 14,
+                fontSize: 12,
+                opacity: 1,
+                vy: -1.2,
+                life: 30,
+              });
+
+              for (let cs = 0; cs < 6; cs++) {
+                const cAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `cspark-${now}-${chainsCount}-${cs}`,
+                  x: other.x,
+                  y: other.y,
+                  vx: Math.cos(cAng) * 3,
+                  vy: Math.sin(cAng) * 3,
+                  radius: 1.6,
+                  color: '#38bdf8',
+                  alpha: 1,
+                  life: 14,
+                });
+              }
+            }
+          }
+        } else {
+          for (let s = 0; s < 8; s++) {
+            const sparkAng = Math.random() * Math.PI * 2;
+            g.particles.push({
+              id: `wallspark-${now}-${s}`,
+              x: hitTargetX,
+              y: hitTargetY,
+              vx: Math.cos(sparkAng) * 3,
+              vy: Math.sin(sparkAng) * 3,
+              radius: 1.8,
+              color: '#facc15',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
+
+        // Romper o sobrecargar obstáculos cercanos (incluyendo cristales energizados)
+        g.terrainManager.obstacles.forEach((obs) => {
+          const d = Math.hypot(obs.x - hitTargetX, obs.y - hitTargetY);
+          if (d <= obs.radius + 30) {
+            obs.hp -= baseDmg;
+            if (obs.obstacleType === 'energized_crystal') {
+              obs.hp = 0;
+              elementalSound.playAoEExplosion();
+              g.enemyManager.enemies.forEach((en) => {
+                if (Math.hypot(en.x - obs.x, en.y - obs.y) < 85) {
+                  en.hp -= 46 * chargeMultiplier;
+                  en.hitFlash = 12;
+                  en.stunnedTimer = 35;
+                }
+              });
+              g.floatingTexts.push({
+                id: `cry-overload-${now}`,
+                x: obs.x,
+                y: obs.y - 20,
+                text: '⚡ ¡SOBRECARGA DE CRISTAL!',
+                color: '#facc15',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.4,
+                life: 35,
               });
             }
           }
-        }
-      } else {
-        // Chispas al golpear muro o suelo
-        for (let s = 0; s < 8; s++) {
-          const sparkAng = Math.random() * Math.PI * 2;
+        });
+
+        for (let s = 0; s < 6; s++) {
+          const staffAng = Math.random() * Math.PI * 2;
           g.particles.push({
-            id: `wallspark-${now}-${s}`,
-            x: hitTargetX,
-            y: hitTargetY,
-            vx: Math.cos(sparkAng) * 3,
-            vy: Math.sin(sparkAng) * 3,
-            radius: 1.8,
-            color: '#facc15',
+            id: `staffspark-${now}-${s}`,
+            x: startX,
+            y: startY,
+            vx: Math.cos(staffAng) * 2,
+            vy: Math.sin(staffAng) * 2,
+            radius: 1.5,
+            color: '#ffffff',
             alpha: 1,
-            life: 14,
+            life: 12,
           });
         }
+
+        g.lightningBolts.push(bolt);
       }
+      // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST: ESTACAS TÁCTICAS + CONGELACIÓN)
+      else if (recipe.id === 'permafrost_prison') {
+        g.screenShake = isCharged ? 9 : 6;
+        elementalSound.playPermafrostPrison();
 
-      // Romper o dañar obstáculos cercanos (cajas, estacas de permafrost, cristales)
-      g.terrainManager.obstacles.forEach((obs) => {
-        const d = Math.hypot(obs.x - hitTargetX, obs.y - hitTargetY);
-        if (d <= obs.radius + 25) {
-          obs.hp -= baseDmg;
-        }
-      });
+        const spikeCount = isCharged ? 5 : 3;
+        g.terrainManager.spawnPermafrostSpikes(targetX, targetY, spikeCount);
+        g.terrainManager.spawnFrostPatch(targetX, targetY, isCharged ? 65 : 45);
 
-      // Destello en la punta del báculo
-      for (let s = 0; s < 6; s++) {
-        const staffAng = Math.random() * Math.PI * 2;
-        g.particles.push({
-          id: `staffspark-${now}-${s}`,
-          x: startX,
-          y: startY,
-          vx: Math.cos(staffAng) * 2,
-          vy: Math.sin(staffAng) * 2,
-          radius: 1.5,
-          color: '#ffffff',
-          alpha: 1,
-          life: 12,
+        const prisonDmg = recipe.damage * chargeMultiplier;
+        g.enemyManager.enemies.forEach((enemy) => {
+          const dist = Math.hypot(enemy.x - targetX, enemy.y - targetY);
+          if (dist < (isCharged ? 85 : 65)) {
+            enemy.hp -= prisonDmg;
+            enemy.hitFlash = 10;
+            g.enemyManager.applyStatus(enemy, 'frozen', 150);
+            g.floatingTexts.push({
+              id: `spike-hit-${now}-${enemy.id}`,
+              x: enemy.x,
+              y: enemy.y - 18,
+              text: `🧊 -${Math.round(prisonDmg)} [CONGELADO]`,
+              color: '#38bdf8',
+              fontSize: 13,
+              opacity: 1,
+              vy: -1.3,
+              life: 35,
+            });
+          }
         });
       }
-
-      g.lightningBolts.push(bolt);
-    }
-    // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST REDISEÑADA COMO ATAQUE OFENSIVO Y TÁCTICO)
-    else if (recipe.id === 'permafrost_prison') {
-      g.screenShake = 6;
-      elementalSound.playPermafrostPrison();
-
-      // Hace brotar estacas de roca y hielo directamente bajo la zona enemiga
-      g.terrainManager.spawnPermafrostSpikes(targetX, targetY, 3);
-      g.terrainManager.spawnFrostPatch(targetX, targetY, 45);
-
-      // Daño físico directo y congelación a los enemigos alcanzados por las estacas
-      g.enemyManager.enemies.forEach((enemy) => {
-        const dist = Math.hypot(enemy.x - targetX, enemy.y - targetY);
-        if (dist < 65) {
-          enemy.hp -= recipe.damage;
-          enemy.hitFlash = 10;
-          g.enemyManager.applyStatus(enemy, 'frozen', 140);
-          g.floatingTexts.push({
-            id: `spike-hit-${now}`,
-            x: enemy.x,
-            y: enemy.y - 18,
-            text: `🧊 -${recipe.damage} [CONGELADO]`,
-            color: '#38bdf8',
-            fontSize: 13,
-            opacity: 1,
-            vy: -1.3,
-            life: 35,
-          });
-        }
-      });
-    }
-    // 2. FUEGO + HIELO (CHOQUE TÉRMICO)
-    else if (recipe.id === 'thermal_shock') {
-      g.screenShake = 6;
-      g.projectiles.push({
-        id: `proj-${now}`,
-        x: wizard.x,
-        y: wizard.y,
-        vx: Math.cos(aimAngle) * 8.0,
-        vy: Math.sin(aimAngle) * 8.0,
-        radius: 12,
-        color: recipe.color,
-        secondaryColor: recipe.secondaryColor,
-        damage: recipe.damage,
-        knockback: recipe.knockback,
-        life: 45,
-        maxLife: 45,
-        pierce: 1,
-        piercedIds: [],
-        isHostile: false,
-        spellType: 'thermal_shock',
-        visualShape: 'thermal_core',
-        onHitSpawn: 'steam_blast',
-      });
-    }
-    // 3. FUEGO + TIERRA (ERUPCIÓN DE MAGMA)
-    else if (recipe.id === 'magma_eruption') {
-      g.screenShake = 6;
-      g.projectiles.push({
-        id: `proj-${now}`,
-        x: wizard.x,
-        y: wizard.y,
-        vx: Math.cos(aimAngle) * 5.8,
-        vy: Math.sin(aimAngle) * 5.8,
-        radius: 15,
-        color: recipe.color,
-        secondaryColor: recipe.secondaryColor,
-        damage: recipe.damage,
-        knockback: recipe.knockback,
-        life: 50,
-        maxLife: 50,
-        pierce: 1,
-        piercedIds: [],
-        isHostile: false,
-        spellType: 'magma_eruption',
-        visualShape: 'magma_rock',
-        onHitSpawn: 'magma_fissure',
-      });
-    }
-    // 4. RAYO + TIERRA (CAMPO DE CRISTALES ENERGIZADOS)
-    else if (recipe.id === 'crystal_field') {
-      const spawnX = wizard.x + Math.cos(aimAngle) * 95;
-      const spawnY = wizard.y + Math.sin(aimAngle) * 95;
-      g.terrainManager.spawnEnergizedCrystals(spawnX, spawnY);
-      g.screenShake = 5;
-    }
-    // 5. HIELO + RAYO (TORMENTA CRIOGÉNICA)
-    else if (recipe.id === 'cryo_storm') {
-      g.screenShake = 5;
-      g.projectiles.push({
-        id: `proj-${now}`,
-        x: wizard.x,
-        y: wizard.y,
-        vx: Math.cos(aimAngle) * 9.0,
-        vy: Math.sin(aimAngle) * 9.0,
-        radius: 11,
-        color: recipe.color,
-        secondaryColor: '#fef08a',
-        damage: recipe.damage,
-        knockback: recipe.knockback,
-        life: 45,
-        maxLife: 45,
-        pierce: 2,
-        piercedIds: [],
-        isHostile: false,
-        spellType: 'cryo_storm',
-        visualShape: 'cryo_shard',
-        statusToApply: 'frozen',
-      });
-    }
-    // 6. FUEGO + RAYO (SOBRECARGA EXPLOSIVA)
-    else if (recipe.id === 'explosive_overload') {
-      g.screenShake = 8;
-      g.projectiles.push({
-        id: `proj-${now}`,
-        x: wizard.x,
-        y: wizard.y,
-        vx: Math.cos(aimAngle) * 10.5,
-        vy: Math.sin(aimAngle) * 10.5,
-        radius: 12,
-        color: recipe.color,
-        secondaryColor: '#ffffff',
-        damage: recipe.damage,
-        knockback: recipe.knockback,
-        life: 40,
-        maxLife: 40,
-        pierce: 1,
-        piercedIds: [],
-        isHostile: false,
-        spellType: 'explosive_overload',
-        visualShape: 'plasma_sphere',
-      });
-    }
-    // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
-    else if (recipe.id === 'elemental_cataclysm') {
-      g.screenShake = 18;
-      for (let i = 0; i < 12; i++) {
-        const ang = (Math.PI * 2 / 12) * i;
+      // 2. FUEGO + HIELO (CHOQUE TÉRMICO)
+      else if (recipe.id === 'thermal_shock') {
+        g.screenShake = isCharged ? 9 : 6;
         g.projectiles.push({
-          id: `cataclysm-${now}-${i}`,
+          id: `proj-${now}`,
           x: wizard.x,
           y: wizard.y,
-          vx: Math.cos(ang) * 7.5,
-          vy: Math.sin(ang) * 7.5,
-          radius: 14,
-          color: i % 2 === 0 ? '#ec4899' : '#facc15',
-          secondaryColor: '#ffffff',
-          damage: 120,
-          knockback: 9.0,
-          life: 55,
-          maxLife: 55,
-          pierce: 3,
+          vx: Math.cos(aimAngle) * 8.0,
+          vy: Math.sin(aimAngle) * 8.0,
+          radius: isCharged ? 16 : 12,
+          color: recipe.color,
+          secondaryColor: recipe.secondaryColor,
+          damage: recipe.damage * chargeMultiplier,
+          knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
+          life: 45,
+          maxLife: 45,
+          pierce: 1,
           piercedIds: [],
           isHostile: false,
-          spellType: 'elemental_cataclysm',
+          spellType: 'thermal_shock',
+          visualShape: 'thermal_core',
+          onHitSpawn: 'steam_blast',
+          areaOfEffect: isCharged ? 90 : 65,
         });
       }
-      g.terrainManager.spawnMagmaFissure(wizard.x, wizard.y, 80);
-    }
-    // ATAQUES INDIVIDUALES CON SILUETAS FÍSICAS RECONOCIBLES:
-    else {
-      let visualShape: 'fire_comet' | 'ice_lance' | 'earth_boulder' | undefined;
-      let statusToApply: 'frozen' | 'burning' | 'shocked' | undefined;
-      let pierce = 1;
-      let speed = 7.0;
+      // 3. FUEGO + TIERRA (ERUPCIÓN DE MAGMA)
+      else if (recipe.id === 'magma_eruption') {
+        g.screenShake = isCharged ? 9 : 6;
+        g.projectiles.push({
+          id: `proj-${now}`,
+          x: wizard.x,
+          y: wizard.y,
+          vx: Math.cos(aimAngle) * 5.8,
+          vy: Math.sin(aimAngle) * 5.8,
+          radius: isCharged ? 18 : 15,
+          color: recipe.color,
+          secondaryColor: recipe.secondaryColor,
+          damage: recipe.damage * chargeMultiplier,
+          knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
+          life: 50,
+          maxLife: 50,
+          pierce: 1,
+          piercedIds: [],
+          isHostile: false,
+          spellType: 'magma_eruption',
+          visualShape: 'magma_rock',
+          onHitSpawn: 'magma_fissure',
+          areaOfEffect: isCharged ? 80 : 60,
+        });
+      }
+      // 4. RAYO + TIERRA (CAMPO DE CRISTALES ENERGIZADOS)
+      else if (recipe.id === 'crystal_field') {
+        const spawnX = wizard.x + Math.cos(aimAngle) * 95;
+        const spawnY = wizard.y + Math.sin(aimAngle) * 95;
+        g.terrainManager.spawnEnergizedCrystals(spawnX, spawnY);
+        if (isCharged) {
+          g.terrainManager.obstacles.push({
+            id: `crystal-${now}-charged`,
+            x: spawnX,
+            y: spawnY - 35,
+            radius: 15,
+            width: 30,
+            height: 30,
+            obstacleType: 'energized_crystal',
+            hp: 90,
+            maxHp: 90,
+            color: '#eab308',
+            solid: true,
+            blocksProjectiles: false,
+            meltable: false,
+            electrified: true,
+            chargeTimer: 0,
+          });
+        }
+        g.screenShake = isCharged ? 8 : 5;
+      }
+      // 5. HIELO + RAYO (TORMENTA CRIOGÉNICA)
+      else if (recipe.id === 'cryo_storm') {
+        g.screenShake = isCharged ? 7 : 5;
+        g.projectiles.push({
+          id: `proj-${now}`,
+          x: wizard.x,
+          y: wizard.y,
+          vx: Math.cos(aimAngle) * 9.0,
+          vy: Math.sin(aimAngle) * 9.0,
+          radius: isCharged ? 14 : 11,
+          color: recipe.color,
+          secondaryColor: '#fef08a',
+          damage: recipe.damage * chargeMultiplier,
+          knockback: recipe.knockback,
+          life: 45,
+          maxLife: 45,
+          pierce: isCharged ? 3 : 2,
+          piercedIds: [],
+          isHostile: false,
+          spellType: 'cryo_storm',
+          visualShape: 'cryo_shard',
+          statusToApply: 'frozen',
+        });
+      }
+      // 6. FUEGO + RAYO (SOBRECARGA EXPLOSIVA)
+      else if (recipe.id === 'explosive_overload') {
+        g.screenShake = isCharged ? 12 : 8;
+        g.projectiles.push({
+          id: `proj-${now}`,
+          x: wizard.x,
+          y: wizard.y,
+          vx: Math.cos(aimAngle) * 11.0,
+          vy: Math.sin(aimAngle) * 11.0,
+          radius: isCharged ? 16 : 12,
+          color: recipe.color,
+          secondaryColor: '#ffffff',
+          damage: recipe.damage * chargeMultiplier,
+          knockback: recipe.knockback * (isCharged ? 1.5 : 1.0),
+          life: 40,
+          maxLife: 40,
+          pierce: 1,
+          piercedIds: [],
+          isHostile: false,
+          spellType: 'explosive_overload',
+          visualShape: 'plasma_sphere',
+          areaOfEffect: isCharged ? 105 : 80,
+        });
+      }
+      // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
+      else if (recipe.id === 'elemental_cataclysm') {
+        g.screenShake = 20;
+        const count = isCharged ? 16 : 12;
+        for (let i = 0; i < count; i++) {
+          const ang = ((Math.PI * 2) / count) * i;
+          g.projectiles.push({
+            id: `cataclysm-${now}-${i}`,
+            x: wizard.x,
+            y: wizard.y,
+            vx: Math.cos(ang) * 7.5,
+            vy: Math.sin(ang) * 7.5,
+            radius: 14,
+            color: i % 2 === 0 ? '#ec4899' : '#facc15',
+            secondaryColor: '#ffffff',
+            damage: 120 * chargeMultiplier,
+            knockback: 9.0,
+            life: 55,
+            maxLife: 55,
+            pierce: 3,
+            piercedIds: [],
+            isHostile: false,
+            spellType: 'elemental_cataclysm',
+            areaOfEffect: 55,
+          });
+        }
+        g.terrainManager.spawnMagmaFissure(wizard.x, wizard.y, 85);
+      }
+      // ATAQUES INDIVIDUALES:
+      else {
+        const isFire = recipe.id === 'fire_shot' || recipe.id === 'fire_inferno';
+        const isIce = recipe.id === 'ice_shard' || recipe.id === 'ice_lance';
+        const isEarth = recipe.id === 'earth_toss' || recipe.id === 'earth_megalith';
 
-      if (recipe.id === 'fire_shot' || recipe.id === 'fire_inferno') {
-        visualShape = 'fire_comet';
-        statusToApply = 'burning';
-        speed = 7.5;
-      } else if (recipe.id === 'ice_shard' || recipe.id === 'ice_lance') {
-        visualShape = 'ice_lance';
-        statusToApply = 'frozen';
-        speed = 8.5;
-        pierce = recipe.id === 'ice_lance' ? 3 : 1;
-      } else if (recipe.id === 'earth_toss' || recipe.id === 'earth_megalith') {
-        visualShape = 'earth_boulder';
-        speed = 5.8; // Megalito pesado con inercia aplastante
-        pierce = recipe.id === 'earth_megalith' ? 2 : 1;
+        if (isFire) {
+          g.projectiles.push({
+            id: `proj-${now}`,
+            x: wizard.x,
+            y: wizard.y,
+            vx: Math.cos(aimAngle) * 7.5,
+            vy: Math.sin(aimAngle) * 7.5,
+            radius: isCharged ? 16 : 10,
+            color: recipe.color,
+            secondaryColor: recipe.secondaryColor,
+            damage: (recipe.damage + statBonus) * chargeMultiplier,
+            knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
+            life: 50,
+            maxLife: 50,
+            pierce: 1,
+            piercedIds: [],
+            isHostile: false,
+            spellType: recipe.id,
+            visualShape: 'fire_comet',
+            statusToApply: 'burning',
+            areaOfEffect: isCharged ? 85 : 55,
+          });
+        } else if (isIce) {
+          const angles = isCharged ? [aimAngle - 0.18, aimAngle, aimAngle + 0.18] : [aimAngle];
+          angles.forEach((ang, sIdx) => {
+            g.projectiles.push({
+              id: `proj-${now}-${sIdx}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: Math.cos(ang) * 8.5,
+              vy: Math.sin(ang) * 8.5,
+              radius: isCharged ? 12 : 9,
+              color: recipe.color,
+              secondaryColor: recipe.secondaryColor,
+              damage: (recipe.damage + statBonus) * chargeMultiplier * (isCharged ? 0.75 : 1.0),
+              knockback: recipe.knockback,
+              life: 50,
+              maxLife: 50,
+              pierce: isCharged ? 3 : (recipe.id === 'ice_lance' ? 3 : 1),
+              piercedIds: [],
+              isHostile: false,
+              spellType: recipe.id,
+              visualShape: 'ice_lance',
+              statusToApply: 'frozen',
+              vRot: 0.14,
+              rotation: 0,
+            });
+          });
+        } else if (isEarth) {
+          g.screenShake = isCharged ? 11 : 7;
+          g.projectiles.push({
+            id: `proj-${now}`,
+            x: wizard.x,
+            y: wizard.y,
+            vx: Math.cos(aimAngle) * 5.8,
+            vy: Math.sin(aimAngle) * 5.8,
+            radius: isCharged ? 20 : 14,
+            color: recipe.color,
+            secondaryColor: recipe.secondaryColor,
+            damage: (recipe.damage + statBonus) * chargeMultiplier,
+            knockback: (recipe.knockback || 4.5) * (isCharged ? 1.5 : 1.1),
+            life: 55,
+            maxLife: 55,
+            pierce: isCharged ? 3 : (recipe.id === 'earth_megalith' ? 2 : 1),
+            piercedIds: [],
+            isHostile: false,
+            spellType: recipe.id,
+            visualShape: 'earth_boulder',
+            vRot: 0.18,
+            rotation: 0,
+          });
+        } else {
+          // Chispa básica
+          g.projectiles.push({
+            id: `proj-${now}`,
+            x: wizard.x,
+            y: wizard.y,
+            vx: Math.cos(aimAngle) * 7.0,
+            vy: Math.sin(aimAngle) * 7.0,
+            radius: 8,
+            color: recipe.color,
+            secondaryColor: recipe.secondaryColor,
+            damage: recipe.damage + statBonus,
+            knockback: recipe.knockback,
+            life: 45,
+            maxLife: 45,
+            pierce: 1,
+            piercedIds: [],
+            isHostile: false,
+            spellType: recipe.id,
+          });
+        }
       }
 
-      g.projectiles.push({
-        id: `proj-${now}`,
-        x: wizard.x,
-        y: wizard.y,
-        vx: Math.cos(aimAngle) * speed,
-        vy: Math.sin(aimAngle) * speed,
-        radius: visualShape === 'earth_boulder' ? 14 : 9,
-        color: recipe.color,
-        secondaryColor: recipe.secondaryColor,
-        damage: recipe.damage + Math.floor(player.stats.attack * 0.4 + player.stats.knowledge * 0.4),
-        knockback: recipe.knockback,
-        life: 50,
-        maxLife: 50,
-        pierce,
-        piercedIds: [],
-        isHostile: false,
-        spellType: recipe.id,
-        visualShape,
-        statusToApply,
-      });
-    }
+      setElementQueue([]);
+    },
+    [activeRecipe, isDefeated, isVictorious, player.stats]
+  );
 
-    setElementQueue([]);
-  }, [activeRecipe, isDefeated, isVictorious, player.stats]);
+  // Manejadores de Carga de Hechizo al presionar el botón de Ataque
+  const startCharge = useCallback(() => {
+    if (isDefeated || isVictorious) return;
+    const wizard = gameStateRef.current.wizard;
+    wizard.isCharging = true;
+    wizard.chargeStartTime = Date.now();
+    wizard.chargeRatio = 0;
+    wizard.chargeSoundPlayed = false;
+    setIsChargingUi(true);
+    elementalSound.playChargeStart();
+  }, [isDefeated, isVictorious]);
+
+  const finishCharge = useCallback(() => {
+    const wizard = gameStateRef.current.wizard;
+    if (!wizard.isCharging) return;
+    const wasCharged = wizard.chargeRatio >= 1.0;
+    wizard.isCharging = false;
+    wizard.chargeRatio = 0;
+    setIsChargingUi(false);
+    setChargeVisualRatio(0);
+    handleAttack(wasCharged);
+  }, [handleAttack]);
 
   // Controles de Joystick Táctil
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -843,11 +1173,57 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const wizard = g.wizard;
       const enemies = g.enemyManager.enemies;
 
-      // 1. Movimiento del Mago
-      if (g.joystick.active && (g.joystick.vx !== 0 || g.joystick.vy !== 0)) {
+      // 1. Dash y Movimiento del Mago
+      if (wizard.dashCooldown > 0) {
+        wizard.dashCooldown--;
+        const cdRatio = wizard.dashCooldown / wizard.dashCooldownMax;
+        if (Math.abs(cdRatio - lastCdRatioRef.current) > 0.04 || wizard.dashCooldown === 0) {
+          lastCdRatioRef.current = cdRatio;
+          setDashCooldownRatio(cdRatio);
+        }
+      }
+
+      if (wizard.isDashing) {
+        wizard.x += wizard.dashVx;
+        wizard.y += wizard.dashVy;
+        wizard.dashTimer--;
+
+        // Guardar silueta para la estela fantasmal (Afterimages)
+        if (wizard.dashTimer % 2 === 0) {
+          wizard.dashTrail.push({
+            x: wizard.x,
+            y: wizard.y,
+            facingAngle: wizard.facingAngle,
+            alpha: 1.0,
+          });
+        }
+
+        if (wizard.dashTimer <= 0) {
+          wizard.isDashing = false;
+        }
+      } else if (g.joystick.active && (g.joystick.vx !== 0 || g.joystick.vy !== 0)) {
         wizard.x += g.joystick.vx;
         wizard.y += g.joystick.vy;
         wizard.animFrame += 0.2;
+      }
+
+      // Desvanecer estela fantasmal del dash
+      for (let t = wizard.dashTrail.length - 1; t >= 0; t--) {
+        wizard.dashTrail[t].alpha -= 0.12;
+        if (wizard.dashTrail[t].alpha <= 0) {
+          wizard.dashTrail.splice(t, 1);
+        }
+      }
+
+      // Actualizar Carga Mágica del Mago
+      if (wizard.isCharging) {
+        const elapsed = Date.now() - wizard.chargeStartTime;
+        wizard.chargeRatio = Math.min(1.0, elapsed / 380);
+        if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
+          wizard.chargeSoundPlayed = true;
+          elementalSound.playChargeReady();
+        }
+        setChargeVisualRatio(wizard.chargeRatio);
       }
 
       // Restricción de límites de la sala
@@ -926,6 +1302,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         p.x += p.vx;
         p.y += p.vy;
         p.life--;
+        if (p.vRot) {
+          p.rotation = (p.rotation || 0) + p.vRot;
+        }
 
         // Estelas de partículas en vuelo según el elemento
         if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
@@ -995,13 +1374,45 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           g.projectiles
         );
         if (hitObstacle) {
+          if (p.areaOfEffect) {
+            triggerAoEExplosion(
+              p,
+              enemies,
+              g.enemyManager,
+              g.terrainManager,
+              g.particles,
+              g.floatingTexts,
+              (amt) => {
+                g.screenShake = Math.max(g.screenShake, amt);
+              }
+            );
+          }
+          if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
+            g.screenShake = Math.max(g.screenShake, 6);
+            for (let s = 0; s < 8; s++) {
+              const spkAng = Math.random() * Math.PI * 2;
+              g.particles.push({
+                id: `espk-obs-${Date.now()}-${s}`,
+                x: p.x,
+                y: p.y,
+                vx: Math.cos(spkAng) * (2 + Math.random() * 3),
+                vy: Math.sin(spkAng) * (2 + Math.random() * 3),
+                radius: 3,
+                color: '#78716c',
+                alpha: 1,
+                life: 16,
+              });
+            }
+          } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
+            g.terrainManager.spawnFrostPatch(p.x, p.y, 40);
+          }
           g.projectiles.splice(pIdx, 1);
           continue;
         }
 
-        // Si es proyectil enemigo -> Daña al jugador
+        // Si es proyectil enemigo -> Daña al jugador (¡a menos que esté en Dash invulnerable!)
         if (p.isHostile) {
-          if (checkCircleCollision(p.x, p.y, p.radius, wizard.x, wizard.y, wizard.radius)) {
+          if (!wizard.isDashing && checkCircleCollision(p.x, p.y, p.radius, wizard.x, wizard.y, wizard.radius)) {
             elementalSound.playPlayerHurt();
             wizard.hitFlash = 10;
             g.screenShake = 6;
@@ -1025,6 +1436,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             if (checkCircleCollision(p.x, p.y, p.radius, enemy.x, enemy.y, enemy.radius)) {
               p.piercedIds.push(enemy.id);
               p.pierce--;
+
+              // Si tiene detonación en área radial (AoE):
+              if (p.areaOfEffect) {
+                triggerAoEExplosion(
+                  p,
+                  enemies,
+                  g.enemyManager,
+                  g.terrainManager,
+                  g.particles,
+                  g.floatingTexts,
+                  (amt) => {
+                    g.screenShake = Math.max(g.screenShake, amt);
+                  }
+                );
+                g.projectiles.splice(pIdx, 1);
+                break;
+              }
 
               let finalDamage = p.damage;
 
@@ -1053,7 +1481,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
               // Reducción si el Guardián de Basalto tiene armadura frontal activa
               if (enemy.bossType === 'basalt_guardian' && enemy.stunnedTimer === 0) {
-                finalDamage *= 0.35; // Absorbe 65% de daño si no está aturdido
+                finalDamage *= 0.35;
               }
 
               enemy.hp -= finalDamage;
@@ -1076,6 +1504,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                   });
                 }
               } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
+                g.terrainManager.spawnFrostPatch(enemy.x, enemy.y, 40);
                 for (let s = 0; s < 8; s++) {
                   const spkAng = Math.random() * Math.PI * 2;
                   g.particles.push({
@@ -1092,6 +1521,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 }
               } else if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
                 g.screenShake = 6;
+                enemy.stunnedTimer = 25;
                 for (let s = 0; s < 8; s++) {
                   const spkAng = Math.random() * Math.PI * 2;
                   g.particles.push({
@@ -1144,6 +1574,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
 
         if (p.life <= 0) {
+          if (p.areaOfEffect) {
+            triggerAoEExplosion(
+              p,
+              enemies,
+              g.enemyManager,
+              g.terrainManager,
+              g.particles,
+              g.floatingTexts,
+              (amt) => {
+                g.screenShake = Math.max(g.screenShake, amt);
+              }
+            );
+          }
           g.projectiles.splice(pIdx, 1);
         }
       }
@@ -1187,12 +1630,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         pt.y += pt.vy;
         pt.life--;
         pt.alpha = pt.life / (pt.maxLife || 18);
+        if (pt.type === 'ring') {
+          pt.radius += 3.2; // Expansión del anillo de onda de choque
+        }
         if (pt.life <= 0) {
           g.particles.splice(i, 1);
         }
       }
-      if (g.particles.length > 50) {
-        g.particles.splice(0, g.particles.length - 50);
+      if (g.particles.length > 55) {
+        g.particles.splice(0, g.particles.length - 55);
       }
 
       // 7. Renderizado en Canvas 2.5D con Cámara Cercana
@@ -1427,16 +1873,61 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             </button>
           </div>
 
-          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR */}
+          {/* BOTÓN DE ESQUIVA RÁPIDA (DASH) */}
           <button
             onPointerDown={(e) => {
               e.stopPropagation();
-              handleAttack();
+              handleDash();
             }}
-            className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 active:scale-90 border-2 border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)] flex flex-col items-center justify-center text-white transition-transform"
+            disabled={dashCooldownRatio > 0}
+            className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-2 transition-all active:scale-90 relative overflow-hidden shadow-lg ${
+              dashCooldownRatio > 0
+                ? 'bg-slate-900/80 border-slate-700 text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-br from-cyan-600 to-blue-700 border-cyan-300 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]'
+            }`}
+          >
+            {dashCooldownRatio > 0 && (
+              <div
+                className="absolute bottom-0 inset-x-0 bg-cyan-400/30 transition-all duration-75"
+                style={{ height: `${dashCooldownRatio * 100}%` }}
+              />
+            )}
+            <span className="text-xl relative z-10">⚡</span>
+            <span className="text-[8px] font-black tracking-wider relative z-10">ESQUIVAR</span>
+          </button>
+
+          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA */}
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              startCharge();
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              finishCharge();
+            }}
+            onPointerCancel={(e) => {
+              e.stopPropagation();
+              finishCharge();
+            }}
+            className={`w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 active:scale-95 border-2 ${
+              chargeVisualRatio >= 1.0
+                ? 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse'
+                : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]'
+            } flex flex-col items-center justify-center text-white transition-all`}
           >
             <span className="text-2xl">{activeRecipe.icon}</span>
-            <span className="text-[11px] font-black tracking-wider mt-0.5">LANZAR</span>
+            <span className="text-[11px] font-black tracking-wider mt-0.5">
+              {chargeVisualRatio >= 1.0 ? '¡CARGADO!' : 'LANZAR'}
+            </span>
+            {isChargingUi && chargeVisualRatio < 1.0 && (
+              <div className="w-12 bg-black/50 h-1.5 rounded-full mt-1 overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 transition-all duration-75"
+                  style={{ width: `${chargeVisualRatio * 100}%` }}
+                />
+              </div>
+            )}
           </button>
         </div>
       </div>

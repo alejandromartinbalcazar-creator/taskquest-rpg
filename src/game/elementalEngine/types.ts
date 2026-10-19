@@ -119,6 +119,7 @@ export interface Projectile {
   onHitSpawn?: 'magma_fissure' | 'permafrost_spikes' | 'crystal_field' | 'steam_blast' | 'obsidian_volcano';
   beamTarget?: { x: number; y: number };
   beamForks?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
+  areaOfEffect?: number;
 }
 
 export interface TerrainZone {
