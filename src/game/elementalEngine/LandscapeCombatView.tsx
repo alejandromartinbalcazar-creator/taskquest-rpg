@@ -314,6 +314,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [isChargingUi, setIsChargingUi] = useState(false);
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
+  const keysPressedRef = useRef<Record<string, boolean>>({});
 
   // Hechizo activo identificado
   const activeRecipe = identifyRecipe(elementQueue);
@@ -523,18 +524,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       });
     }
   }, [isDefeated, isVictorious]);
-
-  // Soporte de Teclado (Espacio o Shift para Esquivar)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-        e.preventDefault();
-        handleDash();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleDash]);
 
   // Lanzamiento de Hechizo (con soporte para variante Cargada)
   const handleAttack = useCallback(
@@ -1106,6 +1095,46 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     handleAttack(wasCharged);
   }, [handleAttack]);
 
+  // Soporte de Teclado Completo para PC / Navegador Chrome (WASD, Flechas, 1-4, Espacio, J/Enter)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressedRef.current[e.code] = true;
+
+      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        e.preventDefault();
+        handleDash();
+      } else if (e.code === 'Digit1' || e.code === 'Numpad1') {
+        handleSelectElement('fire');
+      } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
+        handleSelectElement('lightning');
+      } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
+        handleSelectElement('ice');
+      } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
+        handleSelectElement('earth');
+      } else if (e.code === 'Backspace' || e.code === 'KeyC') {
+        handleClearQueue();
+      } else if (e.code === 'KeyJ' || e.code === 'Enter') {
+        if (!gameStateRef.current.wizard.isCharging) {
+          startCharge();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressedRef.current[e.code] = false;
+      if (e.code === 'KeyJ' || e.code === 'Enter') {
+        finishCharge();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleDash, handleSelectElement, handleClearQueue, startCharge, finishCharge]);
+
   // Controles de Joystick Táctil
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -1173,7 +1202,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const wizard = g.wizard;
       const enemies = g.enemyManager.enemies;
 
-      // 1. Dash y Movimiento del Mago
+      // 1. Dash y Movimiento del Mago (WASD / Flechas / Joystick)
+      let keyVx = 0;
+      let keyVy = 0;
+      const keys = keysPressedRef.current;
+      if (keys['KeyW'] || keys['ArrowUp']) keyVy -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) keyVy += 1;
+      if (keys['KeyA'] || keys['ArrowLeft']) keyVx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) keyVx += 1;
+
       if (wizard.dashCooldown > 0) {
         wizard.dashCooldown--;
         const cdRatio = wizard.dashCooldown / wizard.dashCooldownMax;
@@ -1201,10 +1238,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (wizard.dashTimer <= 0) {
           wizard.isDashing = false;
         }
+      } else if (keyVx !== 0 || keyVy !== 0) {
+        const len = Math.hypot(keyVx, keyVy);
+        const speed = 3.2 + player.stats.speed * 0.08;
+        wizard.x += (keyVx / len) * speed;
+        wizard.y += (keyVy / len) * speed;
+        wizard.facingAngle = Math.atan2(keyVy, keyVx);
+        wizard.isMoving = true;
+        wizard.animFrame += 0.2;
       } else if (g.joystick.active && (g.joystick.vx !== 0 || g.joystick.vy !== 0)) {
         wizard.x += g.joystick.vx;
         wizard.y += g.joystick.vy;
         wizard.animFrame += 0.2;
+      } else {
+        wizard.isMoving = false;
       }
 
       // Desvanecer estela fantasmal del dash

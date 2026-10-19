@@ -62,13 +62,54 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
             Mazmorras de Acción en Tiempo Real
           </h3>
           <p className="text-[11px] text-stone-400 mt-0.5">
-            Controla a tu mago con el joystick móvil, esquiva a los creeps y lanza tus hechizos fusionados.
+            Controla a tu mago, esquiva a los monstruos y prueba tus 10 habilidades mágicas.
           </p>
         </div>
         <div className="flex items-center gap-1.5 bg-amber-950/60 px-3 py-1.5 rounded-2xl border border-amber-600/40 shrink-0">
           <Key className="w-4 h-4 text-amber-400 animate-bounce" />
           <span className="font-black text-amber-300 text-sm">{player.dungeonKeys}</span>
         </div>
+      </div>
+
+      {/* Botón Destacado: Prueba Directa en Navegador / Modo Práctica */}
+      <div className="bg-gradient-to-r from-purple-950/80 via-[#1b1938] to-purple-950/80 p-4 rounded-3xl border-2 border-purple-500/60 flex items-center justify-between shadow-2xl">
+        <div className="space-y-0.5">
+          <div className="text-xs font-black text-purple-200 flex items-center gap-1.5">
+            <span>✨ PROBAR NUEVO MOTOR DE MAGIA</span>
+            <span className="text-[9px] bg-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-full border border-purple-400/40 font-mono">CHROME / PC</span>
+          </div>
+          <div className="text-[11px] text-slate-300">
+            Entra gratis al combate para probar los 10 hechizos, la esquiva [Espacio/Dash] y el ataque cargado.
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            const floorToUse = dungeons[0] || {
+              floorNumber: 1,
+              name: 'Atrio de Entrada',
+              description: 'Sala de entrenamiento elemental',
+              recommendedLevel: 1,
+              enemy: {
+                id: 'practice-target',
+                name: 'Enemigo de Práctica',
+                title: 'Objetivo',
+                avatar: '🎯',
+                hp: 180,
+                maxHp: 180,
+                attack: 8,
+                defense: 2,
+                expReward: 50,
+                goldReward: 25,
+              },
+              isBoss: false,
+              cleared: false,
+            };
+            setActiveFloor(floorToUse);
+          }}
+          className="px-4 py-2.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:brightness-110 active:scale-95 text-white font-black text-xs rounded-2xl border border-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)] shrink-0 transition"
+        >
+          ⚔️ PROBAR AHORA
+        </button>
       </div>
 
       {/* Advertencia de Salud Baja */}
