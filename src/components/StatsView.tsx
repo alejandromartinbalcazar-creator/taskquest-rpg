@@ -1,0 +1,249 @@
+import React, { useState } from 'react';
+import { Player, Task } from '../types';
+import { StorageService } from '../services/storageService';
+import {
+  BarChart3,
+  Download,
+  Upload,
+  Swords,
+  Wind,
+  Shield,
+  BookOpen,
+  TrendingUp,
+  Flame,
+  CheckCircle2,
+} from 'lucide-react';
+
+interface StatsViewProps {
+  player: Player;
+  tasks: Task[];
+  onDataImported: () => void;
+}
+
+export const StatsView: React.FC<StatsViewProps> = ({
+  player,
+  tasks,
+  onDataImported,
+}) => {
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  // Estadísticas reales por Afinidad de Atributo del Personaje
+  const attackTasks = tasks.filter((t) => t.statAffinity === 'attack');
+  const speedTasks = tasks.filter((t) => t.statAffinity === 'speed');
+  const defenseTasks = tasks.filter((t) => t.statAffinity === 'defense');
+  const knowledgeTasks = tasks.filter((t) => t.statAffinity === 'knowledge');
+
+  const attackCompleted = attackTasks.filter((t) => t.completed).length;
+  const speedCompleted = speedTasks.filter((t) => t.completed).length;
+  const defenseCompleted = defenseTasks.filter((t) => t.completed).length;
+  const knowledgeCompleted = knowledgeTasks.filter((t) => t.completed).length;
+
+  const totalCompleted = tasks.filter((t) => t.completed).length;
+  const totalTasks = tasks.length;
+  const completionRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+
+  const handleExport = () => {
+    const json = StorageService.exportData();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `taskquest_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const success = StorageService.importData(content);
+      if (success) {
+        setImportStatus('¡Datos restaurados con éxito!');
+        onDataImported();
+      } else {
+        setImportStatus('Error: Archivo de respaldo no válido.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="max-w-xl mx-auto px-3 py-4 pb-24 space-y-4">
+      {/* Resumen Principal */}
+      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl">
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart3 className="w-5 h-5 text-cyan-400" />
+          <h3 className="font-bold text-sm text-slate-100">Panel de Rendimiento Real</h3>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-center">
+          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
+            <span className="text-2xl font-black text-emerald-400">{totalCompleted}</span>
+            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              Misiones Conquistadas
+            </div>
+          </div>
+
+          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
+            <span className="text-2xl font-black text-cyan-400">{completionRate}%</span>
+            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              Efectividad Global
+            </div>
+          </div>
+
+          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
+            <span className="text-2xl font-black text-amber-400">
+              {player.cleanStreakDays} días
+            </span>
+            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              Racha sin Procrastinar
+            </div>
+          </div>
+
+          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
+            <span className="text-2xl font-black text-rose-400">
+              {player.totalDamageSufferedFromProcrastination} HP
+            </span>
+            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              Daño por Retrasos
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Desglose por Atributos del Héroe */}
+      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl space-y-3">
+        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-purple-400" />
+          Progreso por Atributos del Héroe
+        </h4>
+
+        <div className="space-y-3">
+          {/* Ataque */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-bold text-rose-400 flex items-center gap-1.5">
+                <Swords className="w-3.5 h-3.5" />
+                Ataque (Nivel {player.stats.attack})
+              </span>
+              <span className="text-slate-300">
+                {attackCompleted} / {attackTasks.length} completadas
+              </span>
+            </div>
+            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-rose-500 to-red-400"
+                style={{
+                  width: `${attackTasks.length > 0 ? (attackCompleted / attackTasks.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Velocidad */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5" />
+                Velocidad (Nivel {player.stats.speed})
+              </span>
+              <span className="text-slate-300">
+                {speedCompleted} / {speedTasks.length} completadas
+              </span>
+            </div>
+            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 to-blue-400"
+                style={{
+                  width: `${speedTasks.length > 0 ? (speedCompleted / speedTasks.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Resistencia */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                Resistencia (Nivel {player.stats.defense})
+              </span>
+              <span className="text-slate-300">
+                {defenseCompleted} / {defenseTasks.length} completadas
+              </span>
+            </div>
+            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                style={{
+                  width: `${defenseTasks.length > 0 ? (defenseCompleted / defenseTasks.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Conocimiento */}
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-bold text-purple-400 flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" />
+                Conocimiento (Nivel {player.stats.knowledge})
+              </span>
+              <span className="text-slate-300">
+                {knowledgeCompleted} / {knowledgeTasks.length} completadas
+              </span>
+            </div>
+            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-purple-500 to-indigo-400"
+                style={{
+                  width: `${knowledgeTasks.length > 0 ? (knowledgeCompleted / knowledgeTasks.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Respaldo y Exportación de Datos */}
+      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl space-y-3">
+        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+          Respaldo de Progreso (100% Offline)
+        </h4>
+        <p className="text-xs text-slate-400">
+          Tus datos se guardan de forma privada y local en tu dispositivo. Puedes descargar una
+          copia en cualquier momento para restaurarla en otro equipo o teléfono.
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#1a1f33] hover:bg-[#232945] border border-[#2e375a] text-slate-200 text-xs font-bold rounded-xl transition"
+          >
+            <Download className="w-4 h-4 text-cyan-400" />
+            <span>Descargar Respaldo</span>
+          </button>
+
+          <label className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#1a1f33] hover:bg-[#232945] border border-[#2e375a] text-slate-200 text-xs font-bold rounded-xl cursor-pointer transition">
+            <Upload className="w-4 h-4 text-purple-400" />
+            <span>Restaurar Datos</span>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {importStatus && (
+          <p className="text-xs text-center text-cyan-300 font-medium">{importStatus}</p>
+        )}
+      </div>
+    </div>
+  );
+};

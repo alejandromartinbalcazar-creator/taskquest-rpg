@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-dark: #090a10;
+    --card-dark: #121420;
+    --border-dark: #22263d;
+  }
+  
+  body {
+    background-color: var(--bg-dark);
+    color: #e2e8f0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0f17;
+}
+::-webkit-scrollbar-thumb {
+  background: #272c47;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4269;
+}
+
+/* Animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.98); }
+}
+
+@keyframes float-hero {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes slash-hit {
+  0% { transform: scale(0.8) rotate(-15deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 0; }
+}
+
+@keyframes damage-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s infinite ease-in-out;
+}
+
+.animate-float {
+  animation: float-hero 3s infinite ease-in-out;
+}
+
+.animate-damage {
+  animation: damage-shake 0.4s ease-in-out;
+}
+
+/* Glow effects */
+.glow-fire {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.45);
+}
+.glow-lightning {
+  box-shadow: 0 0 20px rgba(234, 179, 8, 0.45);
+}
+.glow-earth {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.45);
+}
+.glow-ice {
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
+}
+.glow-plasma {
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
+}
+.glow-magma {
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.6);
+}

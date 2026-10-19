@@ -1,0 +1,18 @@
+{
+  "name": "TaskQuest RPG - Vence la Procrastinación",
+  "short_name": "TaskQuest",
+  "description": "Gestiona tu vida real mediante un RPG de hábitos, micro-pasos y combate contra la inacción.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090a10",
+  "theme_color": "#090a10",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
