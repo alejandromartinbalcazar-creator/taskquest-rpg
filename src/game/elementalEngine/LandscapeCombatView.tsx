@@ -20,6 +20,7 @@ import {
   VolcanicBombardmentEntity,
   VolcanicFissureEntity,
   LavaBombEntity,
+  ThermalVortexEntity,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -470,6 +471,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     tectonicFists: [] as TectonicFistEntity[],
     cryoBeams: [] as CryoBeamEntity[],
     volcanicBombardments: [] as VolcanicBombardmentEntity[],
+    thermalVortices: [] as ThermalVortexEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     particles: [] as Particle[],
@@ -766,6 +768,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.tectonicFists = [];
       g.cryoBeams = [];
       g.volcanicBombardments = [];
+      g.thermalVortices = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -885,7 +888,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'earth_megalith') {
         // Puño Tectónico tiene su propio rugido sísmico de invocación
       }
-      else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
+      else if (recipe.id === 'thermal_shock') {
+        // Vórtice de Choque Térmico gestiona sus propios sonidos de descompresión sónica y fractura
+      }
       else if (recipe.id === 'magma_eruption') {
         // Bombardeo Volcánico gestiona sus propios sonidos de rugido sísmico, géiseres y splat
       }
@@ -921,6 +926,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
         targetX = wizard.x + Math.cos(aimAngle) * 260;
         targetY = wizard.y + Math.sin(aimAngle) * 260;
+      } else if (recipe.id === 'thermal_shock') {
+        // Vórtice de Choque Térmico: Centrado en el jugador por defecto (botón de pánico), o en el cursor/joystick si apunta
+        if (attackAimRef.current.isAiming) {
+          const adx = attackAimRef.current.currX - attackAimRef.current.startX;
+          const ady = attackAimRef.current.currY - attackAimRef.current.startY;
+          if (Math.hypot(adx, ady) > 7) {
+            aimAngle = Math.atan2(ady, adx);
+            targetX = wizard.x + Math.cos(aimAngle) * 95;
+            targetY = wizard.y + Math.sin(aimAngle) * 95 * 0.58;
+          } else {
+            targetX = wizard.x;
+            targetY = wizard.y;
+          }
+        } else if (mousePosRef.current.active && Math.hypot(mousePosRef.current.x - wizard.x, mousePosRef.current.y - wizard.y) > 40) {
+          targetX = mousePosRef.current.x;
+          targetY = mousePosRef.current.y;
+          aimAngle = Math.atan2(targetY - wizard.y, targetX - wizard.x);
+        } else {
+          targetX = wizard.x;
+          targetY = wizard.y;
+        }
       } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption') {
         // Apuntado de Puño Tectónico / Bombardeo Volcánico: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
         const targetDist = recipe.id === 'magma_eruption' ? 180 : 220;
@@ -1500,30 +1526,71 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           }
         });
       }
-      // 2. FUEGO + HIELO (CHOQUE TÉRMICO)
+      // 2. FUEGO + HIELO (VÓRTICE DE CHOQUE TÉRMICO: ONDA EXPANSIVA DE VAPOR, EMPUJE Y DETONACIÓN REACTIVA)
       else if (recipe.id === 'thermal_shock') {
-        g.screenShake = isCharged ? 9 : 6;
-        g.projectiles.push({
-          id: `proj-${now}`,
-          x: wizard.x,
-          y: wizard.y,
-          vx: Math.cos(aimAngle) * 8.0,
-          vy: Math.sin(aimAngle) * 8.0,
-          radius: isCharged ? 16 : 12,
-          color: recipe.color,
-          secondaryColor: recipe.secondaryColor,
-          damage: recipe.damage * chargeMultiplier,
-          knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
-          life: 45,
-          maxLife: 45,
-          pierce: 1,
-          piercedIds: [],
-          isHostile: false,
-          spellType: 'thermal_shock',
-          visualShape: 'thermal_core',
-          onHitSpawn: 'steam_blast',
-          areaOfEffect: isCharged ? 90 : 65,
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const ratio = chargeRatio !== undefined ? Math.max(0, Math.min(1.0, chargeRatio)) : (isCharged ? 1.0 : 0);
+        // Daño base al 100% en toque normal, y +50% adicional en sobrecarga (1.5x)
+        const chargeDamageBoost = 1.0 + 0.50 * (isMaxCharge ? 1.0 : ratio);
+
+        const baseDmg = recipe.damage + statBonus;
+        const finalDmg = Math.round(baseDmg * chargeDamageBoost);
+        const maxRadius = isMaxCharge ? 150 : 105;
+        const knockbackForce = (recipe.knockback || 8.5) * (isMaxCharge ? 1.35 : 1.0);
+
+        elementalSound.playThermalShockBlast(isMaxCharge);
+        g.screenShake = isMaxCharge ? 10 : 6;
+
+        g.thermalVortices.push({
+          id: `vortex-${now}-${Math.random()}`,
+          x: targetX,
+          y: targetY,
+          currentRadius: 0,
+          maxRadius,
+          damage: finalDmg,
+          knockback: knockbackForce,
+          isCharged: isMaxCharge,
+          phase: 'expanding',
+          phaseTimer: 0,
+          expandDurationMs: 260,
+          dissipateDurationMs: 240,
+          hasDealtDamage: false,
+          hitEnemyIds: [],
+          ringSeed: Math.random(),
         });
+
+        // Partículas iniciales de condensación violenta (chispa ígnea y cristales árticos)
+        for (let p = 0; p < (isMaxCharge ? 16 : 10); p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pDist = Math.random() * 20;
+          const pSpd = 2.0 + Math.random() * 3.5;
+          g.particles.push({
+            id: `vortex-init-${now}-${p}`,
+            x: targetX + Math.cos(pAng) * pDist,
+            y: targetY + Math.sin(pAng) * pDist * 0.58,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd * 0.58 - 0.5,
+            radius: 1.8 + Math.random() * 1.8,
+            color: p % 2 === 0 ? '#ff6d00' : '#80d8ff',
+            alpha: 1,
+            life: 20,
+          });
+        }
+
+        g.floatingTexts.push({
+          id: `vortex-text-${now}`,
+          x: wizard.x,
+          y: wizard.y - 25,
+          text: isMaxCharge ? '♨️ ¡SOBRECARGA TÉRMICA +50%!' : '♨️ ¡VÓRTICE DE CHOQUE TÉRMICO!',
+          color: isMaxCharge ? '#80d8ff' : '#f43f5e',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.3,
+          life: 38,
+        });
+
+        setElementQueue([]);
+        return;
       }
       // 3. FUEGO + TIERRA (BOMBARDEO VOLCÁNICO: RETARDO, FISURAS MAGMÁTICAS, GÉISERES Y BOMBAS BALÍSTICAS)
       else if (recipe.id === 'magma_eruption') {
@@ -1903,17 +1970,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'magma_eruption'
-      ? 'volcanic'
-      : (activeRecipe.id === 'cryo_storm'
-        ? 'cryo'
-        : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-          ? 'lightning'
-          : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-            ? 'ice'
-            : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-              ? 'earth'
-              : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))));
+    wizard.chargeType = activeRecipe.id === 'thermal_shock'
+      ? 'thermal'
+      : (activeRecipe.id === 'magma_eruption'
+        ? 'volcanic'
+        : (activeRecipe.id === 'cryo_storm'
+          ? 'cryo'
+          : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+            ? 'lightning'
+            : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+              ? 'ice'
+              : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                ? 'earth'
+                : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -1929,7 +1998,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption')
+    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock')
       ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2225,7 +2294,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isTectonic = activeRecipe.id === 'earth_megalith';
         const isCryo = activeRecipe.id === 'cryo_storm';
         const isVolcanic = activeRecipe.id === 'magma_eruption';
-        const maxChargeTime = (isCryo || isVolcanic) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isThermal = activeRecipe.id === 'thermal_shock';
+        const maxChargeTime = (isCryo || isVolcanic || isThermal) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2338,6 +2408,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Filamentos entrelazados de fuego y escarcha ártica convergentes para Vórtice de Choque Térmico
+        else if (isThermal) {
+          if (Math.random() < 0.4 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `thermal-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.2 + wizard.chargeRatio * 2.2),
+              vy: -Math.sin(pAng) * (1.2 + wizard.chargeRatio * 1.3),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.5 ? '#ff6d00' : '#80d8ff',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2416,6 +2506,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 14,
               color: '#ff6d00',
+              alpha: 1,
+              life: 16,
+              maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isThermal) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6.5;
+            g.particles.push({
+              id: `thermal-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 14,
+              color: '#80d8ff',
               alpha: 1,
               life: 16,
               maxLife: 16,
@@ -4489,6 +4595,156 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.8 Actualizar Vórtice de Choque Térmico (Fuego + Hielo: Onda expansiva, empuje radial y detonación crítica)
+      for (let vIdx = g.thermalVortices.length - 1; vIdx >= 0; vIdx--) {
+        const vortex = g.thermalVortices[vIdx];
+        vortex.phaseTimer += dt;
+
+        // FASE A / B: EXPANSIÓN DE LA ONDA DE VAPOR (260 ms)
+        if (vortex.phase === 'expanding') {
+          const prog = Math.min(1.0, vortex.phaseTimer / vortex.expandDurationMs);
+          vortex.currentRadius = vortex.maxRadius * Math.sin(prog * Math.PI * 0.5);
+
+          // Detección de colisión, empuje y daño a enemigos en el frente de choque
+          for (const enemy of g.enemyManager.enemies) {
+            if (enemy.hp <= 0) continue;
+            if (vortex.hitEnemyIds.includes(enemy.id)) continue;
+
+            const dist = Math.hypot(enemy.x - vortex.x, (enemy.y - vortex.y) / 0.58);
+            if (dist <= enemy.radius + vortex.currentRadius) {
+              vortex.hitEnemyIds.push(enemy.id);
+
+              // Comprobar sinergia reactiva: ¿Tiene acumulación de congelación o escarcha previa?
+              const hasFrozenStatus = enemy.statuses.some((s) => s.type === 'frozen' || s.type === 'slowed');
+
+              if (hasFrozenStatus) {
+                // DETONACIÓN CRÍTICA POR CHOQUE TÉRMICO (x2.4 de daño masivo)
+                const critDmg = Math.round(vortex.damage * 2.4);
+                enemy.hp -= critDmg;
+                enemy.hitFlash = 15;
+
+                // Consumir el estado de congelación inmediatamente
+                enemy.statuses = enemy.statuses.filter((s) => s.type !== 'frozen' && s.type !== 'slowed');
+
+                // Aturdimiento garantizado (1.0 segundo = 60 frames)
+                enemy.stunnedTimer = 60;
+                enemy.isTelegraphing = false;
+                enemy.attackCooldown = 0;
+
+                elementalSound.playThermalShatterCrit();
+                g.screenShake = Math.max(g.screenShake, 8.5);
+
+                // Estallido secundario localizado sobre el enemigo (esquirlas de hielo y vapor a presión)
+                for (let sc = 0; sc < 14; sc++) {
+                  const sAng = Math.random() * Math.PI * 2;
+                  const sSpd = 2.5 + Math.random() * 4.5;
+                  g.particles.push({
+                    id: `shatter-${frameNow}-${enemy.id}-${sc}`,
+                    x: enemy.x,
+                    y: enemy.y - 12,
+                    vx: Math.cos(sAng) * sSpd,
+                    vy: Math.sin(sAng) * sSpd * 0.58 - 1.0,
+                    radius: 1.8 + Math.random() * 2.0,
+                    color: sc % 3 === 0 ? '#ffffff' : (sc % 3 === 1 ? '#80d8ff' : '#e0f7fa'),
+                    alpha: 1,
+                    life: 22,
+                  });
+                }
+
+                g.floatingTexts.push({
+                  id: `vortex-crit-${frameNow}-${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 28,
+                  text: `♨️💥 -${critDmg} [¡DETONACIÓN TÉRMICA!]`,
+                  color: '#38bdf8',
+                  fontSize: 14,
+                  opacity: 1,
+                  vy: -1.6,
+                  life: 42,
+                });
+              } else {
+                // Daño estándar de la onda de vapor
+                enemy.hp -= vortex.damage;
+                enemy.hitFlash = 10;
+                enemy.isTelegraphing = false;
+                enemy.attackCooldown = 0;
+
+                g.floatingTexts.push({
+                  id: `vortex-hit-${frameNow}-${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 20,
+                  text: `♨️ -${vortex.damage} [VAPOR]`,
+                  color: '#f43f5e',
+                  fontSize: 12,
+                  opacity: 1,
+                  vy: -1.2,
+                  life: 30,
+                });
+              }
+
+              // Empuje violento radial hacia afuera (Radial Knockback)
+              const isBoss = enemy.archetype === 'boss';
+              if (!isBoss) {
+                let pushAng = Math.atan2(enemy.y - vortex.y, enemy.x - vortex.x);
+                if (Math.abs(enemy.x - vortex.x) < 2 && Math.abs(enemy.y - vortex.y) < 2) {
+                  pushAng = Math.random() * Math.PI * 2;
+                }
+                const pushDist = vortex.knockback * (vortex.isCharged ? 4.8 : 3.6);
+                enemy.vx += Math.cos(pushAng) * (pushDist * 0.45);
+                enemy.vy += Math.sin(pushAng) * (pushDist * 0.45 * 0.58);
+                enemy.x += Math.cos(pushAng) * (pushDist * 0.55);
+                enemy.y += Math.sin(pushAng) * (pushDist * 0.55 * 0.58);
+              } else {
+                enemy.stunnedTimer = 22; // Micro-interrupción para jefes
+              }
+
+              // Salpicadura de vapor al impactar a cada enemigo
+              for (let sp = 0; sp < 4; sp++) {
+                const spAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `vortex-steam-${frameNow}-${enemy.id}-${sp}`,
+                  x: enemy.x,
+                  y: enemy.y - 10,
+                  vx: Math.cos(spAng) * 2.0,
+                  vy: Math.sin(spAng) * 2.0 - 0.8,
+                  radius: 2.2,
+                  color: '#eceff1',
+                  alpha: 0.7,
+                  life: 16,
+                });
+              }
+            }
+          }
+
+          // Daño y derretimiento de obstáculos en el área
+          g.terrainManager.obstacles.forEach((obs) => {
+            if (obs.hp !== undefined && obs.hp > 0) {
+              const dist = Math.hypot(obs.x - vortex.x, (obs.y - vortex.y) / 0.58);
+              if (dist <= obs.radius + vortex.currentRadius) {
+                // El calor del vapor derrite estacas de hielo y muros gélidos rápidamente
+                const meltBonus = (obs.obstacleType === 'ice_wall' || obs.obstacleType === 'permafrost_spike') ? 2.5 : 1.0;
+                obs.hp -= vortex.damage * meltBonus;
+              }
+            }
+          });
+
+          if (vortex.phaseTimer >= vortex.expandDurationMs) {
+            vortex.phase = 'dissipating';
+            vortex.phaseTimer = 0;
+          }
+        }
+        // FASE D: DISIPACIÓN DE LA NIEBLA DE VAPOR (240 ms)
+        else if (vortex.phase === 'dissipating') {
+          if (vortex.phaseTimer >= vortex.dissipateDurationMs) {
+            vortex.phase = 'finished';
+          }
+        }
+
+        if (vortex.phase === 'finished') {
+          g.thermalVortices.splice(vIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -4557,6 +4813,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.tectonicFists,
             g.cryoBeams,
             g.volcanicBombardments,
+            g.thermalVortices,
             g.forestLevel ?? undefined
           );
         }
@@ -4814,6 +5071,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-200 shadow-[0_0_30px_rgba(0,240,255,0.95)] animate-pulse'
                     : activeRecipe.id === 'magma_eruption'
                     ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
+                    : activeRecipe.id === 'thermal_shock'
+                    ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -4825,6 +5084,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_20px_rgba(0,240,255,0.7)]'
                     : activeRecipe.id === 'magma_eruption'
                     ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
+                    : activeRecipe.id === 'thermal_shock'
+                    ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -4846,6 +5107,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡CRÍO +50%! ❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️⚡' : 'RAYO CRÍO ❄️⚡')
                 : activeRecipe.id === 'magma_eruption'
                 ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
+                : activeRecipe.id === 'thermal_shock'
+                ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -4864,6 +5127,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_8px_#00f0ff]'
                       : activeRecipe.id === 'magma_eruption'
                       ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff6d00]'
+                      : activeRecipe.id === 'thermal_shock'
+                      ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-cyan-400 shadow-[0_0_8px_#f43f5e]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

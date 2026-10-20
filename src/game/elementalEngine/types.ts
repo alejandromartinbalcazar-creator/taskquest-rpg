@@ -449,6 +449,27 @@ export interface VolcanicBombardmentEntity {
   finished: boolean;
 }
 
+// VÓRTICE DE CHOQUE TÉRMICO (FUEGO + HIELO: EXPANSIÓN RADIAL DE VAPOR, EMPUJE Y DETONACIÓN REACTIVA)
+export type ThermalVortexPhase = 'expanding' | 'dissipating' | 'finished';
+
+export interface ThermalVortexEntity {
+  id: string;
+  x: number;
+  y: number;
+  currentRadius: number;
+  maxRadius: number; // base ~105px (3.0 unidades), cargado ~150px (4.2 unidades)
+  damage: number;
+  knockback: number;
+  isCharged: boolean;
+  phase: ThermalVortexPhase;
+  phaseTimer: number;
+  expandDurationMs: number; // ~260ms
+  dissipateDurationMs: number; // ~240ms
+  hasDealtDamage: boolean;
+  hitEnemyIds: string[];
+  ringSeed: number;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

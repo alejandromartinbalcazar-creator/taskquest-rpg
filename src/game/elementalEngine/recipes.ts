@@ -117,16 +117,15 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
   // LAS 6 COMBINACIONES PRIORITARIAS DE 2 ELEMENTOS
   thermal_shock: {
     id: 'thermal_shock',
-    name: 'Choque Térmico',
+    name: 'Vórtice de Choque Térmico',
     elements: ['fire', 'ice'],
-    description: 'Onda de vapor a alta presión. Causa daño demoledor x2.5 si el enemigo estaba congelado.',
+    description: 'Violenta expansión radial de vapor a alta presión que empuja a los enemigos cercanos y detona críticamente (x2.4 de daño y aturdimiento) a quienes tengan escarcha o congelación previa.',
     icon: '♨️💥',
     color: '#f43f5e',
     secondaryColor: '#38bdf8',
-    damage: 58,
-    knockback: 5.5,
+    damage: 56,
+    knockback: 8.5,
     cooldownMs: 450,
-    selfDamageRisk: 0.2,
   },
   magma_eruption: {
     id: 'magma_eruption',

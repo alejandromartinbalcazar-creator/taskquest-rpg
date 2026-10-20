@@ -1608,6 +1608,97 @@ class ElementalSoundEngine {
     noise.start(now);
     noise.stop(now + 0.12);
   }
+
+  // =========================================================================
+  // VÓRTICE DE CHOQUE TÉRMICO (FUEGO + HIELO: EXPANSIÓN DE VAPOR Y DETONACIÓN)
+  // =========================================================================
+
+  // 1. Expansión explosiva de la onda de vapor y choque térmico
+  public playThermalShockBlast(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // A. Golpe sónico grave de descompresión
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(isCharged ? 160 : 130, now);
+    osc.frequency.exponentialRampToValueAtTime(36, now + 0.32);
+
+    gain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.32);
+
+    // B. Ráfaga expansiva de vapor sibilante a alta presión (White noise con bandpass dinámico)
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.34);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.45;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(isCharged ? 1200 : 950, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(320, now + 0.34);
+    noiseFilter.Q.setValueAtTime(1.8, now);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(isCharged ? 0.28 : 0.20, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.34);
+  }
+
+  // 2. Fractura reactiva y detonación crítica sobre enemigo congelado
+  public playThermalShatterCrit() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Quiebre cristalino de hielo de alta frecuencia
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1400, now);
+    osc.frequency.exponentialRampToValueAtTime(450, now + 0.18);
+
+    gain.gain.setValueAtTime(0.32, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+
+    // Detonación sónica por vaporización súbita interna
+    const pop = this.ctx.createOscillator();
+    const popGain = this.ctx.createGain();
+    pop.type = 'sine';
+    pop.frequency.setValueAtTime(260, now);
+    pop.frequency.exponentialRampToValueAtTime(65, now + 0.15);
+
+    popGain.gain.setValueAtTime(0.26, now);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+    pop.connect(popGain);
+    popGain.connect(this.ctx.destination);
+    pop.start(now);
+    pop.stop(now + 0.15);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

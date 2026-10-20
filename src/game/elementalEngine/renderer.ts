@@ -17,6 +17,7 @@ import {
   VolcanicBombardmentEntity,
   VolcanicFissureEntity,
   LavaBombEntity,
+  ThermalVortexEntity,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -65,6 +66,7 @@ export class IsometricRenderer {
     tectonicFists: TectonicFistEntity[] = [],
     cryoBeams: CryoBeamEntity[] = [],
     volcanicBombardments: VolcanicBombardmentEntity[] = [],
+    thermalVortices: ThermalVortexEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -112,6 +114,9 @@ export class IsometricRenderer {
     // 3.75 Dibujar Suelo, Grietas y Sombras de Bombardeo Volcánico (Fuego + Tierra)
     this.drawVolcanicBombardmentFloor(ctx, volcanicBombardments);
 
+    // 3.76 Dibujar Vórtices de Choque Térmico (Fuego + Hielo: Ondas radiales de vapor y micro-anillos concéntricos)
+    this.drawThermalVortices(ctx, thermalVortices);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -121,6 +126,8 @@ export class IsometricRenderer {
       this.drawCryoAimTrajectory(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'volcanic') {
       this.drawVolcanicAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'thermal') {
+      this.drawThermalAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -1129,6 +1136,56 @@ export class IsometricRenderer {
         if (isReady) {
           ctx.strokeStyle = '#fff176';
           ctx.lineWidth = 1.3;
+          for (let sp = 0; sp < 3; sp++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const spR1 = pulseR * 0.8;
+            const spR2 = pulseR * 1.6;
+            ctx.beginPath();
+            ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+            ctx.lineTo(staffX + Math.cos(spAng + 0.3) * spR2, staffY + Math.sin(spAng + 0.3) * spR2);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Resplandor dual de fuego y hielo para Vórtice de Choque Térmico (Fuego + Hielo)
+      const isThermal = wizard.chargeType === 'thermal';
+      if (isThermal) {
+        ctx.shadowBlur = 0;
+        const sparkCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 7));
+        for (let sc = 0; sc < sparkCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.007 : -0.007) + (sc * Math.PI * 2) / sparkCount;
+          const scDist = 18 + ratio * 10;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? (isReady ? '#ffffff' : '#ff6d00') : (isReady ? '#80d8ff' : '#06b6d4');
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 2.8 : 2.0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Esfera dual de colisión térmica en el báculo al cargar
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9 : 5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const thermalGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        thermalGrad.addColorStop(0, '#ffffff');
+        thermalGrad.addColorStop(0.3, '#80d8ff');
+        thermalGrad.addColorStop(0.65, '#ff6d00');
+        thermalGrad.addColorStop(0.9, '#f43f5e');
+        thermalGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+        ctx.fillStyle = thermalGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (isReady) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
           for (let sp = 0; sp < 3; sp++) {
             const spAng = Math.random() * Math.PI * 2;
             const spR1 = pulseR * 0.8;
@@ -3318,6 +3375,180 @@ export class IsometricRenderer {
     ctx.shadowBlur = 4;
     ctx.fillText(
       isReady ? '¡SOBRECARGA VOLCÁNICA +50%! 🌋 (5 FISURAS)' : 'BOMBARDEO VOLCÁNICO 🌋 (3 FISURAS)',
+      0,
+      -areaRadius * squish - 12
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // VÓRTICE DE CHOQUE TÉRMICO (FUEGO + HIELO: EXPANSIÓN DE VAPOR Y ANILLOS)
+  // =========================================================================
+
+  // 1. Onda expansiva de vapor a alta presión, núcleo térmico y micro-anillos de distorsión
+  private static drawThermalVortices(
+    ctx: CanvasRenderingContext2D,
+    vortices: ThermalVortexEntity[]
+  ) {
+    if (!vortices || vortices.length === 0) return;
+
+    vortices.forEach((vortex) => {
+      if (vortex.phase === 'finished') return;
+
+      const squish = 0.58;
+      const r = vortex.currentRadius;
+      if (r <= 2) return;
+
+      let alpha = 1.0;
+      let prog = 1.0;
+
+      if (vortex.phase === 'expanding') {
+        prog = Math.min(1.0, vortex.phaseTimer / vortex.expandDurationMs);
+        alpha = 1.0;
+      } else if (vortex.phase === 'dissipating') {
+        const disProg = Math.min(1.0, vortex.phaseTimer / vortex.dissipateDurationMs);
+        alpha = Math.max(0, 1.0 - disProg);
+        prog = 1.0;
+      }
+
+      ctx.save();
+      ctx.translate(vortex.x, vortex.y);
+
+      // A. Núcleo central térmico anaranjado que se consume y disuelve rápidamente
+      if (prog < 0.85 && alpha > 0.05) {
+        const coreAlpha = Math.max(0, (1.0 - prog * 1.18) * alpha * 0.7);
+        const coreR = r * 0.45;
+        const heatGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, coreR);
+        heatGrad.addColorStop(0, `rgba(255, 241, 118, ${coreAlpha})`);
+        heatGrad.addColorStop(0.4, `rgba(255, 109, 0, ${coreAlpha * 0.85})`);
+        heatGrad.addColorStop(0.85, `rgba(244, 63, 94, ${coreAlpha * 0.5})`);
+        heatGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+
+        ctx.fillStyle = heatGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, coreR, coreR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pavesas incandescentes centrales que se apagan al contacto con la niebla
+        const now = Date.now();
+        for (let eb = 0; eb < 5; eb++) {
+          const ebAng = now * 0.005 + eb * 1.25;
+          const ebDist = coreR * (0.3 + 0.5 * ((now * 0.002 + eb * 0.2) % 1.0));
+          const ebx = Math.cos(ebAng) * ebDist;
+          const eby = Math.sin(ebAng) * ebDist * squish;
+          ctx.fillStyle = `rgba(255, 241, 118, ${coreAlpha * 0.9})`;
+          ctx.beginPath();
+          ctx.arc(ebx, eby, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // B. Anillo denso de vapor translúcido (Mezcla de blanco nieve y gris ceniza suave)
+      const steamGrad = ctx.createRadialGradient(0, 0, r * 0.28, 0, 0, r * 1.04);
+      steamGrad.addColorStop(0, `rgba(255, 109, 0, ${0.15 * alpha})`);
+      steamGrad.addColorStop(0.32, `rgba(255, 255, 255, ${0.60 * alpha})`);
+      steamGrad.addColorStop(0.68, `rgba(236, 239, 241, ${0.46 * alpha})`);
+      steamGrad.addColorStop(0.88, `rgba(128, 216, 255, ${0.40 * alpha})`);
+      steamGrad.addColorStop(1, 'rgba(128, 216, 255, 0)');
+
+      ctx.fillStyle = steamGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // C. Micro-anillos concéntricos de distorsión sónica y choque a alta presión
+      // Anillo 1 (interno blanco)
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.52 * alpha})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.72, r * 0.72 * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Anillo 2 (medio cian de escarcha pulverizada)
+      ctx.strokeStyle = `rgba(128, 216, 255, ${0.62 * alpha})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.88, r * 0.88 * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // D. Borde frontal de condensación sónica (Perímetro exterior)
+      ctx.strokeStyle = vortex.isCharged
+        ? `rgba(128, 216, 255, ${0.92 * alpha})`
+        : `rgba(128, 216, 255, ${0.78 * alpha})`;
+      ctx.lineWidth = vortex.isCharged ? 3.2 : 2.2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // E. Filamentos de vapor radiales arremolinados
+      const wisps = 6;
+      for (let w = 0; w < wisps; w++) {
+        const wAng = (w * Math.PI * 2) / wisps + (vortex.ringSeed * 2);
+        const wx1 = Math.cos(wAng) * (r * 0.65);
+        const wy1 = Math.sin(wAng) * (r * 0.65 * squish);
+        const wx2 = Math.cos(wAng + 0.18) * (r * 0.95);
+        const wy2 = Math.sin(wAng + 0.18) * (r * 0.95 * squish);
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 * alpha})`;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(wx1, wy1);
+        ctx.quadraticCurveTo((wx1 + wx2) / 2 + 3, (wy1 + wy2) / 2 - 2, wx2, wy2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Previsualización de retícula táctica para Vórtice de Choque Térmico
+  private static drawThermalAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const areaRadius = isReady ? 150 : 105;
+
+    ctx.save();
+    ctx.translate(wizard.x, wizard.y);
+
+    // Círculo de cobertura de onda de choque térmico
+    ctx.strokeStyle = isReady ? '#80d8ff' : '#f43f5e';
+    ctx.lineWidth = isReady ? 2.4 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Anillo secundario interno
+    ctx.strokeStyle = isReady ? 'rgba(255, 109, 0, 0.7)' : 'rgba(128, 216, 255, 0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, areaRadius * 0.6, areaRadius * 0.6 * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Cruz sónica central
+    ctx.strokeStyle = isReady ? '#ffffff' : '#f43f5e';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-16, 0);
+    ctx.lineTo(16, 0);
+    ctx.moveTo(0, -16 * squish);
+    ctx.lineTo(0, 16 * squish);
+    ctx.stroke();
+
+    // Texto de HUD táctico flotante sobre la retícula
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#80d8ff' : '#f43f5e';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isReady ? '¡SOBRECARGA TÉRMICA +50%! ♨️💥 (RADIO 4.2)' : 'VÓRTICE DE CHOQUE TÉRMICO ♨️💥 (RADIO 3.0)',
       0,
       -areaRadius * squish - 12
     );
