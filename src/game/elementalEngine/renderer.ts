@@ -20,6 +20,8 @@ import {
   ThermalVortexEntity,
   ConductiveCageEntity,
   ConductivePillarNode,
+  PermafrostPrisonEntity,
+  PermafrostMonolithNode,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -70,6 +72,7 @@ export class IsometricRenderer {
     volcanicBombardments: VolcanicBombardmentEntity[] = [],
     thermalVortices: ThermalVortexEntity[] = [],
     conductiveCages: ConductiveCageEntity[] = [],
+    permafrostPrisons: PermafrostPrisonEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -123,6 +126,9 @@ export class IsometricRenderer {
     // 3.77 Dibujar Suelo, Glifos y Arcos Voltaicos de la Jaula de Pilares Conductores (Rayo + Tierra)
     this.drawConductiveCageFloor(ctx, conductiveCages);
 
+    // 3.78 Dibujar Suelo, Fracturas y Escarcha de la Prisión de Permafrost (Hielo + Tierra)
+    this.drawPermafrostPrisonFloor(ctx, permafrostPrisons);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -136,6 +142,8 @@ export class IsometricRenderer {
       this.drawThermalAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'conductive') {
       this.drawConductiveAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'permafrost') {
+      this.drawPermafrostAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -231,6 +239,20 @@ export class IsometricRenderer {
             y: pillar.y,
             draw: () => this.drawConductivePillar(ctx, pillar, cage),
           });
+        });
+      }
+    });
+
+    // Monolitos de Prisión de Permafrost (Hielo + Tierra) integrados en el Depth Sorting
+    permafrostPrisons.forEach((prison) => {
+      if (prison.phase !== 'finished') {
+        prison.monoliths.forEach((mono) => {
+          if (!mono.shattered) {
+            renderList.push({
+              y: mono.y,
+              draw: () => this.drawPermafrostMonolith(ctx, mono, prison),
+            });
+          }
         });
       }
     });
@@ -1265,6 +1287,61 @@ export class IsometricRenderer {
           ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
           ctx.lineTo(staffX + Math.cos(spAng + 0.35) * spR2, staffY + Math.sin(spAng + 0.35) * spR2);
           ctx.stroke();
+        }
+      }
+
+      // Resplandor glacio-tectónico para Prisión de Permafrost (Hielo + Tierra)
+      const isPermafrost = wizard.chargeType === 'permafrost';
+      if (isPermafrost) {
+        ctx.shadowBlur = 0;
+        const crystalCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 7));
+        for (let sc = 0; sc < crystalCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.007 : -0.007) + (sc * Math.PI * 2) / crystalCount;
+          const scDist = 18 + ratio * 10;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? (isReady ? '#ffffff' : '#00e5ff') : (isReady ? '#80d8ff' : '#37474f');
+          ctx.beginPath();
+          ctx.moveTo(0, -3.2);
+          ctx.lineTo(2.2, 0);
+          ctx.lineTo(0, 3.2);
+          ctx.lineTo(-2.2, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Esfera de permafrost y escarcha densa en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9.5 : 5.5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const frostGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        frostGrad.addColorStop(0, '#ffffff');
+        frostGrad.addColorStop(0.3, '#00e5ff');
+        frostGrad.addColorStop(0.7, '#0284c7');
+        frostGrad.addColorStop(0.9, '#37474f');
+        frostGrad.addColorStop(1, 'rgba(55, 71, 79, 0)');
+        ctx.fillStyle = frostGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Destellos de hielo gélido
+        if (isReady) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          for (let sp = 0; sp < 4; sp++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const spR1 = pulseR * 0.6;
+            const spR2 = pulseR * 1.6;
+            ctx.beginPath();
+            ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+            ctx.lineTo(staffX + Math.cos(spAng + 0.25) * spR2, staffY + Math.sin(spAng + 0.25) * spR2);
+            ctx.stroke();
+          }
         }
       }
 
@@ -4516,6 +4593,351 @@ export class IsometricRenderer {
     ctx.shadowBlur = 4;
     ctx.fillText(
       isReady ? '¡JAULA DE 4 PILARES (+50% DAÑO)!' : 'JAULA CONDUCTORA (3 PILARES)',
+      0,
+      -r * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // PRISIÓN DE PERMAFROST (HIELO + TIERRA: SUELO, MONOLITOS Y RETÍCULA TÁCTICA)
+  // =========================================================================
+
+  // 1. Dibuja el suelo, cráter de escarcha, niebla gélida y fracturas de la Prisión de Permafrost
+  private static drawPermafrostPrisonFloor(
+    ctx: CanvasRenderingContext2D,
+    prisons: PermafrostPrisonEntity[]
+  ) {
+    if (!prisons || prisons.length === 0) return;
+
+    const squish = 0.58;
+
+    prisons.forEach((prison) => {
+      if (prison.phase === 'finished') return;
+
+      const now = Date.now();
+      let alpha = 1.0;
+      if (prison.phase === 'erupting') {
+        alpha = Math.min(1.0, 0.4 + (prison.phaseTimer / prison.eruptDurationMs) * 0.6);
+      } else if (prison.phase === 'shattering') {
+        alpha = Math.max(0, 1.0 - prison.phaseTimer / prison.shatterDurationMs);
+      }
+
+      ctx.save();
+
+      // A. Cráter de permafrost y escarcha fría en el suelo
+      const r = prison.radius;
+      const groundGrad = ctx.createRadialGradient(prison.centerX, prison.centerY, 10, prison.centerX, prison.centerY, r * 1.25);
+      groundGrad.addColorStop(0, `rgba(0, 229, 255, ${0.28 * alpha})`);
+      groundGrad.addColorStop(0.5, `rgba(2, 132, 199, ${0.16 * alpha})`);
+      groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = groundGrad;
+      ctx.beginPath();
+      ctx.ellipse(prison.centerX, prison.centerY, r * 1.25, r * 1.25 * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Anillo perimetral de escarcha y barrera cristalina
+      ctx.strokeStyle = `rgba(128, 216, 255, ${0.55 * alpha})`;
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.ellipse(prison.centerX, prison.centerY, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Grietas de hielo desde el centro hacia cada monolito activo
+      prison.monoliths.forEach((m) => {
+        if (m.shattered) return;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.75 * alpha})`;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(prison.centerX, prison.centerY);
+        const midX = (prison.centerX + m.x) * 0.5 + Math.sin(now * 0.006 + m.angles[0]) * 3;
+        const midY = (prison.centerY + m.y) * 0.5 + Math.cos(now * 0.006 + m.angles[0]) * 1.5;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(m.x, m.y);
+        ctx.stroke();
+
+        // Núcleo cian de la grieta
+        ctx.strokeStyle = `rgba(0, 229, 255, ${0.9 * alpha})`;
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+      });
+
+      // Niebla de vaho helado flotando sobre el suelo
+      const mistPulse = Math.sin(now * 0.003) * 4;
+      const mistGrad = ctx.createRadialGradient(prison.centerX, prison.centerY, 1, prison.centerX, prison.centerY, (r * 0.75) + mistPulse);
+      mistGrad.addColorStop(0, `rgba(224, 247, 250, ${0.2 * alpha})`);
+      mistGrad.addColorStop(1, 'rgba(224, 247, 250, 0)');
+      ctx.fillStyle = mistGrad;
+      ctx.beginPath();
+      ctx.ellipse(prison.centerX, prison.centerY, (r * 0.75) + mistPulse, ((r * 0.75) + mistPulse) * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja un Monolito de Permafrost (roca angular oscura revestida de permafrost cristalino y fracturas)
+  private static drawPermafrostMonolith(
+    ctx: CanvasRenderingContext2D,
+    mono: PermafrostMonolithNode,
+    prison: PermafrostPrisonEntity
+  ) {
+    const squish = 0.58;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Temblor al recibir impactos o al detonar
+    let shakeX = 0;
+    let shakeY = 0;
+    if (mono.hitFlash > 0) {
+      shakeX = (Math.random() - 0.5) * 3;
+      shakeY = (Math.random() - 0.5) * 3;
+    } else if (mono.shattered) {
+      const shakeAmt = (mono.shatterTimer / prison.shatterDurationMs) * 7;
+      shakeX = (Math.random() - 0.5) * shakeAmt;
+      shakeY = (Math.random() - 0.5) * shakeAmt;
+    }
+
+    ctx.translate(mono.x + shakeX, mono.y + shakeY);
+
+    // A. Sombra proyectada en el suelo
+    const baseR = mono.radius;
+    const shadowGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, baseR * 1.5);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+    shadowGrad.addColorStop(0.7, 'rgba(15, 23, 42, 0.35)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, baseR * 1.5, baseR * 1.5 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // B. Collar de estacas de hielo en la base
+    mono.angles.forEach((ang) => {
+      const spkLen = baseR * 1.45;
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ang) * (baseR * 0.7), Math.sin(ang) * (baseR * 0.7) * squish);
+      ctx.lineTo(Math.cos(ang) * spkLen, Math.sin(ang) * spkLen * squish);
+      ctx.stroke();
+    });
+
+    const h = mono.height;
+    if (h > 4) {
+      const halfW = baseR * 0.95;
+      const topHalfW = baseR * 0.72;
+      const topY = -h;
+
+      // C. Núcleo de Roca Angular (Pizarra oscura)
+      // Cara izquierda (sombra profunda)
+      ctx.fillStyle = '#263238';
+      ctx.beginPath();
+      ctx.moveTo(-halfW, 0);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(0, topY + 2);
+      ctx.lineTo(-topHalfW, topY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cara derecha (roca iluminada)
+      ctx.fillStyle = '#455a64';
+      ctx.beginPath();
+      ctx.moveTo(0, 3);
+      ctx.lineTo(halfW, 0);
+      ctx.lineTo(topHalfW, topY);
+      ctx.lineTo(0, topY + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // D. Coraza Exterior de Permafrost Translúcido (Placas de hielo cristalino)
+      // Capa de hielo izquierda
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.42)';
+      ctx.beginPath();
+      ctx.moveTo(-halfW - 2, 0);
+      ctx.lineTo(0, 4);
+      ctx.lineTo(0, topY);
+      ctx.lineTo(-topHalfW - 2, topY - 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Capa de hielo derecha
+      ctx.fillStyle = 'rgba(128, 216, 255, 0.65)';
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(halfW + 2, 0);
+      ctx.lineTo(topHalfW + 2, topY - 2);
+      ctx.lineTo(0, topY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Aristas afiladas de permafrost brillante
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(0, topY);
+      ctx.moveTo(-halfW - 2, 0);
+      ctx.lineTo(-topHalfW - 2, topY - 2);
+      ctx.moveTo(halfW + 2, 0);
+      ctx.lineTo(topHalfW + 2, topY - 2);
+      ctx.stroke();
+
+      // E. Cúspide Glacial Afilada (Corona de hielo y roca)
+      const tipY = topY - 14;
+      ctx.fillStyle = '#80d8ff';
+      ctx.beginPath();
+      ctx.moveTo(0, topY);
+      ctx.lineTo(-topHalfW - 2, topY - 2);
+      ctx.lineTo(0, tipY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(0, topY);
+      ctx.lineTo(topHalfW + 2, topY - 2);
+      ctx.lineTo(0, tipY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Destello de corona gélida
+      const coronaGrad = ctx.createRadialGradient(0, tipY + 4, 1, 0, tipY + 4, 16);
+      coronaGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      coronaGrad.addColorStop(0.4, 'rgba(0, 229, 255, 0.7)');
+      coronaGrad.addColorStop(0.8, 'rgba(2, 132, 199, 0.35)');
+      coronaGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      ctx.fillStyle = coronaGrad;
+      ctx.beginPath();
+      ctx.arc(0, tipY + 4, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      // F. Grietas Progresivas de Daño / Desgaste
+      if (mono.hp < mono.maxHp) {
+        const crackPct = Math.max(0, Math.min(1.0, 1.0 - mono.hp / mono.maxHp));
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-halfW * 0.6, topY * 0.25);
+        ctx.lineTo(-halfW * 0.1, topY * (0.45 * crackPct));
+        ctx.lineTo(-halfW * 0.45, topY * (0.75 * crackPct));
+        ctx.moveTo(halfW * 0.5, topY * 0.3);
+        ctx.lineTo(halfW * 0.15, topY * (0.6 * crackPct));
+        ctx.lineTo(halfW * 0.4, topY * (0.85 * crackPct));
+        ctx.stroke();
+
+        // Barra de vida táctica flotante sobre el monolito
+        const barW = 26;
+        const barH = 3.5;
+        const barY = tipY - 8;
+        const hpRatio = Math.max(0, mono.hp / mono.maxHp);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillRect(-barW / 2 - 1, barY - 1, barW + 2, barH + 2);
+
+        ctx.fillStyle = hpRatio > 0.5 ? '#00e5ff' : (hpRatio > 0.25 ? '#f59e0b' : '#ef4444');
+        ctx.fillRect(-barW / 2, barY, barW * hpRatio, barH);
+      }
+
+      // G. Destello de Impacto (Hit Flash)
+      if (mono.hitFlash > 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.beginPath();
+        ctx.moveTo(-halfW - 2, 0);
+        ctx.lineTo(halfW + 2, 0);
+        ctx.lineTo(topHalfW + 2, topY - 2);
+        ctx.lineTo(0, tipY);
+        ctx.lineTo(-topHalfW - 2, topY - 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // H. Emisión de Vaho Frío (Ralentización táctica visual)
+      const mistOffset = Math.sin(now * 0.005 + mono.angles[1]) * 3;
+      ctx.fillStyle = 'rgba(224, 247, 250, 0.18)';
+      ctx.beginPath();
+      ctx.arc(-halfW - 4, -h * 0.3 + mistOffset, 6, 0, Math.PI * 2);
+      ctx.arc(halfW + 4, -h * 0.4 - mistOffset, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Prisión de Permafrost
+  private static drawPermafrostAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const targetDist = 135;
+    const cx = wizard.x + Math.cos(wizard.facingAngle) * targetDist;
+    const cy = wizard.y + Math.sin(wizard.facingAngle) * targetDist * squish;
+    const r = isReady ? 90 : 64;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Vértices proyectados de los monolitos de permafrost
+    const points: Array<{ x: number; y: number }> = [];
+    if (!isReady) {
+      // 4 Monolitos: Rombo / Cuadrado circunscrito
+      points.push({ x: 0, y: -r * squish });
+      points.push({ x: r, y: 0 });
+      points.push({ x: 0, y: r * squish });
+      points.push({ x: -r, y: 0 });
+    } else {
+      // 6 Monolitos: Hexágono regular expandido (+50% daño/salud)
+      for (let i = 0; i < 6; i++) {
+        const ang = (i * Math.PI) / 3 - Math.PI / 2;
+        points.push({
+          x: r * Math.cos(ang),
+          y: r * Math.sin(ang) * squish,
+        });
+      }
+    }
+
+    // Perímetro poligonal punteado
+    ctx.strokeStyle = isReady ? '#80d8ff' : '#00e5ff';
+    ctx.lineWidth = isReady ? 2.4 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    points.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Marcadores glacio-tectónicos en cada monolito proyectado
+    points.forEach((pt) => {
+      ctx.fillStyle = isReady ? '#ffffff' : '#80d8ff';
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, isReady ? 5.5 : 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = isReady ? '#00e5ff' : '#0284c7';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, isReady ? 9 : 7, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // Texto de HUD táctico flotante
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#80d8ff' : '#00e5ff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isReady ? '¡PRISIÓN 6P (+50% DAÑO/VIDA)! ❄️🌍' : 'PRISIÓN DE PERMAFROST (4 MONOLITOS)',
       0,
       -r * squish - 14
     );

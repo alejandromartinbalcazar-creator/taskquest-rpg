@@ -23,6 +23,8 @@ import {
   ThermalVortexEntity,
   ConductiveCageEntity,
   ConductivePillarNode,
+  PermafrostPrisonEntity,
+  PermafrostMonolithNode,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -475,6 +477,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     volcanicBombardments: [] as VolcanicBombardmentEntity[],
     thermalVortices: [] as ThermalVortexEntity[],
     conductiveCages: [] as ConductiveCageEntity[],
+    permafrostPrisons: [] as PermafrostPrisonEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     particles: [] as Particle[],
@@ -773,6 +776,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.volcanicBombardments = [];
       g.thermalVortices = [];
       g.conductiveCages = [];
+      g.permafrostPrisons = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -904,7 +908,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'cryo_storm') {
         // Rayo Criogénico gestiona su propio sonido de disparo / sobrecarga
       }
-      else if (recipe.id === 'permafrost_prison') elementalSound.playPermafrostPrison();
+      else if (recipe.id === 'permafrost_prison') {
+        // Prisión de Permafrost gestiona sus propios sonidos de erupción telúrica y fragmentación
+      }
       else if (recipe.id === 'explosive_overload' || recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -953,9 +959,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = recipe.id === 'magma_eruption' ? 180 : (recipe.id === 'crystal_field' ? 140 : 220);
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220);
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -1502,35 +1508,156 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
-      // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST: ESTACAS TÁCTICAS + CONGELACIÓN)
+      // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST: MONOLITOS DE ROCA/HIELO, ABSORCIÓN DE PROYECTILES Y METRALLA RADIAL)
       else if (recipe.id === 'permafrost_prison') {
-        g.screenShake = isCharged ? 9 : 6;
-        elementalSound.playPermafrostPrison();
+        const isOverloaded = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const baseDmg = recipe.damage + statBonus;
+        const fragmentationDmg = Math.round(baseDmg * (isOverloaded ? 1.5 : 1.0));
+        const impactDmg = Math.round(16 * (isOverloaded ? 1.5 : 1.0));
+        const prisonRadius = isOverloaded ? 90 : 64;
+        const squish = 0.58;
+        const monolithHp = isOverloaded ? 180 : 120; // +50% durabilidad
+        const monolithMaxHeight = isOverloaded ? 74 : 62;
 
-        const spikeCount = isCharged ? 5 : 3;
-        g.terrainManager.spawnPermafrostSpikes(targetX, targetY, spikeCount);
-        g.terrainManager.spawnFrostPatch(targetX, targetY, isCharged ? 65 : 45);
+        g.screenShake = isOverloaded ? 8.5 : 5.5;
+        elementalSound.playPermafrostErupt(isOverloaded);
 
-        const prisonDmg = recipe.damage * chargeMultiplier;
-        g.enemyManager.enemies.forEach((enemy) => {
-          const dist = Math.hypot(enemy.x - targetX, enemy.y - targetY);
-          if (dist < (isCharged ? 85 : 65)) {
-            enemy.hp -= prisonDmg;
-            enemy.hitFlash = 10;
-            g.enemyManager.applyStatus(enemy, 'frozen', 150);
-            g.floatingTexts.push({
-              id: `spike-hit-${now}-${enemy.id}`,
-              x: enemy.x,
-              y: enemy.y - 18,
-              text: `🧊 -${Math.round(prisonDmg)} [CONGELADO]`,
-              color: '#38bdf8',
-              fontSize: 13,
-              opacity: 1,
-              vy: -1.3,
-              life: 35,
+        const monoliths: PermafrostMonolithNode[] = [];
+
+        if (!isOverloaded) {
+          // 4 Monolitos: Rombo / Cuadrado perimetral
+          const offsets = [
+            { x: 0, y: -prisonRadius * squish },
+            { x: prisonRadius, y: 0 },
+            { x: 0, y: prisonRadius * squish },
+            { x: -prisonRadius, y: 0 },
+          ];
+          offsets.forEach((off, idx) => {
+            monoliths.push({
+              id: `perma_mono_${now}_${idx}`,
+              x: targetX + off.x,
+              y: targetY + off.y,
+              height: 0,
+              maxHeight: monolithMaxHeight,
+              radius: 15,
+              hp: monolithHp,
+              maxHp: monolithHp,
+              crackProgress: 0,
+              shattered: false,
+              shatterTimer: 0,
+              hitFlash: 0,
+              angles: [idx * 1.5, idx * 1.5 + 2.1],
+            });
+          });
+        } else {
+          // 6 Monolitos: Hexágono regular reforzado
+          for (let i = 0; i < 6; i++) {
+            const ang = (i * Math.PI) / 3 - Math.PI / 2;
+            monoliths.push({
+              id: `perma_mono_${now}_${i}`,
+              x: targetX + prisonRadius * Math.cos(ang),
+              y: targetY + prisonRadius * Math.sin(ang) * squish,
+              height: 0,
+              maxHeight: monolithMaxHeight,
+              radius: 16,
+              hp: monolithHp,
+              maxHp: monolithHp,
+              crackProgress: 0,
+              shattered: false,
+              shatterTimer: 0,
+              hitFlash: 0,
+              angles: [i * 1.05, i * 1.05 + 2.4],
+            });
+          }
+        }
+
+        // Si algún enemigo común está justo en el punto de brote de un monolito, recibe daño de impacto y es empujado hacia el centro
+        const hitEnemyIds: string[] = [];
+        monoliths.forEach((m) => {
+          for (const enemy of g.enemyManager.enemies) {
+            if (enemy.hp <= 0) continue;
+            const dist = Math.hypot(enemy.x - m.x, (enemy.y - m.y) / squish);
+            if (dist < m.radius + enemy.radius) {
+              if (!hitEnemyIds.includes(enemy.id)) {
+                hitEnemyIds.push(enemy.id);
+                enemy.hp -= impactDmg;
+                enemy.hitFlash = 12;
+                // Empujar hacia el centro de la prisión
+                const pushAng = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+                enemy.x += Math.cos(pushAng) * 22;
+                enemy.y += Math.sin(pushAng) * 22 * squish;
+                g.enemyManager.applyStatus(enemy, 'slowed', 90);
+                g.floatingTexts.push({
+                  id: `perma_impact_${now}_${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 15,
+                  text: `-${impactDmg} ❄️`,
+                  color: '#00e5ff',
+                  fontSize: 13,
+                  opacity: 1,
+                  vy: -1.0,
+                  life: 25,
+                });
+              }
+            }
+          }
+        });
+
+        // Crear la entidad Prisión de Permafrost
+        const prisonEntity: PermafrostPrisonEntity = {
+          id: `permafrost_prison_${now}_${Math.random().toString(36).substring(2, 6)}`,
+          centerX: targetX,
+          centerY: targetY,
+          radius: prisonRadius,
+          isCharged: isOverloaded,
+          monoliths,
+          phase: 'erupting',
+          phaseTimer: 0,
+          eruptDurationMs: 220,
+          activeDurationMs: 3500,
+          shatterDurationMs: 260,
+          fragmentationDamage: fragmentationDmg,
+          impactDamage: impactDmg,
+          hitEruptionEnemyIds: hitEnemyIds,
+          finished: false,
+        };
+
+        g.permafrostPrisons.push(prisonEntity);
+
+        // Polvo de escarcha y fragmentos de permafrost al brotar
+        monoliths.forEach((m) => {
+          for (let i = 0; i < 7; i++) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pSpd = 1.4 + Math.random() * 2.6;
+            g.particles.push({
+              x: m.x,
+              y: m.y,
+              vx: Math.cos(pAng) * pSpd,
+              vy: Math.sin(pAng) * pSpd * squish,
+              radius: 1.6 + Math.random() * 2.0,
+              color: i % 2 === 0 ? '#00e5ff' : (i % 3 === 0 ? '#ffffff' : '#37474f'),
+              alpha: 0.9,
+              life: 25 + Math.random() * 15,
+              type: i % 2 === 0 ? 'ice' : 'stone_chip',
             });
           }
         });
+
+        // Notificación de texto flotante
+        g.floatingTexts.push({
+          id: `ft_perma_${now}`,
+          x: targetX,
+          y: targetY - 45,
+          text: isOverloaded ? '❄️🌍 ¡PRISIÓN DE PERMAFROST +50%!' : '❄️🌍 PRISIÓN DE PERMAFROST',
+          color: isOverloaded ? '#80d8ff' : '#00e5ff',
+          fontSize: isOverloaded ? 16 : 14,
+          opacity: 1,
+          vy: -1.2,
+          life: 42,
+        });
+
+        setElementQueue([]);
+        return;
       }
       // 2. FUEGO + HIELO (VÓRTICE DE CHOQUE TÉRMICO: ONDA EXPANSIVA DE VAPOR, EMPUJE Y DETONACIÓN REACTIVA)
       else if (recipe.id === 'thermal_shock') {
@@ -2115,21 +2242,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'crystal_field'
-      ? 'conductive'
-      : (activeRecipe.id === 'thermal_shock'
-        ? 'thermal'
-        : (activeRecipe.id === 'magma_eruption'
-          ? 'volcanic'
-          : (activeRecipe.id === 'cryo_storm'
-            ? 'cryo'
-            : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-              ? 'lightning'
-              : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                ? 'ice'
-                : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                  ? 'earth'
-                  : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))));
+    wizard.chargeType = activeRecipe.id === 'permafrost_prison'
+      ? 'permafrost'
+      : (activeRecipe.id === 'crystal_field'
+        ? 'conductive'
+        : (activeRecipe.id === 'thermal_shock'
+          ? 'thermal'
+          : (activeRecipe.id === 'magma_eruption'
+            ? 'volcanic'
+            : (activeRecipe.id === 'cryo_storm'
+              ? 'cryo'
+              : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+                ? 'lightning'
+                : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                  ? 'ice'
+                  : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                    ? 'earth'
+                    : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2145,7 +2274,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field')
+    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2443,7 +2572,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isVolcanic = activeRecipe.id === 'magma_eruption';
         const isThermal = activeRecipe.id === 'thermal_shock';
         const isConductive = activeRecipe.id === 'crystal_field';
-        const maxChargeTime = (isCryo || isVolcanic || isThermal || isConductive) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isPermafrost = activeRecipe.id === 'permafrost_prison';
+        const maxChargeTime = (isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2596,6 +2726,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Cristales de hielo y gravilla de pizarra convergentes para Prisión de Permafrost
+        else if (isPermafrost) {
+          if (Math.random() < 0.4 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `perma-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.2 + wizard.chargeRatio * 2.2),
+              vy: -Math.sin(pAng) * (1.2 + wizard.chargeRatio * 1.3),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.5 ? '#00e5ff' : '#ffffff',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2706,6 +2856,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 14,
               color: '#fde047',
+              alpha: 1,
+              life: 16,
+              maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isPermafrost) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6.5;
+            g.particles.push({
+              id: `perma-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 14,
+              color: '#00e5ff',
               alpha: 1,
               life: 16,
               maxLife: 16,
@@ -3354,6 +3520,44 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
             g.terrainManager.spawnFrostPatch(p.x, p.y, 40);
           }
+          g.projectiles.splice(pIdx, 1);
+          continue;
+        }
+
+        // Comprobar colisión e interceptación con monolitos de Prisión de Permafrost
+        let hitPermafrost = false;
+        for (const prison of g.permafrostPrisons) {
+          if (prison.phase !== 'active' && prison.phase !== 'erupting') continue;
+          for (const m of prison.monoliths) {
+            if (m.shattered) continue;
+            if (checkCircleCollision(p.x, p.y, p.radius, m.x, m.y, m.radius + 3)) {
+              m.hp -= p.damage;
+              m.hitFlash = 12;
+              elementalSound.playPermafrostBlock();
+              hitPermafrost = true;
+
+              // Chispas de impacto sobre el permafrost
+              for (let s = 0; s < 5; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  x: p.x,
+                  y: p.y,
+                  vx: Math.cos(sAng) * 2.4,
+                  vy: Math.sin(sAng) * 2.4 * 0.58,
+                  radius: 1.6,
+                  color: s % 2 === 0 ? '#00e5ff' : '#ffffff',
+                  alpha: 1,
+                  life: 14,
+                  type: 'ice',
+                });
+              }
+              break;
+            }
+          }
+          if (hitPermafrost) break;
+        }
+
+        if (hitPermafrost) {
           g.projectiles.splice(pIdx, 1);
           continue;
         }
@@ -5179,6 +5383,147 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.10 Actualizar Prisión de Permafrost (Hielo + Tierra: Barrera, Bloqueo, Ralentización y Detonación por Metralla)
+      for (let prIdx = g.permafrostPrisons.length - 1; prIdx >= 0; prIdx--) {
+        const prison = g.permafrostPrisons[prIdx];
+        prison.phaseTimer += dt;
+
+        // FASE 1: ERUPCIÓN (220 ms)
+        if (prison.phase === 'erupting') {
+          const prog = Math.min(1.0, prison.phaseTimer / prison.eruptDurationMs);
+          prison.monoliths.forEach((m) => {
+            m.height = m.maxHeight * Math.sin(prog * Math.PI * 0.5);
+          });
+          if (prison.phaseTimer >= prison.eruptDurationMs) {
+            prison.phase = 'active';
+            prison.phaseTimer = 0;
+            prison.monoliths.forEach((m) => {
+              m.height = m.maxHeight;
+            });
+          }
+        }
+        // FASE 2: ACTIVA (BARRERA FÍSICA, COBERTURA Y RALENTIZACIÓN)
+        else if (prison.phase === 'active') {
+          const isExpired = prison.phaseTimer >= prison.activeDurationMs;
+
+          // A. Colisión sólida de monolitos con el Mago
+          prison.monoliths.forEach((m) => {
+            if (m.shattered) return;
+            const dx = wizard.x - m.x;
+            const dy = (wizard.y - m.y) / 0.58;
+            const dist = Math.hypot(dx, dy);
+            const minDist = m.radius + 14;
+            if (dist < minDist && dist > 0.01) {
+              const overlap = minDist - dist;
+              wizard.x += (dx / dist) * overlap;
+              wizard.y += (dy / dist) * overlap * 0.58;
+            }
+          });
+
+          // B. Colisión y ralentización por proximidad con cada enemigo
+          for (const enemy of g.enemyManager.enemies) {
+            if (enemy.hp <= 0) continue;
+
+            for (const m of prison.monoliths) {
+              if (m.shattered) continue;
+
+              const dx = enemy.x - m.x;
+              const dy = (enemy.y - m.y) / 0.58;
+              const dist = Math.hypot(dx, dy);
+
+              // B.1 Obstáculo físico: separar enemigo si intenta atravesar el monolito
+              const minDist = m.radius + enemy.radius;
+              if (dist < minDist && dist > 0.01) {
+                const overlap = minDist - dist;
+                enemy.x += (dx / dist) * overlap;
+                enemy.y += (dy / dist) * overlap * 0.58;
+              }
+
+              // B.2 Ralentización por proximidad fría (30% de slow continuo)
+              if (dist < m.radius + 30) {
+                g.enemyManager.applyStatus(enemy, 'slowed', 45);
+              }
+            }
+          }
+
+          // C. Comprobar destrucción por daño o expiración de tiempo
+          prison.monoliths.forEach((m) => {
+            if (m.shattered) return;
+            if (m.hitFlash > 0) m.hitFlash--;
+
+            if (m.hp <= 0 || isExpired) {
+              // DETONACIÓN Y FRAGMENTACIÓN EXPLOSIVA
+              m.shattered = true;
+              m.shatterTimer = 0;
+              elementalSound.playPermafrostShatter(prison.isCharged);
+              g.screenShake = Math.max(g.screenShake, prison.isCharged ? 8.5 : 5.5);
+
+              // Daño de fragmentación radial (~75px) a los enemigos circundantes
+              for (const enemy of g.enemyManager.enemies) {
+                if (enemy.hp <= 0) continue;
+                const dist = Math.hypot(enemy.x - m.x, (enemy.y - m.y) / 0.58);
+                if (dist <= 75) {
+                  enemy.hp -= prison.fragmentationDamage;
+                  enemy.hitFlash = 14;
+                  g.enemyManager.applyStatus(enemy, 'slowed', 120);
+
+                  // Empuje radial hacia afuera
+                  const knockAng = Math.atan2((enemy.y - m.y) / 0.58, enemy.x - m.x);
+                  enemy.x += Math.cos(knockAng) * 16;
+                  enemy.y += Math.sin(knockAng) * 16 * 0.58;
+
+                  g.floatingTexts.push({
+                    id: `frag_${frameNow}_${enemy.id}_${m.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 20,
+                    text: `-${prison.fragmentationDamage} ❄️ METRALLA`,
+                    color: '#80d8ff',
+                    fontSize: 14,
+                    opacity: 1,
+                    vy: -1.2,
+                    life: 30,
+                  });
+                }
+              }
+
+              // Proyectar esquirlas afiladas de hielo y fragmentos de roca
+              for (let s = 0; s < 16; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                const sSpd = 2.5 + Math.random() * 4.5;
+                g.particles.push({
+                  x: m.x,
+                  y: m.y - m.height * 0.4,
+                  vx: Math.cos(sAng) * sSpd,
+                  vy: Math.sin(sAng) * sSpd * 0.58 - 1.0,
+                  radius: 1.8 + Math.random() * 2.2,
+                  color: s % 2 === 0 ? '#00e5ff' : (s % 3 === 0 ? '#ffffff' : '#37474f'),
+                  alpha: 1,
+                  life: 22,
+                  type: s % 3 === 0 ? 'stone_chip' : 'ice',
+                });
+              }
+            }
+          });
+
+          // Si todos los monolitos están destruidos o expiró el tiempo, pasar a fase de fragmentación
+          const allShattered = prison.monoliths.every((m) => m.shattered);
+          if (allShattered) {
+            prison.phase = 'shattering';
+            prison.phaseTimer = 0;
+          }
+        }
+        // FASE 3: SHATTERING (animación final de disolución y limpieza limpia)
+        else if (prison.phase === 'shattering') {
+          if (prison.phaseTimer >= prison.shatterDurationMs) {
+            prison.phase = 'finished';
+          }
+        }
+
+        if (prison.phase === 'finished') {
+          g.permafrostPrisons.splice(prIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -5249,6 +5594,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.volcanicBombardments,
             g.thermalVortices,
             g.conductiveCages,
+            g.permafrostPrisons,
             g.forestLevel ?? undefined
           );
         }
@@ -5510,6 +5856,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
                     : activeRecipe.id === 'crystal_field'
                     ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
+                    : activeRecipe.id === 'permafrost_prison'
+                    ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -5525,6 +5873,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
                     : activeRecipe.id === 'crystal_field'
                     ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
+                    : activeRecipe.id === 'permafrost_prison'
+                    ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -5550,6 +5900,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
                 : activeRecipe.id === 'crystal_field'
                 ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
+                : activeRecipe.id === 'permafrost_prison'
+                ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -5572,6 +5924,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-cyan-400 shadow-[0_0_8px_#f43f5e]'
                       : activeRecipe.id === 'crystal_field'
                       ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-cyan-400 shadow-[0_0_8px_#eab308]'
+                      : activeRecipe.id === 'permafrost_prison'
+                      ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-slate-400 shadow-[0_0_8px_#00e5ff]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

@@ -513,6 +513,43 @@ export interface ConductiveCageEntity {
   finished: boolean;
 }
 
+// PRISIÓN DE PERMAFROST (HIELO + TIERRA: MONOLITOS DE ROCA/HIELO, ABSORCIÓN DE PROYECTILES Y METRALLA RADIAL)
+export type PermafrostPhase = 'erupting' | 'active' | 'shattering' | 'finished';
+
+export interface PermafrostMonolithNode {
+  id: string;
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number; // ~60-75px
+  radius: number; // ~15px collider
+  hp: number;
+  maxHp: number; // ~120 tap, 180 charged
+  crackProgress: number; // 0..1
+  shattered: boolean;
+  shatterTimer: number;
+  hitFlash: number;
+  angles: number[];
+}
+
+export interface PermafrostPrisonEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  isCharged: boolean;
+  monoliths: PermafrostMonolithNode[];
+  phase: PermafrostPhase;
+  phaseTimer: number;
+  eruptDurationMs: number; // ~220ms
+  activeDurationMs: number; // ~3500ms
+  shatterDurationMs: number; // ~260ms
+  fragmentationDamage: number; // ~48 tap, ~72 charged
+  impactDamage: number; // ~16
+  hitEruptionEnemyIds: string[];
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

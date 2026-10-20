@@ -490,37 +490,9 @@ class ElementalSoundEngine {
     osc.stop(now + 0.45);
   }
 
-  // Ruptura de Permafrost (Fragmentos de Hielo y Roca)
-  public playPermafrostShatter() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    // Crujido de alta frecuencia
-    const osc1 = this.ctx.createOscillator();
-    const gain1 = this.ctx.createGain();
-    osc1.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(950, now);
-    osc1.frequency.exponentialRampToValueAtTime(180, now + 0.22);
-    gain1.gain.setValueAtTime(0.25, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    osc1.connect(gain1);
-    gain1.connect(this.ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.22);
-
-    // Golpe de roca sordo
-    const osc2 = this.ctx.createOscillator();
-    const gain2 = this.ctx.createGain();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(140, now + 0.04);
-    osc2.frequency.exponentialRampToValueAtTime(50, now + 0.3);
-    gain2.gain.setValueAtTime(0.28, now + 0.04);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc2.connect(gain2);
-    gain2.connect(this.ctx.destination);
-    osc2.start(now + 0.04);
-    osc2.stop(now + 0.3);
+  // Ruptura de Permafrost (Fragmentos de Hielo y Roca - Delegación)
+  public playLegacyPermafrostShatter() {
+    this.playPermafrostShatter(false);
   }
 
   // Aliento de Fuego del Dragón
@@ -1804,6 +1776,124 @@ class ElementalSoundEngine {
     crackGain.connect(this.ctx.destination);
     crack.start(now + 0.04);
     crack.stop(now + 0.22);
+  }
+
+  // =========================================================================
+  // PRISIÓN DE PERMAFROST (HIELO + TIERRA)
+  // =========================================================================
+
+  // 1. Erupción telúrica de monolitos y cristalización de permafrost
+  public playPermafrostErupt(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-golpe sísmico de emergencia de roca
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(isCharged ? 110 : 140, now);
+    thud.frequency.exponentialRampToValueAtTime(30, now + 0.26);
+
+    thudGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.26);
+
+    // Crujido agudo de congelación y permafrost
+    const iceCrack = this.ctx.createOscillator();
+    const iceGain = this.ctx.createGain();
+    iceCrack.type = 'sawtooth';
+    iceCrack.frequency.setValueAtTime(isCharged ? 1150 : 920, now);
+    iceCrack.frequency.exponentialRampToValueAtTime(340, now + 0.2);
+
+    iceGain.gain.setValueAtTime(isCharged ? 0.25 : 0.18, now);
+    iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    iceCrack.connect(iceGain);
+    iceGain.connect(this.ctx.destination);
+    iceCrack.start(now);
+    iceCrack.stop(now + 0.2);
+  }
+
+  // 2. Bloqueo e interceptación de proyectil contra el permafrost
+  public playPermafrostBlock() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Golpe sordo de absorción
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.1);
+
+    // Chink cristalino de impacto en hielo duro
+    const chink = this.ctx.createOscillator();
+    const chinkGain = this.ctx.createGain();
+    chink.type = 'sine';
+    chink.frequency.setValueAtTime(1750, now);
+    chink.frequency.exponentialRampToValueAtTime(650, now + 0.08);
+
+    chinkGain.gain.setValueAtTime(0.18, now);
+    chinkGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    chink.connect(chinkGain);
+    chinkGain.connect(this.ctx.destination);
+    chink.start(now);
+    chink.stop(now + 0.08);
+  }
+
+  // 3. Fragmentación explosiva y detonación de metralla de hielo y roca
+  public playPermafrostShatter(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Estallido de hielo a alta frecuencia
+    const shatter = this.ctx.createOscillator();
+    const shatterGain = this.ctx.createGain();
+    shatter.type = 'sawtooth';
+    shatter.frequency.setValueAtTime(isCharged ? 1600 : 1300, now);
+    shatter.frequency.exponentialRampToValueAtTime(220, now + 0.22);
+
+    shatterGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    shatter.connect(shatterGain);
+    shatterGain.connect(this.ctx.destination);
+    shatter.start(now);
+    shatter.stop(now + 0.22);
+
+    // Onda sónica de choque telúrica
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'sine';
+    boom.frequency.setValueAtTime(isCharged ? 220 : 180, now);
+    boom.frequency.exponentialRampToValueAtTime(35, now + 0.25);
+
+    boomGain.gain.setValueAtTime(isCharged ? 0.45 : 0.32, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(now);
+    boom.stop(now + 0.25);
   }
 }
 
