@@ -10,6 +10,8 @@ import {
   RoomType,
   ChanneledStreamState,
   InfernalCrownEntity,
+  GlacialEruptionEntity,
+  GlacialSpikeSegment,
 } from './types';
 import { drawWizardSprite } from '../renderWizard';
 
@@ -47,7 +49,8 @@ export class IsometricRenderer {
     screenShake: number,
     roomType: RoomType,
     currentBoss: GameEnemy | null,
-    infernalCrowns: InfernalCrownEntity[] = []
+    infernalCrowns: InfernalCrownEntity[] = [],
+    glacialEruptions: GlacialEruptionEntity[] = []
   ) {
     ctx.save();
 
@@ -79,6 +82,14 @@ export class IsometricRenderer {
     // 3.5 Dibujar Suelo y Grietas de Corona Infernal (Fuego + Fuego)
     this.drawInfernalCrownFloor(ctx, infernalCrowns);
 
+    // 3.6 Dibujar Falla y Surco de Permafrost de Erupción Glacial (Hielo + Hielo)
+    this.drawGlacialEruptionFloor(ctx, glacialEruptions);
+
+    // 3.7 Línea de trayectoria táctica al cargar o apuntar Erupción Glacial
+    if (wizard.isCharging && wizard.chargeType === 'ice') {
+      this.drawGlacialAimTrajectory(ctx, wizard);
+    }
+
     // 4. Dibujar Arcos Eléctricos entre Cristales
     this.drawElectricArcs(ctx, electricArcs);
 
@@ -93,6 +104,18 @@ export class IsometricRenderer {
       renderList.push({
         y: obs.y,
         draw: () => this.drawObstacle(ctx, obs),
+      });
+    });
+
+    // Púas de Hielo de Erupción Glacial (Hielo + Hielo) integradas en el Depth Sorting
+    glacialEruptions.forEach((eruption) => {
+      eruption.segments.forEach((seg) => {
+        if (seg.emerged) {
+          renderList.push({
+            y: seg.y,
+            draw: () => this.drawGlacialSpikeSegment(ctx, seg, eruption),
+          });
+        }
       });
     });
 
@@ -690,6 +713,48 @@ export class IsometricRenderer {
           ctx.fillStyle = plasmaGrad;
           ctx.beginPath();
           ctx.arc(staffX, staffY, pulseR * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Cristales de escarcha y aura glacial específicos de Erupción Glacial
+      const isIce = wizard.chargeType === 'ice' || wizard.staffOrbColor === '#06b6d4';
+      if (isIce) {
+        ctx.shadowBlur = 0;
+        const iceCount = isReady ? 6 : Math.max(2, Math.floor(ratio * 5));
+        for (let ic = 0; ic < iceCount; ic++) {
+          const icAng = Date.now() * 0.005 + (ic * Math.PI * 2) / iceCount;
+          const icDist = 18 + ratio * 8;
+          const ix = Math.cos(icAng) * icDist;
+          const iy = 8 + Math.sin(icAng) * (icDist * 0.58);
+
+          ctx.save();
+          ctx.translate(ix, iy);
+          ctx.rotate(icAng + Math.PI / 2);
+          ctx.fillStyle = isReady ? '#e0f7fa' : '#38bdf8';
+          ctx.beginPath();
+          ctx.moveTo(0, -7);
+          ctx.lineTo(2.5, 3);
+          ctx.lineTo(0, 5);
+          ctx.lineTo(-2.5, 3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Esfera de hielo puro y escarcha en el báculo al alcanzar carga máxima
+        if (isReady) {
+          const staffX = Math.cos(wizard.facingAngle) * 16;
+          const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+          const pulseR = 7 + Math.sin(Date.now() * 0.02) * 2;
+          const frostGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+          frostGrad.addColorStop(0, '#ffffff');
+          frostGrad.addColorStop(0.4, '#e0f7fa');
+          frostGrad.addColorStop(0.75, '#06b6d4');
+          frostGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+          ctx.fillStyle = frostGrad;
+          ctx.beginPath();
+          ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -1601,6 +1666,259 @@ export class IsometricRenderer {
     ctx.shadowBlur = 4;
     ctx.textAlign = 'center';
     ctx.fillText(`👑 ${boss.name.toUpperCase()} (Fase ${boss.phase || 1})`, width / 2, barY - 9);
+
+    ctx.restore();
+  }
+
+  // Dibuja el surco de permafrost, fracturas heladas y niebla de frío en el suelo para Erupción Glacial
+  private static drawGlacialEruptionFloor(ctx: CanvasRenderingContext2D, eruptions: GlacialEruptionEntity[]) {
+    if (!eruptions || eruptions.length === 0) return;
+
+    const squish = 0.58;
+
+    eruptions.forEach((eruption) => {
+      ctx.save();
+
+      const alpha = eruption.phase === 'shattering'
+        ? Math.max(0, 1 - eruption.phaseTimer / eruption.shatterDurationMs)
+        : 1.0;
+
+      // 1. Surco de escarcha y permafrost en el suelo a lo largo de los segmentos emergidos
+      const emergedSegs = eruption.segments.filter((s) => s.emerged);
+      if (emergedSegs.length > 0) {
+        const lastSeg = emergedSegs[emergedSegs.length - 1];
+        const furGrad = ctx.createLinearGradient(eruption.startX, eruption.startY, lastSeg.x, lastSeg.y);
+        furGrad.addColorStop(0, `rgba(6, 182, 212, ${0.45 * alpha})`);
+        furGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.35 * alpha})`);
+        furGrad.addColorStop(1, `rgba(224, 247, 250, ${0.15 * alpha})`);
+
+        ctx.strokeStyle = furGrad;
+        ctx.lineWidth = eruption.isCharged ? 38 : 28;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(eruption.startX, eruption.startY);
+        emergedSegs.forEach((seg) => {
+          ctx.lineTo(seg.x, seg.y);
+        });
+        ctx.stroke();
+
+        // 2. Línea de fractura sísmica en zigzag blanco-celeste en el eje central
+        ctx.strokeStyle = `rgba(240, 249, 255, ${0.85 * alpha})`;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(eruption.startX, eruption.startY);
+        emergedSegs.forEach((seg, idx) => {
+          const zigX = (idx % 2 === 0 ? 3 : -3) * Math.sin(eruption.aimAngle);
+          const zigY = (idx % 2 === 0 ? -3 : 3) * Math.cos(eruption.aimAngle) * squish;
+          ctx.lineTo(seg.x + zigX, seg.y + zigY);
+        });
+        ctx.stroke();
+
+        // 3. Pequeñas grietas radiales secundarias bajo cada púa emergida
+        emergedSegs.forEach((seg, sIdx) => {
+          const crackRadius = (16 + (sIdx % 3) * 6) * (eruption.isCharged ? 1.3 : 1.0);
+          ctx.strokeStyle = `rgba(56, 189, 248, ${0.6 * alpha})`;
+          ctx.lineWidth = 1.4;
+          for (let k = 0; k < 3; k++) {
+            const kAng = eruption.aimAngle + Math.PI / 2 + (k - 1) * 0.7 + (seg.rotationOffset || 0);
+            const kLen = crackRadius * (0.6 + ((sIdx + k) % 3) * 0.25);
+            ctx.beginPath();
+            ctx.moveTo(seg.x, seg.y);
+            ctx.lineTo(seg.x + Math.cos(kAng) * kLen, seg.y + Math.sin(kAng) * kLen * squish);
+            ctx.stroke();
+          }
+        });
+
+        // 4. Niebla gélida persistente (aura de frío absoluto)
+        if (eruption.phase === 'persisting') {
+          const mistCount = emergedSegs.length;
+          for (let m = 0; m < mistCount; m++) {
+            const seg = emergedSegs[m];
+            const wave = Math.sin(Date.now() * 0.003 + m * 1.5) * 6;
+            const mistGrad = ctx.createRadialGradient(seg.x + wave, seg.y, 4, seg.x + wave, seg.y, 24);
+            mistGrad.addColorStop(0, 'rgba(224, 247, 250, 0.28)');
+            mistGrad.addColorStop(0.6, 'rgba(56, 189, 248, 0.12)');
+            mistGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+            ctx.fillStyle = mistGrad;
+            ctx.beginPath();
+            ctx.ellipse(seg.x + wave, seg.y, 24, 24 * squish, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // Dibuja una púa o aguja de hielo gigante facetada en 2.5D con caras poligonales e iluminación especular
+  private static drawGlacialSpikeSegment(
+    ctx: CanvasRenderingContext2D,
+    seg: GlacialSpikeSegment,
+    eruption: GlacialEruptionEntity
+  ) {
+    const squish = 0.58;
+    const h = seg.currentHeight;
+    if (h <= 1) return;
+
+    ctx.save();
+
+    let alpha = 1.0;
+    let jitterX = 0;
+    let jitterY = 0;
+
+    if (eruption.phase === 'shattering') {
+      const prog = Math.min(1, eruption.phaseTimer / eruption.shatterDurationMs);
+      alpha = Math.max(0, 1 - prog);
+      jitterX = (Math.random() - 0.5) * 5 * (1 - prog);
+      jitterY = (Math.random() - 0.5) * 4 * (1 - prog);
+    }
+
+    const bx = seg.x + jitterX;
+    const by = seg.y + jitterY;
+    const w = seg.width;
+
+    // Vértice superior (Punta afilada de la púa)
+    const tipX = bx + Math.sin(seg.rotationOffset) * (h * 0.22);
+    const tipY = by - h;
+
+    // Vértices de la base en el suelo con perspectiva isométrica
+    const bLeftX = bx - w * 0.52;
+    const bLeftY = by - w * 0.15 * squish;
+    const bRightX = bx + w * 0.52;
+    const bRightY = by - w * 0.15 * squish;
+    const bFrontX = bx;
+    const bFrontY = by + w * 0.38 * squish;
+    const bBackX = bx;
+    const bBackY = by - w * 0.38 * squish;
+
+    // 1. Sombra de contacto en el suelo
+    ctx.fillStyle = `rgba(3, 30, 48, ${0.45 * alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, w * 0.65, w * 0.65 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Cara Trasera Profunda (Shadow Facet posterior)
+    ctx.fillStyle = `rgba(12, 74, 110, ${0.75 * alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bLeftX, bLeftY);
+    ctx.lineTo(bBackX, bBackY);
+    ctx.lineTo(bRightX, bRightY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Cara Izquierda Iluminada (Light / Specular Facet)
+    // Recibe luz cenital-izquierda: gradiente blanco hielo a cyan cristalino
+    const leftGrad = ctx.createLinearGradient(tipX, tipY, bLeftX, bLeftY);
+    leftGrad.addColorStop(0, `rgba(255, 255, 255, ${0.95 * alpha})`);
+    leftGrad.addColorStop(0.25, `rgba(224, 247, 250, ${0.9 * alpha})`);
+    leftGrad.addColorStop(0.7, `rgba(56, 189, 248, ${0.85 * alpha})`);
+    leftGrad.addColorStop(1, `rgba(14, 116, 144, ${0.85 * alpha})`);
+
+    ctx.fillStyle = leftGrad;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bLeftX, bLeftY);
+    ctx.lineTo(bFrontX, bFrontY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 4. Cara Derecha Sombreada (Deep Crystal Facet)
+    // Sombra proyectada del cristal: gradiente cyan profundo a azul zafiro
+    const rightGrad = ctx.createLinearGradient(tipX, tipY, bRightX, bRightY);
+    rightGrad.addColorStop(0, `rgba(224, 247, 250, ${0.9 * alpha})`);
+    rightGrad.addColorStop(0.35, `rgba(2, 132, 199, ${0.85 * alpha})`);
+    rightGrad.addColorStop(0.85, `rgba(3, 105, 161, ${0.9 * alpha})`);
+    rightGrad.addColorStop(1, `rgba(12, 74, 110, ${0.92 * alpha})`);
+
+    ctx.fillStyle = rightGrad;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bFrontX, bFrontY);
+    ctx.lineTo(bRightX, bRightY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 5. Arista Central Especular (Línea de cresta afilada con destello blanco)
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * alpha})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bFrontX, bFrontY);
+    ctx.stroke();
+
+    // Arista lateral izquierda nítida
+    ctx.strokeStyle = `rgba(224, 247, 250, ${0.7 * alpha})`;
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bLeftX, bLeftY);
+    ctx.stroke();
+
+    // 6. Destello estelar en la punta de las púas grandes
+    if (seg.index >= 3 && h > 35 && alpha > 0.4) {
+      const glintPulse = 0.7 + 0.3 * Math.sin(Date.now() * 0.008 + seg.index);
+      ctx.fillStyle = `rgba(255, 255, 255, ${glintPulse * alpha})`;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 7. Grietas internas en fase de Shatter
+    if (eruption.phase === 'shattering') {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * alpha})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY + h * 0.3);
+      ctx.lineTo(bx - w * 0.2, by - h * 0.5);
+      ctx.lineTo(bx + w * 0.25, by - h * 0.3);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // Línea de trayectoria táctica previa al lanzar Erupción Glacial
+  private static drawGlacialAimTrajectory(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ang = wizard.facingAngle;
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const length = isReady ? 330 : 250;
+    const squish = 0.58;
+
+    ctx.save();
+
+    // Línea discontinua luminosa
+    ctx.strokeStyle = isReady ? 'rgba(224, 247, 250, 0.75)' : 'rgba(6, 182, 212, 0.5)';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([10, 8]);
+
+    const endX = wizard.x + Math.cos(ang) * length;
+    const endY = wizard.y + Math.sin(ang) * length * squish;
+
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Marcadores de impacto de púas a lo largo de la trayectoria
+    const numMarkers = isReady ? 8 : 6;
+    const stepDist = length / numMarkers;
+    for (let i = 1; i <= numMarkers; i++) {
+      const mx = wizard.x + Math.cos(ang) * (i * stepDist);
+      const my = wizard.y + Math.sin(ang) * (i * stepDist) * squish;
+      const pulse = 2.5 + Math.sin(Date.now() * 0.01 + i) * 1;
+
+      ctx.fillStyle = isReady ? '#ffffff' : '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(mx, my, pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
   }

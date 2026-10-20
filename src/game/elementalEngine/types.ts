@@ -316,6 +316,41 @@ export interface VoltaicChainEntity {
   visitedEnemyIds: string[];
 }
 
+export type GlacialEruptionPhase = 'emerging' | 'persisting' | 'shattering' | 'finished';
+
+export interface GlacialSpikeSegment {
+  index: number;
+  x: number;
+  y: number;
+  maxHeight: number;
+  currentHeight: number;
+  width: number;
+  rotationOffset: number;
+  emerged: boolean;
+  emergeDelayMs: number;
+  shatterProgress: number;
+}
+
+export interface GlacialEruptionEntity {
+  id: string;
+  startX: number;
+  startY: number;
+  aimAngle: number;
+  segments: GlacialSpikeSegment[];
+  currentStep: number;
+  totalSteps: number;
+  stepIntervalMs: number;
+  elapsedMs: number;
+  damage: number;
+  knockup: number;
+  isCharged: boolean;
+  phase: GlacialEruptionPhase;
+  phaseTimer: number;
+  persistDurationMs: number;
+  shatterDurationMs: number;
+  hitEnemyIds: string[];
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'
