@@ -8,6 +8,7 @@ import {
   ElectricArc,
   LightningBoltEffect,
   RoomType,
+  ChanneledStreamState,
 } from './types';
 import { drawWizardSprite } from '../renderWizard';
 
@@ -31,6 +32,7 @@ export class IsometricRenderer {
       dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
       isCharging?: boolean;
       chargeRatio?: number;
+      channeledStream?: ChanneledStreamState | null;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -107,6 +109,11 @@ export class IsometricRenderer {
 
     // Ejecutar dibujo ordenado
     renderList.forEach((item) => item.draw());
+
+    // 5.5 Dibujar Chorro Elemental Continuo (Flujo de Llamas / Chorro Criogénico)
+    if (wizard.channeledStream && wizard.channeledStream.active) {
+      this.drawChanneledStream(ctx, wizard, wizard.channeledStream);
+    }
 
     // 6. Dibujar Proyectiles con SILUETAS FÍSICAS DIFERENCIADAS (Fuego, Rayo, Hielo, Tierra, etc.)
     this.drawProjectiles(ctx, projectiles);
@@ -398,6 +405,7 @@ export class IsometricRenderer {
       dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
       isCharging?: boolean;
       chargeRatio?: number;
+      channeledStream?: ChanneledStreamState | null;
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -933,6 +941,204 @@ export class IsometricRenderer {
       ctx.fillText(t.text, t.x, t.y);
       ctx.restore();
     });
+  }
+
+  // DIBUJO DE FLUJO CONTINUO CANALIZADO (FUEGO Y HIELO)
+  private static drawChanneledStream(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number },
+    stream: ChanneledStreamState
+  ) {
+    ctx.save();
+    const originX = wizard.x + Math.cos(stream.aimAngle) * 20;
+    const originY = wizard.y - 6 + Math.sin(stream.aimAngle) * 20;
+    const range = stream.range || 230;
+    const halfArc = (stream.spreadAngle || 0.55) / 2;
+    const now = Date.now();
+    const t = now * 0.008;
+
+    if (stream.type === 'fire') {
+      // 1. Resplandor cálido en el suelo
+      ctx.save();
+      ctx.translate(originX, originY);
+      ctx.rotate(stream.aimAngle);
+
+      const groundGlow = ctx.createRadialGradient(0, 0, 10, range * 0.7, 0, range);
+      groundGlow.addColorStop(0, 'rgba(239, 68, 68, 0.28)');
+      groundGlow.addColorStop(0.5, 'rgba(249, 115, 22, 0.16)');
+      groundGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = groundGlow;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, range, -halfArc * 1.25, halfArc * 1.25);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. Cono principal de fuego continuo con gradiente radial multicapa
+      const fireGrad = ctx.createRadialGradient(0, 0, 6, range * 0.65, 0, range);
+      fireGrad.addColorStop(0, 'rgba(255, 255, 245, 0.96)');
+      fireGrad.addColorStop(0.15, 'rgba(254, 240, 138, 0.90)');
+      fireGrad.addColorStop(0.42, 'rgba(249, 115, 22, 0.72)');
+      fireGrad.addColorStop(0.8, 'rgba(220, 38, 38, 0.42)');
+      fireGrad.addColorStop(1, 'rgba(153, 27, 27, 0)');
+
+      ctx.fillStyle = fireGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+
+      const steps = 14;
+      for (let i = 1; i <= steps; i++) {
+        const prog = i / steps;
+        const curR = range * prog;
+        const wave = Math.sin(t * 5 + prog * 8) * (8 * prog);
+        const curAng = -halfArc + (wave / curR);
+        ctx.lineTo(Math.cos(curAng) * curR, Math.sin(curAng) * curR);
+      }
+
+      for (let a = -halfArc; a <= halfArc; a += 0.08) {
+        const pulse = Math.sin(t * 6 + a * 10) * 9;
+        ctx.lineTo(Math.cos(a) * (range + pulse), Math.sin(a) * (range + pulse));
+      }
+
+      for (let i = steps; i >= 1; i--) {
+        const prog = i / steps;
+        const curR = range * prog;
+        const wave = Math.cos(t * 5 + prog * 8) * (8 * prog);
+        const curAng = halfArc + (wave / curR);
+        ctx.lineTo(Math.cos(curAng) * curR, Math.sin(curAng) * curR);
+      }
+
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Lenguas de fuego centrales
+      ctx.lineWidth = 4.5;
+      for (let l = 0; l < 4; l++) {
+        const lProg = l / 3;
+        const lAng = -halfArc * 0.65 + lProg * halfArc * 1.3;
+        const lLen = range * (0.75 + Math.sin(t * 4 + l * 2) * 0.2);
+
+        ctx.strokeStyle = l % 2 === 0 ? '#fef08a' : '#fb923c';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        const cp1x = lLen * 0.35;
+        const cp1y = Math.sin(t * 7 + l * 3) * 14;
+        const cp2x = lLen * 0.7;
+        const cp2y = Math.cos(t * 6 + l * 2) * 18;
+        const endX = Math.cos(lAng) * lLen;
+        const endY = Math.sin(lAng) * lLen;
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY);
+        ctx.stroke();
+      }
+
+      // 4. Núcleo incandescente en el báculo
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, 7 + Math.sin(t * 8) * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    } else {
+      // HIELO (Flujo Continuo de Ventisca / Chorro Criogénico)
+      ctx.save();
+      ctx.translate(originX, originY);
+      ctx.rotate(stream.aimAngle);
+
+      // 1. Escarcha resplandeciente en el suelo
+      const iceGroundGrad = ctx.createRadialGradient(0, 0, 10, range * 0.6, 0, range);
+      iceGroundGrad.addColorStop(0, 'rgba(186, 230, 253, 0.35)');
+      iceGroundGrad.addColorStop(0.6, 'rgba(56, 189, 248, 0.18)');
+      iceGroundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = iceGroundGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, range, -halfArc * 1.15, halfArc * 1.15);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. Haz Cónico Glacial con niebla sub-cero
+      const iceGrad = ctx.createRadialGradient(0, 0, 5, range * 0.7, 0, range);
+      iceGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      iceGrad.addColorStop(0.18, 'rgba(224, 242, 254, 0.85)');
+      iceGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.65)');
+      iceGrad.addColorStop(0.85, 'rgba(2, 132, 199, 0.32)');
+      iceGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+
+      ctx.fillStyle = iceGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+
+      const iceSteps = 12;
+      for (let i = 1; i <= iceSteps; i++) {
+        const prog = i / iceSteps;
+        const curR = range * prog;
+        const jagg = (i % 2 === 0 ? 3 : -3) * prog;
+        const curAng = -halfArc + (jagg / curR);
+        ctx.lineTo(Math.cos(curAng) * curR, Math.sin(curAng) * curR);
+      }
+
+      for (let a = -halfArc; a <= halfArc; a += 0.07) {
+        const rimJagg = Math.sin(t * 8 + a * 14) * 6;
+        ctx.lineTo(Math.cos(a) * (range + rimJagg), Math.sin(a) * (range + rimJagg));
+      }
+
+      for (let i = iceSteps; i >= 1; i--) {
+        const prog = i / iceSteps;
+        const curR = range * prog;
+        const jagg = (i % 2 === 0 ? -3 : 3) * prog;
+        const curAng = halfArc + (jagg / curR);
+        ctx.lineTo(Math.cos(curAng) * curR, Math.sin(curAng) * curR);
+      }
+
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Frentes de choque criogénicos
+      ctx.lineWidth = 2.2;
+      for (let w = 0; w < 3; w++) {
+        const wProg = ((t * 1.5 + w * 0.33) % 1.0);
+        const wDist = range * wProg;
+        const wAlpha = (1 - wProg) * 0.75;
+        ctx.strokeStyle = `rgba(224, 242, 254, ${wAlpha})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, wDist, -halfArc * 0.9, halfArc * 0.9);
+        ctx.stroke();
+      }
+
+      // 4. Filamentos de escarcha
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = '#ffffff';
+      for (let s = 0; s < 5; s++) {
+        const sProg = s / 4;
+        const sAng = -halfArc * 0.7 + sProg * halfArc * 1.4;
+        const sLen = range * (0.8 + Math.cos(t * 5 + s) * 0.15);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(sAng) * sLen, Math.sin(sAng) * sLen);
+        ctx.stroke();
+
+        const tipX = Math.cos(sAng) * sLen;
+        const tipY = Math.sin(sAng) * sLen;
+        ctx.fillStyle = '#e0f2fe';
+        ctx.beginPath();
+        ctx.moveTo(tipX + 4, tipY);
+        ctx.lineTo(tipX, tipY - 2.5);
+        ctx.lineTo(tipX - 4, tipY);
+        ctx.lineTo(tipX, tipY + 2.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 5. Destello gélido en la punta del báculo
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    ctx.restore();
   }
 
   // BARRA DE SALUD SUPERIOR DEL JEFE (HUD)

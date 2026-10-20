@@ -2,6 +2,22 @@
 
 export type ElementType = 'fire' | 'lightning' | 'ice' | 'earth';
 
+export type ChanneledStreamType = 'fire' | 'ice';
+
+export interface ChanneledStreamState {
+  active: boolean;
+  type: ChanneledStreamType;
+  aimAngle: number;
+  lockedEnemyId: string | null;
+  range: number;
+  spreadAngle: number;
+  damageIntervalMs: number;
+  damagePerTick: number;
+  lastDamageTimestampPerEnemy: Record<string, number>;
+  lastDamageTimestampPerObstacle: Record<string, number>;
+  sourceButton?: 'element' | 'attack';
+}
+
 export type StatusEffectType = 'burning' | 'frozen' | 'slowed' | 'shocked' | 'wet';
 
 export interface ActiveStatus {

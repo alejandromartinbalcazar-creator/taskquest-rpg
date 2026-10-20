@@ -9,6 +9,7 @@ import {
   RelicReward,
   GameEnemy,
   LightningBoltEffect,
+  ChanneledStreamState,
 } from './types';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
@@ -341,6 +342,18 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       chargeStartTime: 0,
       chargeRatio: 0,
       chargeSoundPlayed: false,
+      channeledStream: {
+        active: false,
+        type: 'fire' as 'fire' | 'ice',
+        aimAngle: -Math.PI / 2,
+        lockedEnemyId: null as string | null,
+        range: 230,
+        spreadAngle: 0.58,
+        damageIntervalMs: 160,
+        damagePerTick: 14,
+        lastDamageTimestampPerEnemy: {} as Record<string, number>,
+        lastDamageTimestampPerObstacle: {} as Record<string, number>,
+      } as ChanneledStreamState,
     },
     camera: { x: 550, y: 560 },
     joystick: {
@@ -408,10 +421,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setTimeout(() => setRoomBanner(null), 3000);
   }, [player.currentHp, player.maxHp]);
 
+  const stopChanneledAttack = useCallback((type?: 'fire' | 'ice') => {
+    const g = gameStateRef.current;
+    const wizard = g.wizard;
+    if (!wizard.channeledStream.active) return;
+    if (type && wizard.channeledStream.type !== type) return;
+
+    wizard.channeledStream.active = false;
+    wizard.channeledStream.lockedEnemyId = null;
+    wizard.channeledStream.lastDamageTimestampPerEnemy = {};
+    wizard.channeledStream.lastDamageTimestampPerObstacle = {};
+    elementalSound.stopContinuousStream();
+  }, []);
+
   // Selección de elemento
   const handleSelectElement = useCallback(
     (el: ElementType) => {
       if (isDefeated || isVictorious) return;
+      const activeStream = gameStateRef.current.wizard.channeledStream;
+      if (activeStream.active && activeStream.type !== el) {
+        stopChanneledAttack();
+      }
       elementalSound.playElementSelect(el);
 
       setElementQueue((prev) => {
@@ -421,12 +451,65 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         return [...prev, el];
       });
     },
+    [isDefeated, isVictorious, stopChanneledAttack]
+  );
+
+  const startChanneledAttack = useCallback(
+    (type: 'fire' | 'ice', sourceButton: 'element' | 'attack' = 'element') => {
+      if (isDefeated || isVictorious) return;
+      const g = gameStateRef.current;
+      const wizard = g.wizard;
+      if (wizard.isDashing) return;
+
+      const isFire = type === 'fire';
+      const range = isFire ? 230 : 215;
+      const spreadAngle = isFire ? 0.58 : 0.48;
+      const damagePerTick = isFire ? 15 : 13;
+
+      wizard.channeledStream.active = true;
+      wizard.channeledStream.type = type;
+      wizard.channeledStream.range = range;
+      wizard.channeledStream.spreadAngle = spreadAngle;
+      wizard.channeledStream.damageIntervalMs = 160;
+      wizard.channeledStream.damagePerTick = damagePerTick;
+      wizard.channeledStream.sourceButton = sourceButton;
+      wizard.staffOrbColor = isFire ? '#ef4444' : '#06b6d4';
+
+      let closestDist = range + 40;
+      let targetEnemy: GameEnemy | null = null;
+      for (const enemy of g.enemyManager.enemies) {
+        if (enemy.hp <= 0) continue;
+        const d = Math.hypot(enemy.x - wizard.x, enemy.y - wizard.y);
+        if (d < closestDist) {
+          const ang = Math.atan2(enemy.y - wizard.y, enemy.x - wizard.x);
+          let diff = ang - wizard.facingAngle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          if (Math.abs(diff) < 0.65) {
+            closestDist = d;
+            targetEnemy = enemy;
+          }
+        }
+      }
+
+      if (targetEnemy) {
+        wizard.channeledStream.lockedEnemyId = targetEnemy.id;
+        wizard.channeledStream.aimAngle = Math.atan2(targetEnemy.y - wizard.y, targetEnemy.x - wizard.x);
+        wizard.facingAngle = wizard.channeledStream.aimAngle;
+      } else {
+        wizard.channeledStream.lockedEnemyId = null;
+        wizard.channeledStream.aimAngle = wizard.facingAngle;
+      }
+
+      elementalSound.startContinuousStream(type);
+    },
     [isDefeated, isVictorious]
   );
 
   const handleClearQueue = useCallback(() => {
+    stopChanneledAttack();
     setElementQueue([]);
-  }, []);
+  }, [stopChanneledAttack]);
 
   // Transición a la siguiente sala
   const changeToRoom = useCallback(
@@ -440,6 +523,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       }
 
       const g = gameStateRef.current;
+      stopChanneledAttack();
       g.roomIndex = nextIndex;
       g.roomCleared = false;
       // Posiciona al mago en la entrada sur de la nueva sala
@@ -493,6 +577,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     const wizard = g.wizard;
     if (wizard.dashCooldown > 0 || wizard.isDashing) return;
 
+    stopChanneledAttack();
     elementalSound.playDash();
     wizard.isDashing = true;
     wizard.dashTimer = 11;
@@ -974,53 +1059,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isEarth = recipe.id === 'earth_toss' || recipe.id === 'earth_megalith';
 
         if (isFire) {
-          g.projectiles.push({
-            id: `proj-${now}`,
-            x: wizard.x,
-            y: wizard.y,
-            vx: Math.cos(aimAngle) * 7.5,
-            vy: Math.sin(aimAngle) * 7.5,
-            radius: isCharged ? 16 : 10,
-            color: recipe.color,
-            secondaryColor: recipe.secondaryColor,
-            damage: (recipe.damage + statBonus) * chargeMultiplier,
-            knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
-            life: 50,
-            maxLife: 50,
-            pierce: 1,
-            piercedIds: [],
-            isHostile: false,
-            spellType: recipe.id,
-            visualShape: 'fire_comet',
-            statusToApply: 'burning',
-            areaOfEffect: isCharged ? 85 : 55,
-          });
+          // Flujo de Llamas Continuo: no genera proyectiles individuales
+          startChanneledAttack('fire', 'attack');
+          setTimeout(() => {
+            stopChanneledAttack('fire');
+          }, 350);
         } else if (isIce) {
-          const angles = isCharged ? [aimAngle - 0.18, aimAngle, aimAngle + 0.18] : [aimAngle];
-          angles.forEach((ang, sIdx) => {
-            g.projectiles.push({
-              id: `proj-${now}-${sIdx}`,
-              x: wizard.x,
-              y: wizard.y,
-              vx: Math.cos(ang) * 8.5,
-              vy: Math.sin(ang) * 8.5,
-              radius: isCharged ? 12 : 9,
-              color: recipe.color,
-              secondaryColor: recipe.secondaryColor,
-              damage: (recipe.damage + statBonus) * chargeMultiplier * (isCharged ? 0.75 : 1.0),
-              knockback: recipe.knockback,
-              life: 50,
-              maxLife: 50,
-              pierce: isCharged ? 3 : (recipe.id === 'ice_lance' ? 3 : 1),
-              piercedIds: [],
-              isHostile: false,
-              spellType: recipe.id,
-              visualShape: 'ice_lance',
-              statusToApply: 'frozen',
-              vRot: 0.14,
-              rotation: 0,
-            });
-          });
+          // Chorro Criogénico Continuo: no genera proyectiles individuales
+          startChanneledAttack('ice', 'attack');
+          setTimeout(() => {
+            stopChanneledAttack('ice');
+          }, 350);
         } else if (isEarth) {
           g.screenShake = isCharged ? 11 : 7;
           g.projectiles.push({
@@ -1069,12 +1118,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       setElementQueue([]);
     },
-    [activeRecipe, isDefeated, isVictorious, player.stats]
+    [activeRecipe, isDefeated, isVictorious, player.stats, startChanneledAttack, stopChanneledAttack]
   );
 
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
   const startCharge = useCallback(() => {
     if (isDefeated || isVictorious) return;
+    if (activeRecipe.id === 'fire_shot' || activeRecipe.id === 'fire_inferno') {
+      startChanneledAttack('fire', 'attack');
+      return;
+    }
+    if (activeRecipe.id === 'ice_shard' || activeRecipe.id === 'ice_lance') {
+      startChanneledAttack('ice', 'attack');
+      return;
+    }
     const wizard = gameStateRef.current.wizard;
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
@@ -1082,10 +1139,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     elementalSound.playChargeStart();
-  }, [isDefeated, isVictorious]);
+  }, [activeRecipe.id, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
     const wizard = gameStateRef.current.wizard;
+    if (wizard.channeledStream.active) {
+      stopChanneledAttack();
+      return;
+    }
     if (!wizard.isCharging) return;
     const wasCharged = wizard.chargeRatio >= 1.0;
     wizard.isCharging = false;
@@ -1093,7 +1154,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setIsChargingUi(false);
     setChargeVisualRatio(0);
     handleAttack(wasCharged);
-  }, [handleAttack]);
+  }, [handleAttack, stopChanneledAttack]);
 
   // Soporte de Teclado Completo para PC / Navegador Chrome (WASD, Flechas, 1-4, Espacio, J/Enter)
   useEffect(() => {
@@ -1104,17 +1165,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         e.preventDefault();
         handleDash();
       } else if (e.code === 'Digit1' || e.code === 'Numpad1') {
-        handleSelectElement('fire');
+        const stream = gameStateRef.current.wizard.channeledStream;
+        if (!stream.active || stream.type !== 'fire') {
+          handleSelectElement('fire');
+          startChanneledAttack('fire', 'element');
+        }
       } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
+        stopChanneledAttack();
         handleSelectElement('lightning');
       } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
-        handleSelectElement('ice');
+        const stream = gameStateRef.current.wizard.channeledStream;
+        if (!stream.active || stream.type !== 'ice') {
+          handleSelectElement('ice');
+          startChanneledAttack('ice', 'element');
+        }
       } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
+        stopChanneledAttack();
         handleSelectElement('earth');
       } else if (e.code === 'Backspace' || e.code === 'KeyC') {
+        stopChanneledAttack();
         handleClearQueue();
       } else if (e.code === 'KeyJ' || e.code === 'Enter') {
-        if (!gameStateRef.current.wizard.isCharging) {
+        const isFire = activeRecipe.id === 'fire_shot' || activeRecipe.id === 'fire_inferno';
+        const isIce = activeRecipe.id === 'ice_shard' || activeRecipe.id === 'ice_lance';
+        if (isFire) {
+          startChanneledAttack('fire', 'attack');
+        } else if (isIce) {
+          startChanneledAttack('ice', 'attack');
+        } else if (!gameStateRef.current.wizard.isCharging) {
           startCharge();
         }
       }
@@ -1122,8 +1200,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressedRef.current[e.code] = false;
-      if (e.code === 'KeyJ' || e.code === 'Enter') {
-        finishCharge();
+      if (e.code === 'Digit1' || e.code === 'Numpad1') {
+        stopChanneledAttack('fire');
+      } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
+        stopChanneledAttack('ice');
+      } else if (e.code === 'KeyJ' || e.code === 'Enter') {
+        if (gameStateRef.current.wizard.channeledStream.active) {
+          stopChanneledAttack();
+        } else {
+          finishCharge();
+        }
       }
     };
 
@@ -1133,7 +1219,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleDash, handleSelectElement, handleClearQueue, startCharge, finishCharge]);
+  }, [
+    activeRecipe.id,
+    handleDash,
+    handleSelectElement,
+    handleClearQueue,
+    startCharge,
+    finishCharge,
+    startChanneledAttack,
+    stopChanneledAttack,
+  ]);
 
   // Controles de Joystick Táctil
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1271,6 +1366,236 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           elementalSound.playChargeReady();
         }
         setChargeVisualRatio(wizard.chargeRatio);
+      }
+
+      // 1.5 Actualizar Ataque Continuo Canalizado (Fuego y Hielo)
+      if (wizard.channeledStream && wizard.channeledStream.active) {
+        const stream = wizard.channeledStream;
+        const now = performance.now();
+        const originX = wizard.x + Math.cos(stream.aimAngle) * 18;
+        const originY = wizard.y - 6 + Math.sin(stream.aimAngle) * 18;
+
+        if (wizard.isDashing) {
+          stopChanneledAttack();
+        } else {
+          // A. Orientación y fijación de blanco suave (sin saltos erráticos)
+          if (stream.lockedEnemyId) {
+            const locked = enemies.find((e) => e.id === stream.lockedEnemyId && e.hp > 0);
+            if (locked) {
+              const d = Math.hypot(locked.x - wizard.x, locked.y - wizard.y);
+              if (d <= stream.range + 70) {
+                const targetAng = Math.atan2(locked.y - wizard.y, locked.x - wizard.x);
+                let diff = targetAng - stream.aimAngle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                stream.aimAngle += diff * 0.22;
+                wizard.facingAngle = stream.aimAngle;
+              } else {
+                stream.lockedEnemyId = null;
+              }
+            } else {
+              stream.lockedEnemyId = null;
+            }
+          }
+
+          if (!stream.lockedEnemyId) {
+            let closestDist = stream.range + 40;
+            let foundTarget: GameEnemy | null = null;
+            for (const e of enemies) {
+              if (e.hp <= 0) continue;
+              const dist = Math.hypot(e.x - wizard.x, e.y - wizard.y);
+              if (dist < closestDist) {
+                const ang = Math.atan2(e.y - wizard.y, e.x - wizard.x);
+                let diff = ang - wizard.facingAngle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                if (Math.abs(diff) < 0.65) {
+                  closestDist = dist;
+                  foundTarget = e;
+                }
+              }
+            }
+            if (foundTarget) {
+              stream.lockedEnemyId = foundTarget.id;
+            } else {
+              stream.aimAngle = wizard.facingAngle;
+            }
+          }
+
+          // B. Detección de Colisión Cónica y Daño Periódico Multi-Objetivo
+          const halfArc = stream.spreadAngle / 2;
+          const currentEnemiesInHitbox = new Set<string>();
+
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const dx = enemy.x - originX;
+            const dy = enemy.y - originY;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist <= stream.range + enemy.radius) {
+              const angleToEnemy = Math.atan2(dy, dx);
+              let angleDiff = angleToEnemy - stream.aimAngle;
+              while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+              while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+              const angularTolerance = halfArc + Math.asin(Math.min(0.9, enemy.radius / Math.max(dist, 1)));
+              if (Math.abs(angleDiff) <= angularTolerance) {
+                // Comprobar obstáculos sólidos que bloqueen la línea de visión
+                let isBlocked = false;
+                for (const obs of g.terrainManager.obstacles) {
+                  if (!obs.solid || !obs.blocksProjectiles) continue;
+                  if (obs.obstacleType === 'door_gate' && !obs.doorLocked) continue;
+                  const obsDist = Math.hypot(obs.x - originX, obs.y - originY);
+                  if (obsDist < dist - 15) {
+                    const obsAng = Math.atan2(obs.y - originY, obs.x - originX);
+                    let obsDiff = obsAng - stream.aimAngle;
+                    while (obsDiff < -Math.PI) obsDiff += Math.PI * 2;
+                    while (obsDiff > Math.PI) obsDiff -= Math.PI * 2;
+                    if (Math.abs(obsDiff) < halfArc * 0.75) {
+                      isBlocked = true;
+                      break;
+                    }
+                  }
+                }
+
+                if (!isBlocked) {
+                  currentEnemiesInHitbox.add(enemy.id);
+
+                  // Aplicar daño a intervalos de simulación controlados
+                  const lastDamage = stream.lastDamageTimestampPerEnemy[enemy.id] || 0;
+                  if (now - lastDamage >= stream.damageIntervalMs) {
+                    stream.lastDamageTimestampPerEnemy[enemy.id] = now;
+
+                    const statBonus = Math.floor(player.stats.attack * 0.25 + player.stats.knowledge * 0.25);
+                    const dmg = stream.damagePerTick + statBonus;
+                    enemy.hp -= dmg;
+                    enemy.hitFlash = 7;
+                    elementalSound.playContinuousTick(stream.type);
+
+                    if (stream.type === 'fire') {
+                      g.enemyManager.applyStatus(enemy, 'burning', 150, 5);
+                      g.floatingTexts.push({
+                        id: `fire-tick-${now}-${enemy.id}`,
+                        x: enemy.x + (Math.random() - 0.5) * 16,
+                        y: enemy.y - 18,
+                        text: `🔥 -${Math.round(dmg)}`,
+                        color: '#f97316',
+                        fontSize: 12,
+                        opacity: 1,
+                        vy: -1.2,
+                        life: 25,
+                      });
+                    } else {
+                      // Hielo: Aplica y refresca ralentización
+                      g.enemyManager.applyStatus(enemy, 'slowed', 130);
+                      if (Math.random() < 0.2) {
+                        g.enemyManager.applyStatus(enemy, 'frozen', 60);
+                      }
+                      g.floatingTexts.push({
+                        id: `ice-tick-${now}-${enemy.id}`,
+                        x: enemy.x + (Math.random() - 0.5) * 16,
+                        y: enemy.y - 18,
+                        text: `❄️ -${Math.round(dmg)} [LENTO]`,
+                        color: '#38bdf8',
+                        fontSize: 12,
+                        opacity: 1,
+                        vy: -1.2,
+                        life: 25,
+                      });
+                    }
+
+                    for (let p = 0; p < 2; p++) {
+                      const spAng = Math.random() * Math.PI * 2;
+                      g.particles.push({
+                        id: `hit-p-${now}-${enemy.id}-${p}`,
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx: Math.cos(spAng) * 2.5,
+                        vy: Math.sin(spAng) * 2.5,
+                        radius: 2,
+                        color: stream.type === 'fire' ? '#fdba74' : '#bae6fd',
+                        alpha: 1,
+                        life: 12,
+                        type: stream.type === 'fire' ? 'ember' : 'ice',
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          // Retirar daño periódico inmediatamente si el enemigo sale del cono
+          Object.keys(stream.lastDamageTimestampPerEnemy).forEach((id) => {
+            if (!currentEnemiesInHitbox.has(id)) {
+              delete stream.lastDamageTimestampPerEnemy[id];
+            }
+          });
+
+          // Interacción con obstáculos en el cono
+          g.terrainManager.obstacles.forEach((obs) => {
+            if (obs.hp <= 0) return;
+            const dx = obs.x - originX;
+            const dy = obs.y - originY;
+            const dist = Math.hypot(dx, dy);
+            if (dist <= stream.range + obs.radius) {
+              const ang = Math.atan2(dy, dx);
+              let diff = ang - stream.aimAngle;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              if (Math.abs(diff) <= halfArc + 0.15) {
+                const lastDmg = stream.lastDamageTimestampPerObstacle[obs.id] || 0;
+                if (now - lastDmg >= stream.damageIntervalMs) {
+                  stream.lastDamageTimestampPerObstacle[obs.id] = now;
+                  if (stream.type === 'fire') {
+                    if (obs.meltable || obs.obstacleType === 'ice_wall') {
+                      obs.hp = 0;
+                      g.terrainManager.spawnWaterPuddle(obs.x, obs.y, 45);
+                      g.floatingTexts.push({
+                        id: `melt-${now}-${obs.id}`,
+                        x: obs.x,
+                        y: obs.y - 15,
+                        text: '💧 ¡HIELO DERRETIDO!',
+                        color: '#38bdf8',
+                        fontSize: 12,
+                        opacity: 1,
+                        vy: -1.1,
+                        life: 30,
+                      });
+                    } else if (obs.obstacleType === 'crate' || obs.obstacleType === 'permafrost_spike') {
+                      obs.hp -= 20;
+                    }
+                  } else if (stream.type === 'ice') {
+                    if (obs.obstacleType === 'crate') {
+                      obs.hp -= 12;
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          // Emisión continua de partículas visuales del chorro
+          for (let sp = 0; sp < 2; sp++) {
+            const pAng = stream.aimAngle + (Math.random() - 0.5) * stream.spreadAngle * 0.85;
+            const speed = 5.5 + Math.random() * 4.0;
+            g.particles.push({
+              id: `stream-p-${now}-${sp}`,
+              x: originX,
+              y: originY,
+              vx: Math.cos(pAng) * speed,
+              vy: Math.sin(pAng) * speed,
+              radius: stream.type === 'fire' ? 3 + Math.random() * 3.5 : 2.5 + Math.random() * 3,
+              color: stream.type === 'fire' ? (Math.random() > 0.5 ? '#f97316' : '#ef4444') : (Math.random() > 0.4 ? '#38bdf8' : '#e0f2fe'),
+              alpha: 0.9,
+              life: 15,
+              maxLife: 15,
+              type: stream.type === 'fire' ? 'ember' : 'ice',
+              rotation: Math.random() * Math.PI,
+              vRot: (Math.random() - 0.5) * 0.25,
+            });
+          }
+        }
       }
 
       // Restricción de límites de la sala
@@ -1720,7 +2045,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     };
 
     animId = requestAnimationFrame(gameLoop);
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      elementalSound.stopContinuousStream();
+    };
   }, [changeToRoom, currentRoom.roomType, isDefeated, isVictorious, onPlayerTakeDamage]);
 
   return (
@@ -1876,6 +2204,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               onPointerDown={(e) => {
                 e.stopPropagation();
                 handleSelectElement('fire');
+                startChanneledAttack('fire', 'element');
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('fire');
+              }}
+              onPointerLeave={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('fire');
+              }}
+              onPointerCancel={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('fire');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-rose-600 to-red-800 active:scale-95 border-2 border-rose-400 shadow-[0_0_12px_rgba(239,68,68,0.4)] flex flex-col items-center justify-center text-white"
             >
@@ -1887,6 +2228,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             <button
               onPointerDown={(e) => {
                 e.stopPropagation();
+                stopChanneledAttack();
                 handleSelectElement('lightning');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-700 active:scale-95 border-2 border-amber-300 shadow-[0_0_12px_rgba(234,179,8,0.4)] flex flex-col items-center justify-center text-white"
@@ -1900,6 +2242,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               onPointerDown={(e) => {
                 e.stopPropagation();
                 handleSelectElement('ice');
+                startChanneledAttack('ice', 'element');
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('ice');
+              }}
+              onPointerLeave={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('ice');
+              }}
+              onPointerCancel={(e) => {
+                e.stopPropagation();
+                stopChanneledAttack('ice');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 active:scale-95 border-2 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.4)] flex flex-col items-center justify-center text-white"
             >
@@ -1911,6 +2266,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             <button
               onPointerDown={(e) => {
                 e.stopPropagation();
+                stopChanneledAttack();
                 handleSelectElement('earth');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-600 to-stone-800 active:scale-95 border-2 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)] flex flex-col items-center justify-center text-white"
@@ -1965,7 +2321,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           >
             <span className="text-2xl">{activeRecipe.icon}</span>
             <span className="text-[11px] font-black tracking-wider mt-0.5">
-              {chargeVisualRatio >= 1.0 ? '¡CARGADO!' : 'LANZAR'}
+              {activeRecipe.id === 'fire_shot' || activeRecipe.id === 'fire_inferno'
+                ? 'CANALIZAR'
+                : activeRecipe.id === 'ice_shard' || activeRecipe.id === 'ice_lance'
+                ? 'CANALIZAR'
+                : chargeVisualRatio >= 1.0
+                ? '¡CARGADO!'
+                : 'LANZAR'}
             </span>
             {isChargingUi && chargeVisualRatio < 1.0 && (
               <div className="w-12 bg-black/50 h-1.5 rounded-full mt-1 overflow-hidden">

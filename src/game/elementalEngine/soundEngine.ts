@@ -621,6 +621,139 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.32);
   }
+
+  // GESTIÓN DE SONIDO CONTINUO PARA ATAQUES CANALIZADOS (FUEGO Y HIELO)
+  private activeStreamType: 'fire' | 'ice' | null = null;
+  private streamOsc1: OscillatorNode | null = null;
+  private streamOsc2: OscillatorNode | null = null;
+  private streamGain: GainNode | null = null;
+  private streamFilter: BiquadFilterNode | null = null;
+
+  public startContinuousStream(type: 'fire' | 'ice') {
+    if (this.isMuted) return;
+    if (this.activeStreamType === type && this.streamGain) return;
+    this.stopContinuousStream();
+
+    this.initCtx();
+    if (!this.ctx) return;
+
+    this.activeStreamType = type;
+    const now = this.ctx.currentTime;
+    this.streamGain = this.ctx.createGain();
+    this.streamGain.gain.setValueAtTime(0.001, now);
+
+    if (type === 'fire') {
+      // Rugido abrasador continuo de llamas
+      this.streamFilter = this.ctx.createBiquadFilter();
+      this.streamFilter.type = 'lowpass';
+      this.streamFilter.frequency.setValueAtTime(420, now);
+
+      this.streamOsc1 = this.ctx.createOscillator();
+      this.streamOsc1.type = 'sawtooth';
+      this.streamOsc1.frequency.setValueAtTime(95, now);
+
+      this.streamOsc2 = this.ctx.createOscillator();
+      this.streamOsc2.type = 'triangle';
+      this.streamOsc2.frequency.setValueAtTime(140, now);
+
+      this.streamOsc1.connect(this.streamFilter);
+      this.streamOsc2.connect(this.streamFilter);
+      this.streamFilter.connect(this.streamGain);
+
+      this.streamGain.gain.linearRampToValueAtTime(0.18, now + 0.06);
+
+      this.streamOsc1.start(now);
+      this.streamOsc2.start(now);
+    } else {
+      // Silbido criogénico de ventisca y zumbido helado
+      this.streamFilter = this.ctx.createBiquadFilter();
+      this.streamFilter.type = 'bandpass';
+      this.streamFilter.frequency.setValueAtTime(780, now);
+      this.streamFilter.Q.setValueAtTime(2.0, now);
+
+      this.streamOsc1 = this.ctx.createOscillator();
+      this.streamOsc1.type = 'sine';
+      this.streamOsc1.frequency.setValueAtTime(540, now);
+
+      this.streamOsc2 = this.ctx.createOscillator();
+      this.streamOsc2.type = 'triangle';
+      this.streamOsc2.frequency.setValueAtTime(820, now);
+
+      this.streamOsc1.connect(this.streamFilter);
+      this.streamOsc2.connect(this.streamFilter);
+      this.streamFilter.connect(this.streamGain);
+
+      this.streamGain.gain.linearRampToValueAtTime(0.14, now + 0.06);
+
+      this.streamOsc1.start(now);
+      this.streamOsc2.start(now);
+    }
+
+    this.streamGain.connect(this.ctx.destination);
+  }
+
+  public stopContinuousStream() {
+    if (!this.streamGain || !this.ctx) {
+      this.activeStreamType = null;
+      return;
+    }
+    const now = this.ctx.currentTime;
+    const g = this.streamGain;
+    const osc1 = this.streamOsc1;
+    const osc2 = this.streamOsc2;
+
+    try {
+      g.gain.linearRampToValueAtTime(0.0001, now + 0.05);
+      setTimeout(() => {
+        try {
+          osc1?.stop();
+          osc2?.stop();
+          osc1?.disconnect();
+          osc2?.disconnect();
+          g.disconnect();
+        } catch {
+          // Ya detenido
+        }
+      }, 60);
+    } catch {
+      // Ya desconectado
+    }
+
+    this.activeStreamType = null;
+    this.streamOsc1 = null;
+    this.streamOsc2 = null;
+    this.streamGain = null;
+    this.streamFilter = null;
+  }
+
+  // Golpe periódico de daño del chorro
+  public playContinuousTick(type: 'fire' | 'ice') {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    if (type === 'fire') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.05);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(860, now);
+      osc.frequency.exponentialRampToValueAtTime(620, now + 0.04);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+    }
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();
