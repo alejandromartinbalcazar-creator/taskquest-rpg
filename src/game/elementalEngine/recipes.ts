@@ -103,15 +103,15 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
   },
   earth_megalith: {
     id: 'earth_megalith',
-    name: 'Megalito Terrestre',
+    name: 'Puño Tectónico',
     elements: ['earth', 'earth'],
-    description: 'Erige un pilar de piedra indestructible que desvía ataques y bloquea enemigos.',
-    icon: '🗿🛡️',
-    color: '#65a30d',
+    description: 'Colosal puño de roca que brota violentamente del suelo, elevando e interrumpiendo enemigos y dejando escombros como cobertura temporal.',
+    icon: '👊🌍',
+    color: '#d97706',
     secondaryColor: '#78350f',
-    damage: 55,
-    knockback: 6.0,
-    cooldownMs: 450,
+    damage: 64,
+    knockback: 7.5,
+    cooldownMs: 650,
   },
 
   // LAS 6 COMBINACIONES PRIORITARIAS DE 2 ELEMENTOS

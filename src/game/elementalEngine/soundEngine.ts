@@ -1122,6 +1122,117 @@ class ElementalSoundEngine {
       osc.stop(now + 0.24);
     });
   }
+
+  // ==========================================
+  // PUÑO TECTÓNICO (TIERRA + TIERRA)
+  // ==========================================
+
+  // 1. Advertencia y rugido sísmico subterráneo
+  public playTectonicRumble(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(isCharged ? 70 : 85, now);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.1);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.24);
+
+    gain.gain.setValueAtTime(isCharged ? 0.32 : 0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  }
+
+  // 2. Emergencia violenta y golpe ascendente (Uppercut telúrico)
+  public playTectonicFistUppercut(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-impacto percusivo pesado (grave)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(180, now);
+    subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.35);
+
+    subGain.gain.setValueAtTime(isCharged ? 0.48 : 0.38, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.35);
+
+    // Ruptura de roca sólida y empuje ascendente
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'square';
+    crackOsc.frequency.setValueAtTime(260, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(65, now + 0.22);
+
+    crackGain.gain.setValueAtTime(isCharged ? 0.28 : 0.2, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    crackOsc.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.22);
+  }
+
+  // 3. Colapso del puño en escombros (Ápice y desprendimiento)
+  public playTectonicCollapse() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    [180, 140, 95].forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.03);
+      osc.frequency.exponentialRampToValueAtTime(35, now + idx * 0.03 + 0.18);
+
+      gain.gain.setValueAtTime(0.18, now + idx * 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.03 + 0.18);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+      osc.start(now + idx * 0.03);
+      osc.stop(now + idx * 0.03 + 0.18);
+    });
+  }
+
+  // 4. Desmoronamiento de escombros temporales en polvo
+  public playTectonicCrumble() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.linearRampToValueAtTime(60, now + 0.2);
+
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

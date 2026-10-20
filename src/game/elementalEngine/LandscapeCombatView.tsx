@@ -15,6 +15,7 @@ import {
   VoltaicJump,
   GlacialEruptionEntity,
   GlacialSpikeSegment,
+  TectonicFistEntity,
 } from './types';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
@@ -460,6 +461,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     infernalCrowns: [] as InfernalCrownEntity[],
     voltaicChains: [] as VoltaicChainEntity[],
     glacialEruptions: [] as GlacialEruptionEntity[],
+    tectonicFists: [] as TectonicFistEntity[],
     lastVoltaicHumTime: 0,
     particles: [] as Particle[],
     floatingTexts: [] as FloatingText[],
@@ -617,6 +619,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.infernalCrowns = [];
       g.voltaicChains = [];
       g.glacialEruptions = [];
+      g.tectonicFists = [];
 
       const nextRoom = DUNGEON_ROOMS[nextIndex];
       g.terrainManager.setupRoomTerrain(nextRoom.roomType);
@@ -716,7 +719,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'ice_lance') {
         // Erupción Glacial tiene su propio sonido de invocación
       }
-      else if (recipe.id === 'earth_toss' || recipe.id === 'earth_megalith') elementalSound.playEarthToss();
+      else if (recipe.id === 'earth_toss') elementalSound.playEarthToss();
+      else if (recipe.id === 'earth_megalith') {
+        // Puño Tectónico tiene su propio rugido sísmico de invocación
+      }
       else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
       else if (recipe.id === 'magma_eruption') elementalSound.playMagmaEruption();
       else if (recipe.id === 'crystal_field') elementalSound.playCrystalField();
@@ -726,7 +732,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
 
-      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Auto para el resto)
+      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico con auto-bloqueo)
       let aimAngle = wizard.facingAngle;
       let closestDist = 420;
       let targetX = wizard.x + Math.cos(aimAngle) * 110;
@@ -749,6 +755,33 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
         targetX = wizard.x + Math.cos(aimAngle) * 260;
         targetY = wizard.y + Math.sin(aimAngle) * 260;
+      } else if (recipe.id === 'earth_megalith') {
+        // Apuntado de Puño Tectónico: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        if (attackAimRef.current.isAiming) {
+          const adx = attackAimRef.current.currX - attackAimRef.current.startX;
+          const ady = attackAimRef.current.currY - attackAimRef.current.startY;
+          if (Math.hypot(adx, ady) > 7) {
+            aimAngle = Math.atan2(ady, adx);
+            targetX = wizard.x + Math.cos(aimAngle) * 220;
+            targetY = wizard.y + Math.sin(aimAngle) * 220 * 0.58;
+          }
+        } else if (mousePosRef.current.active) {
+          targetX = mousePosRef.current.x;
+          targetY = mousePosRef.current.y;
+          aimAngle = Math.atan2(targetY - wizard.y, targetX - wizard.x);
+        } else {
+          for (const enemy of g.enemyManager.enemies) {
+            const dx = enemy.x - wizard.x;
+            const dy = enemy.y - wizard.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < closestDist) {
+              closestDist = dist;
+              aimAngle = Math.atan2(dy, dx);
+              targetX = enemy.x;
+              targetY = enemy.y;
+            }
+          }
+        }
       } else {
         // Auto-apuntar al enemigo más cercano o disparar hacia la dirección del mago
         for (const enemy of g.enemyManager.enemies) {
@@ -1208,6 +1241,68 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 0.3 PUÑO TECTÓNICO (TIERRA + TIERRA): Impacto vertical masivo, elevación, interrupción y escombros temporales
+      else if (recipe.id === 'earth_megalith') {
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const ratio = chargeRatio !== undefined ? Math.max(0, Math.min(1.0, chargeRatio)) : (isCharged ? 1.0 : 0);
+        // Daño base al 100% en toque normal, y +50% adicional si el usuario decide mantener presionado
+        const chargeDamageBoost = 1.0 + 0.50 * (isMaxCharge ? 1.0 : ratio);
+
+        const baseDmg = recipe.damage + statBonus;
+        const finalDmg = Math.round(baseDmg * chargeDamageBoost);
+
+        elementalSound.playTectonicRumble(isMaxCharge);
+        g.screenShake = isMaxCharge ? 10 : 6;
+
+        const impactRadius = isMaxCharge ? 54 : 42;
+        const maxFistH = isMaxCharge ? 95 : 78;
+        const rubbleCount = isMaxCharge ? 4 : 3;
+
+        // Generar 5 ángulos de fractura para las grietas telúricas en el suelo
+        const crackAngles = [
+          0.3 + (Math.random() - 0.5) * 0.25,
+          1.5 + (Math.random() - 0.5) * 0.25,
+          2.7 + (Math.random() - 0.5) * 0.25,
+          3.9 + (Math.random() - 0.5) * 0.25,
+          5.1 + (Math.random() - 0.5) * 0.25,
+        ];
+
+        g.tectonicFists.push({
+          id: `fist-${now}-${Math.random()}`,
+          targetX,
+          targetY,
+          radius: impactRadius,
+          damage: finalDmg,
+          knockup: (recipe.knockback || 7.5) * (isMaxCharge ? 1.4 : 1.0),
+          isCharged: isMaxCharge,
+          phase: 'warning',
+          phaseTimer: 0,
+          warningDurationMs: 220,
+          eruptionDurationMs: 260,
+          collapseDurationMs: 200,
+          hasDealtDamage: false,
+          fistHeight: 0,
+          maxFistHeight: maxFistH,
+          crackAngles,
+          rubbleSpawned: false,
+          rubbleCount,
+        });
+
+        g.floatingTexts.push({
+          id: `fist-cast-${now}`,
+          x: wizard.x,
+          y: wizard.y - 25,
+          text: isMaxCharge ? '👊🌍 ¡PUÑO TECTÓNICO +50%!' : '👊🌍 ¡PUÑO TECTÓNICO!',
+          color: isMaxCharge ? '#fef08a' : '#d97706',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.3,
+          life: 38,
+        });
+
+        setElementQueue([]);
+        return;
+      }
       // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST: ESTACAS TÁCTICAS + CONGELACIÓN)
       else if (recipe.id === 'permafrost_prison') {
         g.screenShake = isCharged ? 9 : 6;
@@ -1444,7 +1539,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else {
         const isFire = recipe.id === 'fire_shot';
         const isIce = recipe.id === 'ice_shard';
-        const isEarth = recipe.id === 'earth_toss' || recipe.id === 'earth_megalith';
+        const isEarth = recipe.id === 'earth_toss';
 
         if (isFire) {
           // Flujo de Llamas Continuo: no genera proyectiles individuales
@@ -1475,7 +1570,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             knockback: (recipe.knockback || 4.5) * (isCharged ? 1.5 : 1.1),
             life: 55,
             maxLife: 55,
-            pierce: isCharged ? 3 : (recipe.id === 'earth_megalith' ? 2 : 1),
+            pierce: isCharged ? 3 : 1,
             piercedIds: [],
             isHostile: false,
             spellType: recipe.id,
@@ -1530,7 +1625,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       ? 'lightning'
       : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
         ? 'ice'
-        : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'));
+        : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+          ? 'earth'
+          : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -1836,7 +1933,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (wizard.isCharging) {
         const isVoltaic = activeRecipe.id === 'lightning_storm';
         const isGlacial = activeRecipe.id === 'ice_lance';
-        const maxChargeTime = isVoltaic ? 1800 : (isGlacial ? 1400 : 380);
+        const isTectonic = activeRecipe.id === 'earth_megalith';
+        const maxChargeTime = isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -1885,6 +1983,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Esquirlas de roca y polvo telúrico convergente para Puño Tectónico
+        else if (isTectonic) {
+          if (Math.random() < 0.35 + wizard.chargeRatio * 0.4) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 16 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `earth-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (1.8 + wizard.chargeRatio * 2.0),
+              vy: -Math.sin(pAng) * (1.0 + wizard.chargeRatio * 1.2),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#f59e0b' : '#78350f',
+              alpha: 1,
+              life: 16,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -1915,6 +2033,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 12,
               color: '#e0f7fa',
+              alpha: 1,
+              life: 15,
+              maxLife: 15,
+              type: 'ring',
+            });
+          } else if (isTectonic) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6;
+            g.particles.push({
+              id: `earth-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 12,
+              color: '#f59e0b',
               alpha: 1,
               life: 15,
               maxLife: 15,
@@ -2175,7 +2309,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (wizard.hitFlash > 0) wizard.hitFlash--;
 
       // 2. Actualizar Obstáculos y Zonas de Terreno
-      g.terrainManager.update(enemies, g.floatingTexts, g.particles, g.projectiles);
+      g.terrainManager.update(enemies, g.floatingTexts, g.particles, g.projectiles, dt);
 
       // 3. Actualizar IA de Enemigos
       g.enemyManager.update(
@@ -3106,6 +3240,174 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.5 Actualizar Puño Tectónico (Tierra + Tierra: Advertencia, Golpe Uppercut, Elevación y Escombros)
+      for (let fIdx = g.tectonicFists.length - 1; fIdx >= 0; fIdx--) {
+        const fist = g.tectonicFists[fIdx];
+        fist.phaseTimer += dt;
+
+        // FASE A: ADVERTENCIA SÍSMICA (220 ms)
+        if (fist.phase === 'warning') {
+          // Partículas sutiles de polvo levantándose del suelo agrietado
+          if (Math.random() < 0.4) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = Math.random() * fist.radius * 0.8;
+            g.particles.push({
+              id: `fist-warn-${frameNow}-${Math.random()}`,
+              x: fist.targetX + Math.cos(pAng) * pDist,
+              y: fist.targetY + Math.sin(pAng) * pDist * 0.58,
+              vx: (Math.random() - 0.5) * 0.8,
+              vy: -0.8 - Math.random() * 1.2,
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#d97706' : '#fef08a',
+              alpha: 0.8,
+              life: 18,
+            });
+          }
+
+          if (fist.phaseTimer >= fist.warningDurationMs) {
+            fist.phase = 'eruption';
+            fist.phaseTimer = 0;
+            elementalSound.playTectonicFistUppercut(fist.isCharged);
+            g.screenShake = Math.max(g.screenShake, fist.isCharged ? 13 : 8);
+
+            // Explosión de polvo y rocas en la base al brotar
+            for (let b = 0; b < 14; b++) {
+              const bAng = Math.random() * Math.PI * 2;
+              const bSpd = 2.5 + Math.random() * 5.0;
+              g.particles.push({
+                id: `fist-base-${frameNow}-${b}`,
+                x: fist.targetX,
+                y: fist.targetY,
+                vx: Math.cos(bAng) * bSpd,
+                vy: Math.sin(bAng) * bSpd * 0.58 - (2 + Math.random() * 3),
+                radius: 2 + Math.random() * 2.5,
+                color: Math.random() < 0.5 ? '#5d4037' : (Math.random() < 0.5 ? '#d97706' : '#a1887f'),
+                alpha: 1,
+                life: 22,
+              });
+            }
+          }
+        }
+
+        // FASE B: EMERGENCIA VIOLENTA DEL PUÑO (260 ms)
+        else if (fist.phase === 'eruption') {
+          const prog = Math.min(1, fist.phaseTimer / fist.eruptionDurationMs);
+          const easeOut = Math.sin(prog * Math.PI * 0.5);
+          fist.fistHeight = fist.maxFistHeight * easeOut;
+
+          // Impacto y detección de daño en el ápice (se aplica exactamente una vez)
+          if (!fist.hasDealtDamage && prog >= 0.45) {
+            fist.hasDealtDamage = true;
+
+            for (const enemy of g.enemyManager.enemies) {
+              if (enemy.hp <= 0) continue;
+              const d = Math.hypot(enemy.x - fist.targetX, (enemy.y - fist.targetY) / 0.58);
+              if (d <= enemy.radius + fist.radius) {
+                enemy.hp -= fist.damage;
+                enemy.hitFlash = 14;
+
+                // Interrupción garantizada de ataque y cancelación de telegráfico
+                enemy.isTelegraphing = false;
+                enemy.telegraphTimer = 0;
+                enemy.attackCooldown = 0;
+                enemy.stunnedTimer = fist.isCharged ? 65 : 45;
+
+                // Elevación vertical (Knock-up) y desplazamiento radial
+                const isBoss = enemy.archetype === 'boss';
+                if (!isBoss) {
+                  // Catapultar hacia arriba en Y y ligeramente hacia afuera
+                  const pushAng = Math.atan2(enemy.y - fist.targetY, enemy.x - fist.targetX);
+                  const pushDist = fist.knockup * (fist.isCharged ? 4.8 : 3.5);
+                  enemy.x += Math.cos(pushAng) * pushDist;
+                  enemy.y -= (fist.knockup * 3.8); // Elevación en el eje vertical
+                } else {
+                  // Jefes pesados: micro-aturdimiento sin desplazamiento forzado grande
+                  enemy.stunnedTimer = 25;
+                }
+
+                g.floatingTexts.push({
+                  id: `fist-hit-${frameNow}-${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 28,
+                  text: fist.isCharged ? `👊 -${fist.damage} [¡PUÑO TECTÓNICO +50%!]` : `👊 -${fist.damage} [¡GOLPE TECTÓNICO!]`,
+                  color: fist.isCharged ? '#fef08a' : '#d97706',
+                  fontSize: 14,
+                  opacity: 1,
+                  vy: -1.6,
+                  life: 40,
+                });
+
+                // Chispas de impacto telúrico
+                for (let h = 0; h < 8; h++) {
+                  const hAng = Math.random() * Math.PI * 2;
+                  g.particles.push({
+                    id: `fist-spark-${frameNow}-${enemy.id}-${h}`,
+                    x: enemy.x,
+                    y: enemy.y - 12,
+                    vx: Math.cos(hAng) * 3.5,
+                    vy: Math.sin(hAng) * 3.5,
+                    radius: 2,
+                    color: '#f59e0b',
+                    alpha: 1,
+                    life: 18,
+                  });
+                }
+              }
+            }
+
+            // Dañar o destruir obstáculos existentes en el epicentro
+            g.terrainManager.obstacles.forEach((obs) => {
+              if (obs.obstacleType === 'tectonic_rubble') return;
+              const d = Math.hypot(obs.x - fist.targetX, (obs.y - fist.targetY) / 0.58);
+              if (d <= obs.radius + fist.radius) {
+                obs.hp -= fist.damage;
+              }
+            });
+          }
+
+          if (fist.phaseTimer >= fist.eruptionDurationMs) {
+            fist.phase = 'collapse';
+            fist.phaseTimer = 0;
+            elementalSound.playTectonicCollapse();
+            g.screenShake = Math.max(g.screenShake, 6);
+          }
+        }
+
+        // FASE C: COLAPSO Y GENERACIÓN DE ESCOMBROS (200 ms)
+        else if (fist.phase === 'collapse') {
+          // Generar los obstáculos de escombros en el terreno exactamente una vez al inicio del colapso
+          if (!fist.rubbleSpawned) {
+            fist.rubbleSpawned = true;
+            g.terrainManager.spawnTectonicRubble(fist.targetX, fist.targetY, fist.rubbleCount, 2400);
+
+            // Explosión de escombros y polvo
+            for (let r = 0; r < 12; r++) {
+              const rAng = Math.random() * Math.PI * 2;
+              const rSpd = 2 + Math.random() * 4;
+              g.particles.push({
+                id: `rubble-burst-${frameNow}-${r}`,
+                x: fist.targetX,
+                y: fist.targetY - fist.fistHeight * 0.5,
+                vx: Math.cos(rAng) * rSpd,
+                vy: Math.sin(rAng) * rSpd * 0.58 - 1.5,
+                radius: 2 + Math.random() * 2,
+                color: Math.random() < 0.6 ? '#4e342e' : '#f59e0b',
+                alpha: 1,
+                life: 20,
+              });
+            }
+          }
+
+          if (fist.phaseTimer >= fist.collapseDurationMs) {
+            fist.phase = 'finished';
+          }
+        }
+
+        if (fist.phase === 'finished') {
+          g.tectonicFists.splice(fIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -3170,7 +3472,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             currentRoom.roomType,
             g.enemyManager.currentBoss,
             g.infernalCrowns,
-            g.glacialEruptions
+            g.glacialEruptions,
+            g.tectonicFists
           );
         }
       }
@@ -3421,11 +3724,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_28px_rgba(56,189,248,0.95)] animate-pulse'
                     : activeRecipe.id === 'ice_lance'
                     ? 'border-cyan-200 shadow-[0_0_28px_rgba(6,182,212,0.95)] animate-pulse'
+                    : activeRecipe.id === 'earth_megalith'
+                    ? 'border-amber-300 shadow-[0_0_28px_rgba(245,158,11,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
                     : activeRecipe.id === 'ice_lance'
                     ? 'border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
+                    : activeRecipe.id === 'earth_megalith'
+                    ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.6)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -3437,6 +3744,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? 'CANALIZAR'
                 : activeRecipe.id === 'ice_lance'
                 ? (chargeVisualRatio >= 1.0 ? '¡GLACIAL +50%! ❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️' : 'GLACIAL ❄️❄️')
+                : activeRecipe.id === 'earth_megalith'
+                ? (chargeVisualRatio >= 1.0 ? '¡PUÑO +50%! 🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'PUÑO 🌍🌍')
                 : activeRecipe.id === 'fire_inferno'
                 ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
                 : activeRecipe.id === 'lightning_storm'
@@ -3453,6 +3762,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-cyan-400 shadow-[0_0_8px_#38bdf8]'
                       : activeRecipe.id === 'ice_lance'
                       ? 'bg-cyan-300 shadow-[0_0_8px_#06b6d4]'
+                      : activeRecipe.id === 'earth_megalith'
+                      ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

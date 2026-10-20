@@ -417,6 +417,39 @@ export class TerrainManager {
     }
   }
 
+  // Genera escombros temporales tras el colapso de Puño Tectónico (Tierra + Tierra)
+  public spawnTectonicRubble(x: number, y: number, count = 3, durationMs = 2200) {
+    const squish = 0.58;
+    const ringRadius = 38;
+    const angleStep = (Math.PI * 2) / count;
+    const baseAngle = Math.random() * Math.PI * 2;
+
+    for (let i = 0; i < count; i++) {
+      const ang = baseAngle + i * angleStep + (Math.random() - 0.5) * 0.35;
+      const dist = ringRadius * (0.85 + Math.random() * 0.3);
+      const rx = x + Math.cos(ang) * dist;
+      const ry = y + Math.sin(ang) * dist * squish;
+
+      this.obstacles.push({
+        id: `rubble-${Date.now()}-${i}-${Math.random()}`,
+        x: rx,
+        y: ry,
+        radius: 17,
+        width: 34,
+        height: 34,
+        obstacleType: 'tectonic_rubble',
+        hp: 95,
+        maxHp: 95,
+        color: '#4e342e',
+        solid: true,
+        blocksProjectiles: true,
+        meltable: false,
+        lifeTimer: durationMs,
+        maxLifeTimer: durationMs,
+      });
+    }
+  }
+
   // Genera muro de roca / pilar de tierra
   public spawnRockPillar(x: number, y: number) {
     this.obstacles.push({
@@ -561,8 +594,37 @@ export class TerrainManager {
     enemies: GameEnemy[],
     floatingTexts: FloatingText[],
     particles: Particle[],
-    projectiles: Projectile[]
+    projectiles: Projectile[],
+    dt = 16
   ) {
+    // 0. Temporizador de vida de obstáculos temporales (Escombros Tectónicos)
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const obs = this.obstacles[i];
+      if (obs.lifeTimer !== undefined) {
+        obs.lifeTimer -= dt;
+        if (obs.lifeTimer <= 0) {
+          obs.hp = 0;
+          elementalSound.playTectonicCrumble();
+          // Partículas de desmoronamiento
+          for (let p = 0; p < 7; p++) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pSpd = 1 + Math.random() * 2.5;
+            particles.push({
+              id: `crumble-${Date.now()}-${p}`,
+              x: obs.x,
+              y: obs.y - 6,
+              vx: Math.cos(pAng) * pSpd,
+              vy: Math.sin(pAng) * pSpd * 0.58 - 1,
+              radius: 1.5 + Math.random() * 2,
+              color: Math.random() < 0.6 ? '#5d4037' : '#d97706',
+              alpha: 1,
+              life: 18,
+            });
+          }
+        }
+      }
+    }
+
     // 1. Limpieza de obstáculos destruidos
     this.obstacles = this.obstacles.filter((obs) => obs.hp > 0);
 

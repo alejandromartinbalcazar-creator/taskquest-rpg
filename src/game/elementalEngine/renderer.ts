@@ -12,6 +12,7 @@ import {
   InfernalCrownEntity,
   GlacialEruptionEntity,
   GlacialSpikeSegment,
+  TectonicFistEntity,
 } from './types';
 import { drawWizardSprite } from '../renderWizard';
 
@@ -50,7 +51,8 @@ export class IsometricRenderer {
     roomType: RoomType,
     currentBoss: GameEnemy | null,
     infernalCrowns: InfernalCrownEntity[] = [],
-    glacialEruptions: GlacialEruptionEntity[] = []
+    glacialEruptions: GlacialEruptionEntity[] = [],
+    tectonicFists: TectonicFistEntity[] = []
   ) {
     ctx.save();
 
@@ -85,9 +87,14 @@ export class IsometricRenderer {
     // 3.6 Dibujar Falla y Surco de Permafrost de Erupción Glacial (Hielo + Hielo)
     this.drawGlacialEruptionFloor(ctx, glacialEruptions);
 
-    // 3.7 Línea de trayectoria táctica al cargar o apuntar Erupción Glacial
+    // 3.7 Dibujar Cráter y Runa Sísmica de Puño Tectónico (Tierra + Tierra)
+    this.drawTectonicFistFloor(ctx, tectonicFists);
+
+    // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'earth') {
+      this.drawTectonicAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -99,7 +106,7 @@ export class IsometricRenderer {
       draw: () => void;
     }> = [];
 
-    // Obstáculos físicos (Muros, Rocas, Cristales, Puertas, Estacas de Permafrost)
+    // Obstáculos físicos (Muros, Rocas, Cristales, Puertas, Estacas de Permafrost, Escombros Tectónicos)
     obstacles.forEach((obs) => {
       renderList.push({
         y: obs.y,
@@ -117,6 +124,16 @@ export class IsometricRenderer {
           });
         }
       });
+    });
+
+    // Colosal Puño Tectónico (Tierra + Tierra) integrado en el Depth Sorting
+    tectonicFists.forEach((fist) => {
+      if (fist.phase === 'eruption' || fist.phase === 'collapse') {
+        renderList.push({
+          y: fist.targetY,
+          draw: () => this.drawTectonicFist(ctx, fist),
+        });
+      }
     });
 
     // Mago (Jugador)
@@ -598,6 +615,58 @@ export class IsometricRenderer {
       ctx.lineTo(obs.x + obs.radius, obs.y + obs.radius - 8);
       ctx.stroke();
     }
+    // 7. ESCOMBROS TEMPORALES DE PUÑO TECTÓNICO (TIERRA + TIERRA)
+    else if (obs.obstacleType === 'tectonic_rubble') {
+      const isExpiring = obs.lifeTimer !== undefined && obs.lifeTimer < 450;
+      const jitter = isExpiring ? (Math.random() - 0.5) * 3 : 0;
+      const rx = obs.x + jitter;
+      const ry = obs.y;
+      const r = obs.radius;
+
+      // Roca angular poliédrica
+      ctx.fillStyle = '#3e2723';
+      ctx.beginPath();
+      ctx.moveTo(rx - r * 0.9, ry + 2);
+      ctx.lineTo(rx - r * 0.7, ry - r * 1.2);
+      ctx.lineTo(rx + r * 0.1, ry - r * 1.5);
+      ctx.lineTo(rx + r * 0.85, ry - r * 0.9);
+      ctx.lineTo(rx + r * 0.95, ry + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Faceta frontal iluminada
+      ctx.fillStyle = '#5d4037';
+      ctx.beginPath();
+      ctx.moveTo(rx - r * 0.7, ry - r * 1.2);
+      ctx.lineTo(rx + r * 0.1, ry - r * 1.5);
+      ctx.lineTo(rx + r * 0.2, ry - 2);
+      ctx.lineTo(rx - r * 0.5, ry + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Borde de cresta superior
+      ctx.strokeStyle = '#8d6e63';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(rx - r * 0.7, ry - r * 1.2);
+      ctx.lineTo(rx + r * 0.1, ry - r * 1.5);
+      ctx.lineTo(rx + r * 0.85, ry - r * 0.9);
+      ctx.stroke();
+
+      // Veta sísmica de energía telúrica (ámbar / oro)
+      const pulseAlpha = isExpiring ? (0.6 + 0.4 * Math.sin(Date.now() * 0.03)) : 0.75;
+      ctx.strokeStyle = `rgba(245, 158, 11, ${pulseAlpha})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(rx - 2, ry - r * 1.3);
+      ctx.lineTo(rx + 4, ry - r * 0.7);
+      ctx.lineTo(rx - 3, ry);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
@@ -753,6 +822,45 @@ export class IsometricRenderer {
           frostGrad.addColorStop(0.75, '#06b6d4');
           frostGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
           ctx.fillStyle = frostGrad;
+          ctx.beginPath();
+          ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Esquirlas de roca y runa sísmica ámbar para Puño Tectónico (Tierra + Tierra)
+      const isEarth = wizard.chargeType === 'earth' || wizard.staffOrbColor === '#d97706';
+      if (isEarth) {
+        ctx.shadowBlur = 0;
+        const stoneCount = isReady ? 6 : Math.max(2, Math.floor(ratio * 5));
+        for (let sc = 0; sc < stoneCount; sc++) {
+          const scAng = Date.now() * 0.004 + (sc * Math.PI * 2) / stoneCount;
+          const scDist = 18 + ratio * 8;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(scAng + Math.PI / 4);
+          ctx.fillStyle = isReady ? '#fef08a' : '#d97706';
+          ctx.fillRect(-3, -3, 6, 6);
+          ctx.strokeStyle = '#78350f';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(-3, -3, 6, 6);
+          ctx.restore();
+        }
+
+        // Esfera de energía telúrica y ámbar dorado en el báculo al alcanzar carga máxima
+        if (isReady) {
+          const staffX = Math.cos(wizard.facingAngle) * 16;
+          const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+          const pulseR = 7 + Math.sin(Date.now() * 0.02) * 2;
+          const earthGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+          earthGrad.addColorStop(0, '#ffffff');
+          earthGrad.addColorStop(0.35, '#fef08a');
+          earthGrad.addColorStop(0.75, '#d97706');
+          earthGrad.addColorStop(1, 'rgba(217, 119, 6, 0)');
+          ctx.fillStyle = earthGrad;
           ctx.beginPath();
           ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
           ctx.fill();
@@ -1919,6 +2027,304 @@ export class IsometricRenderer {
       ctx.arc(mx, my, pulse, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
+  }
+
+  // Dibuja la runa de advertencia sísmica, grietas telúricas y el cráter para Puño Tectónico
+  private static drawTectonicFistFloor(ctx: CanvasRenderingContext2D, fists: TectonicFistEntity[]) {
+    if (!fists || fists.length === 0) return;
+
+    const squish = 0.58;
+
+    fists.forEach((fist) => {
+      ctx.save();
+      ctx.translate(fist.targetX, fist.targetY);
+
+      if (fist.phase === 'warning') {
+        const prog = Math.min(1, fist.phaseTimer / fist.warningDurationMs);
+        const r = fist.radius * (0.6 + prog * 0.4);
+
+        // 1. Disco rúnico ámbar en el suelo
+        const discGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, r);
+        discGrad.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
+        discGrad.addColorStop(0.7, 'rgba(217, 119, 6, 0.2)');
+        discGrad.addColorStop(1, 'rgba(120, 53, 15, 0)');
+        ctx.fillStyle = discGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Anillo de advertencia discontinua con temblor
+        const ringAlpha = 0.4 + 0.4 * Math.sin(fist.phaseTimer * 0.04);
+        ctx.strokeStyle = `rgba(251, 191, 36, ${ringAlpha})`;
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, fist.radius, fist.radius * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 3. Grietas telúricas incandescentes que se ramifican
+        fist.crackAngles.forEach((ang, idx) => {
+          const crackLen = (fist.radius * 0.85) * (0.5 + prog * 0.5) * (0.85 + (idx % 3) * 0.15);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          const midX = Math.cos(ang + 0.1) * (crackLen * 0.5);
+          const midY = Math.sin(ang + 0.1) * (crackLen * 0.5) * squish;
+          const endX = Math.cos(ang - 0.08) * crackLen;
+          const endY = Math.sin(ang - 0.08) * crackLen * squish;
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+
+          // Filamento central dorado brillante
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 1.0;
+          ctx.stroke();
+        });
+      } else if (fist.phase === 'eruption' || fist.phase === 'collapse') {
+        const r = fist.radius;
+
+        // Cráter abierto de roca partida
+        ctx.fillStyle = '#1c1311';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.75, r * 0.75 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Borde fracturado del cráter con roca expuesta
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.8, r * 0.8 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Fisuras permanentes brillantes
+        fist.crackAngles.forEach((ang) => {
+          const cLen = r * 1.1;
+          ctx.strokeStyle = 'rgba(217, 119, 6, 0.7)';
+          ctx.lineWidth = 2.0;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(ang) * cLen, Math.sin(ang) * cLen * squish);
+          ctx.stroke();
+        });
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // Dibuja el colosal Puño Tectónico en 2.5D con estratos minerales, 4 nudillos angulares y geodas
+  private static drawTectonicFist(ctx: CanvasRenderingContext2D, fist: TectonicFistEntity) {
+    const h = fist.fistHeight;
+    if (h <= 2) return;
+
+    ctx.save();
+    const bx = fist.targetX;
+    const by = fist.targetY;
+    const isCharged = fist.isCharged;
+    const w = isCharged ? 48 : 38;
+    const squish = 0.58;
+
+    let alpha = 1.0;
+    let jitterX = 0;
+    let jitterY = 0;
+
+    if (fist.phase === 'collapse') {
+      const prog = Math.min(1, fist.phaseTimer / fist.collapseDurationMs);
+      alpha = Math.max(0, 1 - prog * 0.8);
+      jitterX = (Math.random() - 0.5) * 6;
+      jitterY = (Math.random() - 0.5) * 4;
+    }
+
+    ctx.translate(bx + jitterX, by + jitterY);
+
+    // 1. Sombra de masa en el suelo
+    ctx.fillStyle = 'rgba(26, 15, 13, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.8, w * 0.8 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Vértices clave del Puño Tectónico (Golpe Uppercut vertical):
+    // Muñeca / Columna de antebrazo de roca
+    const wristH = h * 0.42;
+    const knuckleBaseH = h * 0.72;
+    const apexH = h;
+
+    // 2. Columna del antebrazo (Estratos de roca sedimentaria)
+    const armGrad = ctx.createLinearGradient(-w * 0.4, 0, w * 0.4, -wristH);
+    armGrad.addColorStop(0, `rgba(45, 27, 24, ${alpha})`);
+    armGrad.addColorStop(0.5, `rgba(62, 39, 35, ${alpha})`);
+    armGrad.addColorStop(1, `rgba(93, 64, 55, ${alpha})`);
+
+    ctx.fillStyle = armGrad;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.45, 0);
+    ctx.lineTo(-w * 0.38, -wristH);
+    ctx.lineTo(w * 0.38, -wristH);
+    ctx.lineTo(w * 0.45, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Estratos horizontales en el antebrazo
+    ctx.strokeStyle = `rgba(120, 53, 15, ${0.7 * alpha})`;
+    ctx.lineWidth = 1.5;
+    [-wristH * 0.3, -wristH * 0.65].forEach((ly) => {
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.42, ly);
+      ctx.lineTo(w * 0.42, ly);
+      ctx.stroke();
+    });
+
+    // 3. Bloque Central de la Palma y Mano Cerrada
+    const palmGrad = ctx.createLinearGradient(-w * 0.55, -wristH, w * 0.55, -knuckleBaseH);
+    palmGrad.addColorStop(0, `rgba(109, 76, 65, ${alpha})`);
+    palmGrad.addColorStop(0.4, `rgba(93, 64, 55, ${alpha})`);
+    palmGrad.addColorStop(1, `rgba(62, 39, 35, ${alpha})`);
+
+    ctx.fillStyle = palmGrad;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.42, -wristH);
+    ctx.lineTo(-w * 0.54, -knuckleBaseH);
+    ctx.lineTo(w * 0.54, -knuckleBaseH);
+    ctx.lineTo(w * 0.42, -wristH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arista biselada de la palma
+    ctx.strokeStyle = `rgba(161, 136, 127, ${0.75 * alpha})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.42, -wristH);
+    ctx.lineTo(-w * 0.54, -knuckleBaseH);
+    ctx.stroke();
+
+    // 4. Pulgar cerrado y trabado sobre los dedos laterales
+    const thumbGrad = ctx.createLinearGradient(-w * 0.6, -wristH * 0.7, -w * 0.2, -knuckleBaseH * 0.85);
+    thumbGrad.addColorStop(0, `rgba(78, 52, 46, ${alpha})`);
+    thumbGrad.addColorStop(1, `rgba(141, 110, 99, ${alpha})`);
+
+    ctx.fillStyle = thumbGrad;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.4, -wristH * 0.6);
+    ctx.lineTo(-w * 0.62, -wristH * 0.95);
+    ctx.lineTo(-w * 0.45, -knuckleBaseH * 0.9);
+    ctx.lineTo(-w * 0.2, -wristH * 0.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = `rgba(188, 170, 164, ${0.7 * alpha})`;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // 5. Los 4 Nudillos Angulares de Roca (Índice, Medio, Anular, Meñique)
+    // El nudillo del medio es el más elevado en el golpe uppercut
+    const knuckleOffsets = [
+      { xPct: -0.38, wPct: 0.24, hDelta: -h * 0.08 },
+      { xPct: -0.12, wPct: 0.28, hDelta: 0 },         // Nudillo central (Ápice)
+      { xPct: 0.16, wPct: 0.26, hDelta: -h * 0.05 },
+      { xPct: 0.40, wPct: 0.22, hDelta: -h * 0.12 },
+    ];
+
+    knuckleOffsets.forEach((k) => {
+      const kx = k.xPct * w;
+      const kw = k.wPct * w;
+      const topY = -apexH + k.hDelta;
+      const baseY = -knuckleBaseH;
+
+      // Faceta frontal izquierda del nudillo (Iluminada)
+      const kGrad = ctx.createLinearGradient(kx - kw * 0.5, topY, kx + kw * 0.5, baseY);
+      kGrad.addColorStop(0, `rgba(215, 204, 200, ${alpha})`);
+      kGrad.addColorStop(0.35, `rgba(141, 110, 99, ${alpha})`);
+      kGrad.addColorStop(1, `rgba(78, 52, 46, ${alpha})`);
+
+      ctx.fillStyle = kGrad;
+      ctx.beginPath();
+      ctx.moveTo(kx - kw * 0.48, baseY);
+      ctx.lineTo(kx - kw * 0.35, topY + 4);
+      ctx.lineTo(kx, topY);
+      ctx.lineTo(kx + kw * 0.48, baseY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Arista biselada de impacto en el nudillo
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(kx, topY);
+      ctx.lineTo(kx - kw * 0.35, topY + 4);
+      ctx.stroke();
+    });
+
+    // 6. Vetas de Energía Telúrica y Geodas Sísmicas (Ámbar / Oro brillante)
+    ctx.strokeStyle = `rgba(245, 158, 11, ${0.9 * alpha})`;
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = '#fbbf24';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(0, -wristH * 0.2);
+    ctx.lineTo(-w * 0.1, -wristH * 0.7);
+    ctx.lineTo(w * 0.08, -knuckleBaseH * 0.95);
+    ctx.lineTo(-w * 0.05, -apexH + 6);
+    ctx.stroke();
+
+    // Núcleo blanco-dorado
+    ctx.strokeStyle = `rgba(254, 240, 138, ${0.95 * alpha})`;
+    ctx.lineWidth = 1.0;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // 7. En fase de colapso: fracturas adicionales que parten el puño
+    if (fist.phase === 'collapse') {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.3, -apexH * 0.6);
+      ctx.lineTo(w * 0.35, -apexH * 0.4);
+      ctx.lineTo(-w * 0.1, -wristH * 0.8);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // Previsualización de retícula de impacto para Puño Tectónico al apuntar / cargar
+  private static drawTectonicAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ang = wizard.facingAngle;
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const dist = 220;
+    const squish = 0.58;
+    const tx = wizard.x + Math.cos(ang) * dist;
+    const ty = wizard.y + Math.sin(ang) * dist * squish;
+    const r = isReady ? 52 : 40;
+
+    ctx.save();
+    ctx.translate(tx, ty);
+
+    // Círculo de impacto punteado en el suelo
+    ctx.strokeStyle = isReady ? 'rgba(254, 240, 138, 0.85)' : 'rgba(217, 119, 6, 0.65)';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Cruz de mira telúrica
+    ctx.strokeStyle = isReady ? '#fef08a' : '#f59e0b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.4, 0);
+    ctx.lineTo(r * 0.4, 0);
+    ctx.moveTo(0, -r * 0.4 * squish);
+    ctx.lineTo(0, r * 0.4 * squish);
+    ctx.stroke();
 
     ctx.restore();
   }

@@ -163,7 +163,8 @@ export type ObstacleType =
   | 'energized_crystal'
   | 'permafrost_spike' // Estaca de Hielo+Tierra rompible con fuego/tierra
   | 'door_gate'
-  | 'relic_chest';
+  | 'relic_chest'
+  | 'tectonic_rubble'; // Escombros temporales de Puño Tectónico (Tierra+Tierra)
 
 export interface PhysicalObstacle {
   id: string;
@@ -181,6 +182,8 @@ export interface PhysicalObstacle {
   meltable: boolean;
   electrified?: boolean;
   chargeTimer?: number;
+  lifeTimer?: number;
+  maxLifeTimer?: number;
   // Para puertas y cofres
   doorLocked?: boolean;
   doorTargetRoomId?: string;
@@ -349,6 +352,29 @@ export interface GlacialEruptionEntity {
   persistDurationMs: number;
   shatterDurationMs: number;
   hitEnemyIds: string[];
+}
+
+export type TectonicFistPhase = 'warning' | 'eruption' | 'collapse' | 'finished';
+
+export interface TectonicFistEntity {
+  id: string;
+  targetX: number;
+  targetY: number;
+  radius: number;
+  damage: number;
+  knockup: number;
+  isCharged: boolean;
+  phase: TectonicFistPhase;
+  phaseTimer: number;
+  warningDurationMs: number;
+  eruptionDurationMs: number;
+  collapseDurationMs: number;
+  hasDealtDamage: boolean;
+  fistHeight: number;
+  maxFistHeight: number;
+  crackAngles: number[];
+  rubbleSpawned: boolean;
+  rubbleCount: number;
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas
