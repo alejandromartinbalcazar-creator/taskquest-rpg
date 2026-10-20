@@ -14,7 +14,13 @@ import {
   GlacialSpikeSegment,
   TectonicFistEntity,
   CryoBeamEntity,
+  ForestLevelData,
+  ForestTreeEntity,
+  PuzzleWheelEntity,
+  GateDoorEntity,
+  AmbientLeafParticle,
 } from './types';
+import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
 
 export class IsometricRenderer {
@@ -54,7 +60,8 @@ export class IsometricRenderer {
     infernalCrowns: InfernalCrownEntity[] = [],
     glacialEruptions: GlacialEruptionEntity[] = [],
     tectonicFists: TectonicFistEntity[] = [],
-    cryoBeams: CryoBeamEntity[] = []
+    cryoBeams: CryoBeamEntity[] = [],
+    forestLevel?: ForestLevelData
   ) {
     ctx.save();
 
@@ -77,8 +84,14 @@ export class IsometricRenderer {
     ctx.scale(zoom, zoom);
     ctx.translate(-camera.x, -camera.y);
 
-    // 2. Dibujar Suelo de la Mazmorra según el tipo de sala
-    this.drawDungeonFloor(ctx, roomType);
+    const frustum = getCameraFrustum(camera, width, height, zoom, 260);
+
+    // 2. Dibujar Suelo (Bosque Extendido 2.5D con Chunks o Suelo de Mazmorra clásica)
+    if (forestLevel) {
+      this.drawForestGround(ctx, frustum, forestLevel);
+    } else {
+      this.drawDungeonFloor(ctx, roomType);
+    }
 
     // 3. Dibujar Zonas de Terreno (Magma, Hielo, Charcos de Agua, Vapor)
     this.drawTerrainZones(ctx, terrainZones);
@@ -112,11 +125,37 @@ export class IsometricRenderer {
 
     // Obstáculos físicos (Muros, Rocas, Cristales, Puertas, Estacas de Permafrost, Escombros Tectónicos)
     obstacles.forEach((obs) => {
+      if (forestLevel && !isInFrustum(obs.x, obs.y, obs.radius + 30, frustum)) return;
       renderList.push({
         y: obs.y,
         draw: () => this.drawObstacle(ctx, obs),
       });
     });
+
+    // Si hay nivel de bosque: añadir Troncos de Árboles, Rueda Elemental y Portón al Y-Sorting
+    if (forestLevel) {
+      forestLevel.trees.forEach((tree) => {
+        if (!isInFrustum(tree.x, tree.y, tree.canopyRadius + 60, frustum)) return;
+        renderList.push({
+          y: tree.y,
+          draw: () => this.drawTreeTrunk(ctx, tree),
+        });
+      });
+
+      if (isInFrustum(forestLevel.puzzleWheel.x, forestLevel.puzzleWheel.y, 80, frustum)) {
+        renderList.push({
+          y: forestLevel.puzzleWheel.y,
+          draw: () => this.drawPuzzleWheel(ctx, forestLevel.puzzleWheel, wizard),
+        });
+      }
+
+      if (isInFrustum(forestLevel.gateDoor.x, forestLevel.gateDoor.y, 180, frustum)) {
+        renderList.push({
+          y: forestLevel.gateDoor.y,
+          draw: () => this.drawGateDoor(ctx, forestLevel.gateDoor),
+        });
+      }
+    }
 
     // Púas de Hielo de Erupción Glacial (Hielo + Hielo) integradas en el Depth Sorting
     glacialEruptions.forEach((eruption) => {
@@ -182,6 +221,12 @@ export class IsometricRenderer {
 
     // 8. Dibujar Textos Flotantes
     this.drawFloatingTexts(ctx, floatingTexts);
+
+    // 8.5 Capa Superior: Canopy de Árboles (Oclusión suave al pasar por debajo) y Hojas Ambientales
+    if (forestLevel) {
+      this.drawCanopyLayer(ctx, frustum, forestLevel.trees);
+      this.drawAmbientLeaves(ctx, frustum, forestLevel.ambientLeaves);
+    }
 
     ctx.restore(); // Fin del espacio transformado con Zoom
 
@@ -672,6 +717,83 @@ export class IsometricRenderer {
 
       ctx.strokeStyle = '#fef08a';
       ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    // 8. BARRILES DESTRUCTIBLES DEL BOSQUE
+    else if (obs.obstacleType === 'barrel') {
+      const bx = obs.x;
+      const by = obs.y - 10;
+      const bw = obs.radius * 1.8;
+      const bh = obs.radius * 2.2;
+      // Sombra
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(bx, obs.y + 2, obs.radius * 1.1, obs.radius * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Cuerpo del barril (madera oscura con duelas)
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(bx - bw / 2, by - bh / 2, bw, bh, 5);
+      ctx.fill();
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Aros metálicos de hierro
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(bx - bw / 2 + 1, by - bh * 0.25);
+      ctx.lineTo(bx + bw / 2 - 1, by - bh * 0.25);
+      ctx.moveTo(bx - bw / 2 + 1, by + bh * 0.25);
+      ctx.lineTo(bx + bw / 2 - 1, by + bh * 0.25);
+      ctx.stroke();
+      // Tapa superior de madera
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.ellipse(bx, by - bh / 2, bw * 0.44, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 9. CARPA DE EXPEDICIÓN DEL CAMPAMENTO
+    else if (obs.obstacleType === 'camp_tent') {
+      const tx = obs.x;
+      const ty = obs.y;
+      // Sombra proyectada
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(tx, ty + 10, obs.width * 0.55, obs.height * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Carpa triangular de lona
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.moveTo(tx - obs.width / 2, ty + 12);
+      ctx.lineTo(tx, ty - obs.height + 12);
+      ctx.lineTo(tx + obs.width / 2, ty + 12);
+      ctx.closePath();
+      ctx.fill();
+      // Cara iluminada izquierda
+      ctx.fillStyle = '#2563eb';
+      ctx.beginPath();
+      ctx.moveTo(tx - obs.width / 2, ty + 12);
+      ctx.lineTo(tx, ty - obs.height + 12);
+      ctx.lineTo(tx, ty + 12);
+      ctx.closePath();
+      ctx.fill();
+      // Entrada de la carpa
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(tx - 12, ty + 12);
+      ctx.lineTo(tx, ty - 18);
+      ctx.lineTo(tx + 12, ty + 12);
+      ctx.closePath();
+      ctx.fill();
+      // Cuerdas de sujeción
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - obs.height + 12);
+      ctx.lineTo(tx - obs.width * 0.65, ty + 16);
+      ctx.moveTo(tx, ty - obs.height + 12);
+      ctx.lineTo(tx + obs.width * 0.65, ty + 16);
       ctx.stroke();
     }
 
@@ -2697,6 +2819,495 @@ export class IsometricRenderer {
         ctx.fill();
       }
       ctx.restore();
+
+      ctx.restore();
+    });
+  }
+
+  // CAPA 1: SUELO DEL BOSQUE EXTENDIDO (Chunks con Frustum Culling + Sendero Sinuoso + Plazas)
+  private static drawForestGround(
+    ctx: CanvasRenderingContext2D,
+    frustum: FrustumBounds,
+    levelData: ForestLevelData
+  ) {
+    // 1. Chunks de hierba del bosque (solo los visibles dentro del frustum)
+    levelData.chunks.forEach((chunk) => {
+      if (
+        chunk.x + chunk.width < frustum.left ||
+        chunk.x > frustum.right ||
+        chunk.y + chunk.height < frustum.top ||
+        chunk.y > frustum.bottom
+      ) {
+        return; // Frustum culling descartando chunks fuera de cámara
+      }
+
+      // Tonalidad del pasto según la zona
+      let grassColor = '#132819';
+      if (chunk.zone === 'camp') grassColor = '#162e1c';
+      else if (chunk.zone === 'gate') grassColor = '#15241b';
+      else if (chunk.zone === 'arena') grassColor = '#101c15';
+
+      ctx.fillStyle = grassColor;
+      ctx.fillRect(chunk.x, chunk.y, chunk.width, chunk.height);
+
+      // Micro-detalles de textura en el pasto del chunk
+      ctx.fillStyle = '#0f2014';
+      const seed = (chunk.indexX * 17 + chunk.indexY * 31);
+      for (let d = 0; d < 6; d++) {
+        const dx = chunk.x + ((seed * (d + 1) * 73) % chunk.width);
+        const dy = chunk.y + ((seed * (d + 2) * 97) % chunk.height);
+        ctx.fillRect(dx, dy, 18, 10);
+      }
+    });
+
+    // 2. El Gran Sendero de Tierra Sinuoso entre Waypoints
+    const waypoints = levelData.trailWaypoints;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const p1 = waypoints[i];
+      const p2 = waypoints[i + 1];
+
+      // Culling del segmento del sendero
+      const minY = Math.min(p1.y, p2.y) - 200;
+      const maxY = Math.max(p1.y, p2.y) + 200;
+      if (maxY < frustum.top || minY > frustum.bottom) continue;
+
+      // Base del sendero (suelo de tierra compacta)
+      ctx.strokeStyle = '#453221';
+      ctx.lineWidth = (p1.width + p2.width) / 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      // Centro del camino desgastado (tono más claro)
+      ctx.strokeStyle = '#5a422d';
+      ctx.lineWidth = ((p1.width + p2.width) / 2) * 0.65;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+
+    // 3. Plaza de Adoquines en el Checkpoint (Y ~ 3980)
+    if (frustum.bottom >= 3700 && frustum.top <= 4300) {
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(900, 3860, 600, 240);
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      for (let sy = 3880; sy < 4100; sy += 30) {
+        ctx.beginPath();
+        ctx.moveTo(920, sy);
+        ctx.lineTo(1480, sy);
+        ctx.stroke();
+      }
+
+      // Runa / Conducto Criogénico en el suelo entre la Rueda (960, 4050) y el Portón (1200, 3980)
+      const wheel = levelData.puzzleWheel;
+      const hasCharge = wheel.charge > 0;
+      ctx.strokeStyle = hasCharge ? 'rgba(0, 240, 255, 0.75)' : 'rgba(56, 189, 248, 0.25)';
+      ctx.lineWidth = hasCharge ? 3.5 : 2.0;
+      if (hasCharge) {
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+      }
+      ctx.beginPath();
+      ctx.moveTo(wheel.x, wheel.y);
+      ctx.lineTo(wheel.x + 80, wheel.y);
+      ctx.lineTo(levelData.gateDoor.x, levelData.gateDoor.y + 10);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Pulsos de energía criogénica corriendo hacia la puerta
+      if (hasCharge && !wheel.isCompleted) {
+        const pulseProg = (Date.now() * 0.002) % 1;
+        const px = wheel.x + (levelData.gateDoor.x - wheel.x) * pulseProg;
+        const py = wheel.y + (levelData.gateDoor.y + 10 - wheel.y) * pulseProg;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 4. Gran Arena del Jefe / Santuario Megalítico (Y <= 2600)
+    if (frustum.top <= 2600) {
+      const arenaCenterX = 1200;
+      const arenaCenterY = 1600;
+      const arenaRadius = 420;
+
+      // Círculo exterior de piedra antigua
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.ellipse(arenaCenterX, arenaCenterY, arenaRadius, arenaRadius * 0.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+
+      // Círculo interior rúnico
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.ellipse(arenaCenterX, arenaCenterY, arenaRadius * 0.65, arenaRadius * 0.42, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // CAPA 2 (Y-SORTED): Tronco de árbol y raíces en el suelo
+  private static drawTreeTrunk(ctx: CanvasRenderingContext2D, tree: ForestTreeEntity) {
+    const tx = tree.x;
+    const ty = tree.y;
+    const r = tree.trunkRadius;
+    const squish = 0.58;
+
+    // Sombra del tronco en el suelo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty + 2, r * 1.4, r * 1.4 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Raíces y ensanchamiento en la base
+    ctx.fillStyle = tree.trunkColor;
+    ctx.beginPath();
+    ctx.moveTo(tx - r * 1.3, ty + 2);
+    ctx.lineTo(tx - r * 0.7, ty - tree.canopyHeight * 0.25);
+    ctx.lineTo(tx + r * 0.7, ty - tree.canopyHeight * 0.25);
+    ctx.lineTo(tx + r * 1.3, ty + 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Columna del tronco
+    ctx.fillRect(tx - r * 0.7, ty - tree.canopyHeight * 0.75, r * 1.4, tree.canopyHeight * 0.55);
+
+    // Corteza iluminada
+    ctx.strokeStyle = '#5d4037';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(tx - r * 0.2, ty - tree.canopyHeight * 0.7);
+    ctx.lineTo(tx - r * 0.2, ty - 2);
+    ctx.stroke();
+  }
+
+  // CAPA 2 (Y-SORTED): Mecanismo de Rueda Elemental accionado por Hielo
+  private static drawPuzzleWheel(
+    ctx: CanvasRenderingContext2D,
+    wheel: PuzzleWheelEntity,
+    wizard: { x: number; y: number }
+  ) {
+    ctx.save();
+    const wx = wheel.x;
+    const wy = wheel.y;
+    const r = wheel.radius;
+
+    // 1. Sombra en el suelo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(wx, wy + 4, r * 1.2, r * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Pedestal de piedra basal
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, r * 1.1, r * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+
+    // 3. Rueda Dentada giratoria
+    ctx.save();
+    ctx.translate(wx, wy - 8);
+    ctx.rotate(wheel.rotationAngle);
+
+    // Dientes del engranaje
+    const teeth = 8;
+    ctx.fillStyle = wheel.isCompleted ? '#0284c7' : '#475569';
+    for (let i = 0; i < teeth; i++) {
+      const tAng = (i * Math.PI * 2) / teeth;
+      ctx.save();
+      ctx.rotate(tAng);
+      ctx.fillRect(-r * 0.18, -r * 0.95, r * 0.36, r * 0.35);
+      ctx.restore();
+    }
+
+    // Disco central del engranaje
+    ctx.fillStyle = wheel.isCompleted ? '#0369a1' : '#334155';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = wheel.isCompleted ? '#38bdf8' : '#64748b';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Buje central con cristal de hielo
+    ctx.fillStyle = wheel.isCompleted ? '#ffffff' : (wheel.frostVisual > 0.3 ? '#7dd3fc' : '#94a3b8');
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore(); // Fin rotación engranaje
+
+    // 4. Capa de Escarcha y Cristales Glaciales
+    if (wheel.frostVisual > 0.05) {
+      ctx.save();
+      ctx.translate(wx, wy - 8);
+      ctx.globalAlpha = Math.min(1.0, wheel.frostVisual * 1.2);
+      ctx.fillStyle = '#e0f7fa';
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 12;
+      for (let s = 0; s < 6; s++) {
+        const sAng = s * (Math.PI / 3);
+        const sLen = r * (0.4 + wheel.frostVisual * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(sAng - 0.2) * (sLen * 0.4), Math.sin(sAng - 0.2) * (sLen * 0.4));
+        ctx.lineTo(Math.cos(sAng) * sLen, Math.sin(sAng) * sLen);
+        ctx.lineTo(Math.cos(sAng + 0.2) * (sLen * 0.4), Math.sin(sAng + 0.2) * (sLen * 0.4));
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 5. Destello de impacto (Hit Flash)
+    if (wheel.hitFlash > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.arc(wx, wy - 8, r * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. HUD / Indicador Flotante sobre la Rueda
+    const distToPlayer = Math.hypot(wizard.x - wx, wizard.y - wy);
+    if (distToPlayer < 240 || wheel.charge > 0) {
+      ctx.save();
+      ctx.translate(wx, wy - 46);
+
+      if (wheel.isCompleted) {
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✔ MECANISMO DESBLOQUEADO ❄️', 0, 0);
+      } else {
+        // Anillo de progreso semicircular
+        const pct = Math.round(wheel.charge);
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, -6, 14, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, -6, 14, -Math.PI / 2, -Math.PI / 2 + (wheel.charge / 100) * Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${pct}% ❄️`, 0, -2);
+
+        if (pct < 100 && distToPlayer < 180) {
+          ctx.fillStyle = '#7dd3fc';
+          ctx.font = '9px sans-serif';
+          ctx.fillText('DISPARA HIELO', 0, 14);
+        }
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // CAPA 2 (Y-SORTED): Portón Colosal de Hierro con Rejas Levadizas
+  private static drawGateDoor(ctx: CanvasRenderingContext2D, gate: GateDoorEntity) {
+    ctx.save();
+    const gx = gate.x;
+    const gy = gate.y;
+    const w = gate.width;
+
+    // 1. Umbral de piedra en el suelo
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(gx - w / 2, gy - 6, w, 12);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gx - w / 2, gy - 6, w, 12);
+
+    // 2. Rejas de hierro del portón (Se elevan según openProgress)
+    const liftY = -gate.openProgress * 88;
+    const barsCount = 14;
+    const barSpacing = w / (barsCount + 1);
+
+    ctx.save();
+    // Recorte de visualización para que las rejas desaparezcan dentro del dintel superior
+    ctx.beginPath();
+    ctx.rect(gx - w / 2 - 10, gy - 120, w + 20, 140);
+    ctx.clip();
+
+    ctx.translate(0, liftY);
+
+    // Vigas horizontales de hierro
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(gx - w / 2 + 8, gy - 75, w - 16, 10);
+    ctx.fillRect(gx - w / 2 + 8, gy - 40, w - 16, 10);
+    ctx.fillRect(gx - w / 2 + 8, gy - 10, w - 16, 10);
+
+    // Remaches de hierro y barrotes verticales
+    for (let i = 1; i <= barsCount; i++) {
+      const bx = gx - w / 2 + i * barSpacing;
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(bx - 3, gy - 85, 6, 85);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx - 3, gy - 85, 6, 85);
+
+      // Puntas de lanza afiladas en el extremo inferior
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.moveTo(bx - 5, gy);
+      ctx.lineTo(bx, gy + 12);
+      ctx.lineTo(bx + 5, gy);
+      ctx.closePath();
+      ctx.fill();
+
+      // Remaches
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(bx - 1.5, gy - 72, 3, 3);
+      ctx.fillRect(bx - 1.5, gy - 37, 3, 3);
+    }
+
+    ctx.restore(); // Fin recorte rejas
+
+    // 3. Pilares de mampostería ciclópea a izquierda y derecha
+    const drawPillar = (px: number) => {
+      // Base
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(px - 22, gy - 95, 44, 100);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(px - 22, gy - 95, 44, 100);
+      // Capitel
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(px - 26, gy - 105, 52, 14);
+      ctx.strokeRect(px - 26, gy - 105, 52, 14);
+      // Gárgola / Relieve
+      ctx.fillStyle = gate.isOpen ? '#38bdf8' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(px, gy - 70, 7, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    drawPillar(gate.pillarLeftX);
+    drawPillar(gate.pillarRightX);
+
+    ctx.restore();
+  }
+
+  // CAPA 3: CANOPY SUPERIOR (Copas de árboles con transparencia por oclusión)
+  private static drawCanopyLayer(
+    ctx: CanvasRenderingContext2D,
+    frustum: FrustumBounds,
+    trees: ForestTreeEntity[]
+  ) {
+    trees.forEach((tree) => {
+      // Frustum culling para copas de árboles
+      if (!isInFrustum(tree.x, tree.y - tree.canopyHeight, tree.canopyRadius + 30, frustum)) {
+        return;
+      }
+      this.drawTreeCanopy(ctx, tree);
+    });
+  }
+
+  private static drawTreeCanopy(ctx: CanvasRenderingContext2D, tree: ForestTreeEntity) {
+    ctx.save();
+    ctx.globalAlpha = tree.canopyAlpha; // 1.0 normal, 0.65 cuando el jugador pasa por debajo
+    const cx = tree.x;
+    const cy = tree.y - tree.canopyHeight;
+    const r = tree.canopyRadius;
+
+    if (tree.treeType === 'pine') {
+      // Pino / Abeto: 3 niveles triangulares superpuestos
+      const levels = 3;
+      for (let lvl = 0; lvl < levels; lvl++) {
+        const lvlR = r * (1 - lvl * 0.22);
+        const lvlY = cy + lvl * (r * 0.38);
+        const lvlH = r * 0.75;
+
+        ctx.fillStyle = lvl === 0 ? '#1b4324' : lvl === 1 ? tree.foliageColor : '#102e17';
+        ctx.beginPath();
+        ctx.moveTo(cx, lvlY - lvlH);
+        ctx.lineTo(cx + lvlR, lvlY);
+        ctx.lineTo(cx - lvlR, lvlY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Borde escarchado superior
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    } else if (tree.treeType === 'oak') {
+      // Roble frondoso: racimos circulares de follaje
+      const clumps = [
+        { ox: 0, oy: 0, cr: r * 0.8 },
+        { ox: -r * 0.42, oy: r * 0.2, cr: r * 0.58 },
+        { ox: r * 0.42, oy: r * 0.2, cr: r * 0.58 },
+        { ox: -r * 0.25, oy: -r * 0.3, cr: r * 0.52 },
+        { ox: r * 0.25, oy: -r * 0.3, cr: r * 0.52 },
+      ];
+
+      clumps.forEach((c, idx) => {
+        ctx.fillStyle = idx === 0 ? tree.foliageColor : (idx % 2 === 0 ? '#1b4d24' : '#225d2b');
+        ctx.beginPath();
+        ctx.arc(cx + c.ox, cy + c.oy, c.cr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    } else {
+      // Árbol ancestral: copa colosal con sombras profundas
+      ctx.fillStyle = '#0f2916';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = tree.foliageColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - 8, r * 0.82, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // CAPA 4: PARTÍCULAS AMBIENTALES LIGERAS (Pool de 20 hojas flotantes con deriva suave)
+  private static drawAmbientLeaves(
+    ctx: CanvasRenderingContext2D,
+    frustum: FrustumBounds,
+    leaves: AmbientLeafParticle[]
+  ) {
+    leaves.forEach((leaf) => {
+      if (!isInFrustum(leaf.x, leaf.y, 20, frustum)) return;
+
+      ctx.save();
+      ctx.translate(leaf.x, leaf.y);
+      ctx.rotate(leaf.rotation);
+      ctx.globalAlpha = leaf.alpha;
+
+      ctx.fillStyle = leaf.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, leaf.size, leaf.size * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vena central de la hoja
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-leaf.size * 0.9, 0);
+      ctx.lineTo(leaf.size * 0.9, 0);
+      ctx.stroke();
 
       ctx.restore();
     });

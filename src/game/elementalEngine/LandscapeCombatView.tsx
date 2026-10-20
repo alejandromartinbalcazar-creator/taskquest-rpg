@@ -17,7 +17,9 @@ import {
   GlacialSpikeSegment,
   TectonicFistEntity,
   CryoBeamEntity,
+  ForestLevelData,
 } from './types';
+import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import {
@@ -49,8 +51,8 @@ interface RoomConfig {
 const DUNGEON_ROOMS: RoomConfig[] = [
   {
     id: 'room-1',
-    title: 'Sala 1: Atrio de Entrada',
-    subtitle: 'Practica tus 4 elementos y destruye las cajas para avanzar.',
+    title: 'Nivel 1: El Gran Sendero y el Portón Congelado',
+    subtitle: 'Explora el bosque, derrota a las patrullas y acciona la rueda con Hielo para abrir el portón.',
     roomType: 'entrance',
   },
   {
@@ -476,6 +478,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     maxHp: player.maxHp,
     roomIndex: 0,
     roomCleared: false,
+    forestLevel: null as ForestLevelData | null,
   });
 
   // Chequeo de orientación
@@ -502,15 +505,154 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     };
   }, []);
 
-  // Inicializar Sala 1 al montar
+  // Inicializar Nivel 1 del Bosque Extendido al montar
   useEffect(() => {
     const g = gameStateRef.current;
     g.roomIndex = 0;
     g.roomCleared = false;
-    g.wizard.x = 550;
-    g.wizard.y = 560;
-    g.terrainManager.setupRoomTerrain(DUNGEON_ROOMS[0].roomType);
-    g.enemyManager.spawnRoomEnemies(DUNGEON_ROOMS[0].roomType);
+
+    // Crear el nivel extendido del bosque (2400 x 8800)
+    const { levelData, initialObstacles } = createLevel1Forest();
+    g.forestLevel = levelData;
+    g.wizard.x = 1200;
+    g.wizard.y = 8100;
+    g.camera.x = 1200;
+    g.camera.y = 8100;
+    g.terrainManager.obstacles = [...initialObstacles];
+
+    // Generar patrullas y jefes a lo largo del sendero
+    g.enemyManager.enemies = [
+      // Zona 2: Sendero - Grupo 1 (Y ~ 6800)
+      ...([0, 1, 2, 3].map((i) => ({
+        id: `forest-g1-${i}`,
+        name: 'Duende del Bosque',
+        archetype: 'chaser' as const,
+        x: 1040 + (i % 2 === 0 ? -60 : 60),
+        y: 6800 + i * 40,
+        vx: 0,
+        vy: 0,
+        radius: 15,
+        hp: 75,
+        maxHp: 75,
+        attackPower: 9,
+        moveSpeed: 0.95,
+        statuses: [],
+        color: '#16a34a',
+        avatar: '👺',
+        weakness: 'fire' as ElementType,
+        attackCooldown: 0,
+        attackMaxCooldown: 50,
+        telegraphTimer: 0,
+        telegraphMax: 25,
+        isTelegraphing: false,
+        hitFlash: 0,
+      }))),
+      // Zona 2: Sendero - Grupo 2 (Y ~ 5600)
+      ...([0, 1, 2].map((i) => ({
+        id: `forest-g2-chaser-${i}`,
+        name: 'Duende Emboscador',
+        archetype: 'chaser' as const,
+        x: 1380 + (i % 2 === 0 ? -50 : 50),
+        y: 5600 + i * 50,
+        vx: 0,
+        vy: 0,
+        radius: 15,
+        hp: 85,
+        maxHp: 85,
+        attackPower: 11,
+        moveSpeed: 1.0,
+        statuses: [],
+        color: '#dc2626',
+        avatar: '👹',
+        weakness: 'ice' as ElementType,
+        attackCooldown: 0,
+        attackMaxCooldown: 45,
+        telegraphTimer: 0,
+        telegraphMax: 20,
+        isTelegraphing: false,
+        hitFlash: 0,
+      }))),
+      {
+        id: 'forest-g2-shooter-1',
+        name: 'Espectro de las Sombras',
+        archetype: 'ranged' as const,
+        x: 1460,
+        y: 5500,
+        vx: 0,
+        vy: 0,
+        radius: 18,
+        hp: 110,
+        maxHp: 110,
+        attackPower: 14,
+        moveSpeed: 0.65,
+        statuses: [],
+        color: '#a855f7',
+        avatar: '👻',
+        weakness: 'lightning' as ElementType,
+        attackCooldown: 30,
+        attackMaxCooldown: 80,
+        telegraphTimer: 0,
+        telegraphMax: 30,
+        isTelegraphing: false,
+        hitFlash: 0,
+      },
+      // Zona 3: Checkpoint - Guardianes del Portón (Y ~ 4150)
+      ...([0, 1, 2].map((i) => ({
+        id: `gate-guard-${i}`,
+        name: 'Guardián del Portón',
+        archetype: 'chaser' as const,
+        x: 1100 + i * 90,
+        y: 4180,
+        vx: 0,
+        vy: 0,
+        radius: 18,
+        hp: 140,
+        maxHp: 140,
+        attackPower: 16,
+        moveSpeed: 0.85,
+        statuses: [],
+        color: '#0284c7',
+        avatar: '🗿',
+        weakness: 'lightning' as ElementType,
+        attackCooldown: 20,
+        attackMaxCooldown: 60,
+        telegraphTimer: 0,
+        telegraphMax: 25,
+        isTelegraphing: false,
+        hitFlash: 0,
+      }))),
+      // Zona 4: Arena - El Guardián de Basalto (Jefe, Y ~ 1600)
+      {
+        id: 'forest-boss-basalt',
+        name: 'Guardián de Basalto',
+        archetype: 'boss' as const,
+        bossType: 'basalt_guardian' as const,
+        x: 1200,
+        y: 1600,
+        vx: 0,
+        vy: 0,
+        radius: 36,
+        hp: 550,
+        maxHp: 550,
+        armorShield: 140,
+        maxArmorShield: 140,
+        attackPower: 26,
+        moveSpeed: 0.6,
+        statuses: [],
+        color: '#475569',
+        avatar: '🗿👑',
+        weakness: 'earth' as ElementType,
+        attackCooldown: 40,
+        attackMaxCooldown: 130,
+        telegraphTimer: 0,
+        telegraphMax: 45,
+        isTelegraphing: false,
+        hitFlash: 0,
+        phase: 1,
+      },
+    ];
+
+    g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
     g.currentHp = player.currentHp;
     g.maxHp = player.maxHp;
     setCurrentHp(player.currentHp);
@@ -613,11 +755,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       stopChanneledAttack();
       g.roomIndex = nextIndex;
       g.roomCleared = false;
-      // Posiciona al mago en la entrada sur de la nueva sala
-      g.wizard.x = 550;
-      g.wizard.y = 600;
-      g.camera.x = 550;
-      g.camera.y = 600;
       g.projectiles = [];
       g.infernalCrowns = [];
       g.voltaicChains = [];
@@ -625,10 +762,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.tectonicFists = [];
       g.cryoBeams = [];
 
-      const nextRoom = DUNGEON_ROOMS[nextIndex];
-      g.terrainManager.setupRoomTerrain(nextRoom.roomType);
-      g.enemyManager.spawnRoomEnemies(nextRoom.roomType);
+      if (nextIndex === 0) {
+        const { levelData, initialObstacles } = createLevel1Forest();
+        g.forestLevel = levelData;
+        g.wizard.x = 1200;
+        g.wizard.y = 8100;
+        g.camera.x = 1200;
+        g.camera.y = 8100;
+        g.terrainManager.obstacles = [...initialObstacles];
+      } else {
+        g.forestLevel = null;
+        g.wizard.x = 550;
+        g.wizard.y = 600;
+        g.camera.x = 550;
+        g.camera.y = 600;
+        const nextRoom = DUNGEON_ROOMS[nextIndex];
+        g.terrainManager.setupRoomTerrain(nextRoom.roomType);
+        g.enemyManager.spawnRoomEnemies(nextRoom.roomType);
+      }
 
+      const nextRoom = DUNGEON_ROOMS[nextIndex];
       setCurrentRoomIndex(nextIndex);
       setRoomBanner(nextRoom.title);
       setTimeout(() => setRoomBanner(null), 3500);
@@ -2359,11 +2512,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // Restricción de límites de la sala
-      wizard.x = Math.max(90, Math.min(1010, wizard.x));
-      wizard.y = Math.max(90, Math.min(670, wizard.y));
+      // Restricción de límites del mundo
+      if (g.forestLevel) {
+        wizard.x = Math.max(80, Math.min(LEVEL_WIDTH - 80, wizard.x));
+        wizard.y = Math.max(80, Math.min(LEVEL_HEIGHT - 80, wizard.y));
+      } else {
+        wizard.x = Math.max(90, Math.min(1010, wizard.x));
+        wizard.y = Math.max(90, Math.min(670, wizard.y));
+      }
 
-      // Colisión con obstáculos sólidos
+      // Colisión con obstáculos regulares
       g.terrainManager.obstacles.forEach((obs) => {
         resolveCircleObstacleCollision(wizard, obs);
 
@@ -2386,6 +2544,53 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       });
 
+      // Físicas específicas del Nivel 1 del Bosque
+      if (g.forestLevel) {
+        const forest = g.forestLevel;
+
+        // Troncos de árboles cercanos
+        forest.trees.forEach((tree) => {
+          const dx = wizard.x - tree.x;
+          const dy = wizard.y - tree.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = wizard.radius + tree.trunkRadius;
+          if (dist > 0 && dist < minDist) {
+            const overlap = minDist - dist;
+            wizard.x += (dx / dist) * overlap;
+            wizard.y += (dy / dist) * overlap;
+          }
+        });
+
+        // Muros de piedra y acantilados laterales
+        forest.boundaryColliders.forEach((col) => {
+          const dx = wizard.x - col.x;
+          const dy = wizard.y - col.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = wizard.radius + col.radius;
+          if (dist > 0 && dist < minDist) {
+            const overlap = minDist - dist;
+            wizard.x += (dx / dist) * overlap;
+            wizard.y += (dy / dist) * overlap;
+          }
+        });
+
+        // Colisión sólida con el Portón de Hierro cerrado
+        if (forest.gateDoor.solid) {
+          const gate = forest.gateDoor;
+          for (let gx = gate.pillarLeftX + 20; gx <= gate.pillarRightX - 20; gx += 35) {
+            const dx = wizard.x - gx;
+            const dy = wizard.y - gate.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = wizard.radius + 20;
+            if (dist > 0 && dist < minDist) {
+              const overlap = minDist - dist;
+              wizard.x += (dx / dist) * overlap;
+              wizard.y += (dy / dist) * overlap;
+            }
+          }
+        }
+      }
+
       // SEGUIMIENTO DE CÁMARA CERCANA (con anticipación hacia la dirección del mago)
       const leadX = Math.cos(wizard.facingAngle) * 35;
       const leadY = Math.sin(wizard.facingAngle) * 25;
@@ -2393,14 +2598,211 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.camera.y += (wizard.y + leadY - g.camera.y) * 0.12;
 
       // Mantener cámara dentro de los límites del escenario
-      g.camera.x = Math.max(340, Math.min(760, g.camera.x));
-      g.camera.y = Math.max(260, Math.min(520, g.camera.y));
+      if (g.forestLevel) {
+        const cCanvas = canvasRef.current;
+        const viewW = cCanvas ? cCanvas.width / 1.32 : 1100;
+        const viewH = cCanvas ? cCanvas.height / 1.32 : 700;
+        g.camera.x = Math.max(viewW / 2, Math.min(LEVEL_WIDTH - viewW / 2, g.camera.x));
+        g.camera.y = Math.max(viewH / 2, Math.min(LEVEL_HEIGHT - viewH / 2, g.camera.y));
+      } else {
+        g.camera.x = Math.max(340, Math.min(760, g.camera.x));
+        g.camera.y = Math.max(260, Math.min(520, g.camera.y));
+      }
 
       if (g.screenShake > 0) g.screenShake *= 0.88;
       if (wizard.hitFlash > 0) wizard.hitFlash--;
 
       // 2. Actualizar Obstáculos y Zonas de Terreno
       g.terrainManager.update(enemies, g.floatingTexts, g.particles, g.projectiles, dt);
+
+      // ACTUALIZAR MECÁNICAS DEL NIVEL 1 DEL BOSQUE (Puzle de Rueda + Portón + Canopy + Hojas)
+      if (g.forestLevel) {
+        const forest = g.forestLevel;
+        const wheel = forest.puzzleWheel;
+        const gate = forest.gateDoor;
+
+        if (wheel.hitFlash > 0) wheel.hitFlash--;
+
+        // Oclusión de Canopy de árboles (suavizado alfa al pasar por debajo)
+        forest.trees.forEach((tree) => {
+          const distToCanopy = Math.hypot(wizard.x - tree.x, wizard.y - (tree.y - tree.canopyHeight * 0.7));
+          if (distToCanopy < tree.canopyRadius * 0.95) {
+            tree.canopyAlpha += (0.65 - tree.canopyAlpha) * 0.15;
+          } else if (tree.canopyAlpha < 1.0) {
+            tree.canopyAlpha += (1.0 - tree.canopyAlpha) * 0.1;
+          }
+        });
+
+        // Deriva de hojas ambientales
+        forest.ambientLeaves.forEach((leaf) => {
+          leaf.x += leaf.vx;
+          leaf.y += leaf.vy + Math.sin(frameNow * 0.003 + leaf.flutterSeed) * 0.4;
+          leaf.rotation += leaf.vRot;
+          if (leaf.y > g.camera.y + 600) leaf.y = g.camera.y - 600;
+          if (leaf.x > g.camera.x + 800) leaf.x = g.camera.x - 800;
+        });
+
+        // INTERACCIÓN CON HIELO SOBRE LA RUEDA DENTADA
+        if (!wheel.isCompleted) {
+          // A. Proyectiles de Hielo (Hielo básico 'ice_shard', 'ice_lance', 'cryo_storm', etc.)
+          g.projectiles.forEach((p) => {
+            if (p.isHostile || p.life <= 0) return;
+            const isIce = p.spellType === 'ice_shard' || p.spellType === 'ice_lance' || p.spellType === 'cryo_storm' || p.statusToApply === 'frozen';
+            if (!isIce) return;
+
+            const distToWheel = Math.hypot(p.x - wheel.x, p.y - wheel.y);
+            if (distToWheel <= p.radius + wheel.radius) {
+              p.life = 0; // Se consume el proyectil
+              const boost = p.spellType === 'ice_lance' ? 35 : 18;
+              wheel.charge = Math.min(100, wheel.charge + boost);
+              wheel.rotationAngle += 0.55;
+              wheel.frostVisual = Math.min(1.0, wheel.frostVisual + 0.35);
+              wheel.hitFlash = 8;
+              wheel.lastHitTime = frameNow;
+              elementalSound.playWheelTurn(wheel.charge / 100);
+
+              g.floatingTexts.push({
+                id: `wheel-hit-${frameNow}`,
+                x: wheel.x,
+                y: wheel.y - 30,
+                text: `+${boost}% ENGRANAJE ❄️`,
+                color: '#00f0ff',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.2,
+                life: 30,
+              });
+
+              for (let sp = 0; sp < 6; sp++) {
+                const spAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `wheel-p-${frameNow}-${sp}`,
+                  x: wheel.x,
+                  y: wheel.y - 8,
+                  vx: Math.cos(spAng) * 2.5,
+                  vy: Math.sin(spAng) * 2.5,
+                  radius: 2,
+                  color: '#00f0ff',
+                  alpha: 1,
+                  life: 16,
+                });
+              }
+            }
+          });
+
+          // B. Chorro Continuo de Hielo canalizado
+          if (wizard.channeledStream.active && wizard.channeledStream.type === 'ice') {
+            const distToWheel = Math.hypot(wheel.x - wizard.x, wheel.y - wizard.y);
+            if (distToWheel <= wizard.channeledStream.range + wheel.radius) {
+              let angDiff = Math.abs(Math.atan2(wheel.y - wizard.y, wheel.x - wizard.x) - wizard.channeledStream.aimAngle);
+              while (angDiff > Math.PI) angDiff = Math.abs(angDiff - Math.PI * 2);
+              if (angDiff <= wizard.channeledStream.spreadAngle / 2 + 0.25) {
+                wheel.charge = Math.min(100, wheel.charge + dt * 0.05);
+                wheel.rotationAngle += 0.05;
+                wheel.frostVisual = Math.min(1.0, wheel.frostVisual + 0.01);
+                wheel.lastHitTime = frameNow;
+                if (Math.random() < 0.2) {
+                  elementalSound.playWheelTurn(wheel.charge / 100);
+                }
+              }
+            }
+          }
+
+          // C. Rayo Criogénico continuo
+          g.cryoBeams.forEach((beam) => {
+            const bx1 = wizard.x + Math.cos(beam.aimAngle) * 16;
+            const by1 = wizard.y - 12 + Math.sin(beam.aimAngle) * 10;
+            const bx2 = bx1 + Math.cos(beam.aimAngle) * beam.range;
+            const by2 = by1 + Math.sin(beam.aimAngle) * beam.range * 0.72;
+            const bdx = bx2 - bx1;
+            const bdy = by2 - by1;
+            const blenSq = bdx * bdx + bdy * bdy;
+            const t = Math.max(0, Math.min(1, ((wheel.x - bx1) * bdx + (wheel.y - by1) * bdy) / (blenSq || 1)));
+            const px = bx1 + t * bdx;
+            const py = by1 + t * bdy;
+            if (Math.hypot(wheel.x - px, wheel.y - py) <= beam.width * 1.5 + wheel.radius) {
+              wheel.charge = Math.min(100, wheel.charge + dt * 0.08);
+              wheel.rotationAngle += 0.08;
+              wheel.frostVisual = Math.min(1.0, wheel.frostVisual + 0.02);
+              wheel.lastHitTime = frameNow;
+              if (Math.random() < 0.25) {
+                elementalSound.playWheelTurn(wheel.charge / 100);
+              }
+            }
+          });
+
+          // D. Púas de Erupción Glacial
+          g.glacialEruptions.forEach((eruption) => {
+            eruption.segments.forEach((seg) => {
+              if (seg.emerged && Math.hypot(seg.x - wheel.x, seg.y - wheel.y) < wheel.radius + 40) {
+                wheel.charge = Math.min(100, wheel.charge + dt * 0.15);
+                wheel.rotationAngle += 0.15;
+                wheel.frostVisual = 1.0;
+                wheel.lastHitTime = frameNow;
+              }
+            });
+          });
+
+          // Comprobación de completitud al 100%
+          if (wheel.charge >= 100) {
+            wheel.charge = 100;
+            wheel.isCompleted = true;
+            wheel.frostVisual = 1.0;
+            elementalSound.playWheelComplete();
+            elementalSound.playGateOpen();
+            g.screenShake = 12;
+            gate.isOpen = true;
+
+            g.floatingTexts.push({
+              id: `wheel-done-${frameNow}`,
+              x: wheel.x,
+              y: wheel.y - 45,
+              text: '❄️ ¡MECANISMO CONGELADO! PORTÓN ABIERTO 🚪',
+              color: '#38bdf8',
+              fontSize: 14,
+              opacity: 1,
+              vy: -1.4,
+              life: 50,
+            });
+
+            for (let burst = 0; burst < 16; burst++) {
+              const bAng = Math.random() * Math.PI * 2;
+              g.particles.push({
+                id: `wheel-done-p-${frameNow}-${burst}`,
+                x: wheel.x,
+                y: wheel.y - 8,
+                vx: Math.cos(bAng) * (2 + Math.random() * 3),
+                vy: Math.sin(bAng) * (2 + Math.random() * 3),
+                radius: 2.5,
+                color: burst % 2 === 0 ? '#38bdf8' : '#ffffff',
+                alpha: 1,
+                life: 25,
+              });
+            }
+          }
+        }
+
+        // Animación suave de apertura del Portón de Hierro
+        if (gate.isOpen && gate.openProgress < 1.0) {
+          gate.openProgress = Math.min(1.0, gate.openProgress + dt / 1300);
+          if (gate.openProgress >= 0.85) {
+            gate.solid = false; // El paso queda desbloqueado
+          }
+          if (Math.random() < 0.25) {
+            g.particles.push({
+              id: `gate-dust-${frameNow}-${Math.random()}`,
+              x: gate.x + (Math.random() - 0.5) * gate.width * 0.8,
+              y: gate.y + 4,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: -Math.random() * 1.5,
+              radius: 2,
+              color: '#94a3b8',
+              alpha: 0.8,
+              life: 18,
+            });
+          }
+        }
+      }
 
       // 3. Actualizar IA de Enemigos
       g.enemyManager.update(
@@ -3761,7 +4163,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.infernalCrowns,
             g.glacialEruptions,
             g.tectonicFists,
-            g.cryoBeams
+            g.cryoBeams,
+            g.forestLevel ?? undefined
           );
         }
       }

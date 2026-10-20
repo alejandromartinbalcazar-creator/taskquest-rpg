@@ -160,6 +160,8 @@ export type ObstacleType =
   | 'rock_pillar'
   | 'ice_wall'
   | 'crate'
+  | 'barrel'
+  | 'camp_tent'
   | 'energized_crystal'
   | 'permafrost_spike' // Estaca de Hielo+Tierra rompible con fuego/tierra
   | 'door_gate'
@@ -446,4 +448,83 @@ export interface RelicReward {
     | 'max_hp'
     | 'cooldown_reduct';
   value: number;
+}
+
+// ARQUITECTURA DE NIVEL EXTENDIDO 2.5D, PUZLE ELEMENTAL Y CHUNKS
+
+export interface PuzzleWheelEntity {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  charge: number; // 0 a 100%
+  rotationAngle: number; // radianes de giro
+  isCompleted: boolean;
+  frostVisual: number; // 0 a 1 nivel de escarcha
+  hitFlash: number;
+  lastHitTime: number;
+  sparks: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string }>;
+}
+
+export interface GateDoorEntity {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isOpen: boolean;
+  openProgress: number; // 0 (cerrado) a 1.0 (abierto)
+  solid: boolean;
+  pillarLeftX: number;
+  pillarRightX: number;
+}
+
+export interface ForestTreeEntity {
+  id: string;
+  x: number; // base Y para depth sort
+  y: number;
+  trunkRadius: number; // collider
+  canopyRadius: number; // radio de follaje
+  canopyHeight: number; // elevación visual
+  treeType: 'pine' | 'oak' | 'ancient';
+  canopyAlpha: number; // 1.0 normal, 0.65 cuando el mago pasa debajo
+  foliageColor: string;
+  trunkColor: string;
+}
+
+export interface AmbientLeafParticle {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  rotation: number;
+  vRot: number;
+  flutterSeed: number;
+  alpha: number;
+}
+
+export interface LevelChunk {
+  id: string;
+  indexX: number;
+  indexY: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zone: 'camp' | 'trail' | 'gate' | 'arena';
+}
+
+export interface ForestLevelData {
+  worldWidth: number;
+  worldHeight: number;
+  chunks: LevelChunk[];
+  trees: ForestTreeEntity[];
+  puzzleWheel: PuzzleWheelEntity;
+  gateDoor: GateDoorEntity;
+  boundaryColliders: Array<{ x: number; y: number; radius: number }>;
+  ambientLeaves: AmbientLeafParticle[];
+  trailWaypoints: Array<{ x: number; y: number; width: number }>;
 }

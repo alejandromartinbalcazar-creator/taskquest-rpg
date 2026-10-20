@@ -622,6 +622,107 @@ class ElementalSoundEngine {
     osc.stop(now + 0.32);
   }
 
+  // PUZLE DE RUEDA ELEMENTAL Y PUERTA DE HIERRO
+  // Giro de la Rueda Dentada con crujido de escarcha y piedra
+  public playWheelTurn(progress: number = 0) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Frecuencia base sube conforme el engranaje avanza hacia el 100%
+    const baseFreq = 160 + progress * 240;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.3, now + 0.12);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(600, now);
+    filter.Q.setValueAtTime(2.5, now);
+
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
+
+    // Tintineo de cristal gélido
+    const iceOsc = this.ctx.createOscillator();
+    const iceGain = this.ctx.createGain();
+    iceOsc.type = 'sine';
+    iceOsc.frequency.setValueAtTime(900 + Math.random() * 400, now);
+    iceGain.gain.setValueAtTime(0.06, now);
+    iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    iceOsc.connect(iceGain);
+    iceGain.connect(this.ctx.destination);
+    iceOsc.start(now);
+    iceOsc.stop(now + 0.08);
+  }
+
+  // Éxito al 100% del Puzle de la Rueda (Acorde triunfal de cristales de hielo)
+  public playWheelComplete() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const freqs = [523.25, 659.25, 783.99, 1046.5]; // Acorde C Mayor brillante
+    freqs.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+      gain.gain.setValueAtTime(0.2, now + idx * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.45);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + idx * 0.06);
+      osc.stop(now + idx * 0.06 + 0.45);
+    });
+  }
+
+  // Apertura de la Colosal Puerta de Hierro (Chirrido de rejas y cadenas)
+  public playGateOpen() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Retumbar grave de cadenas y mecanismos
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(75, now);
+    osc.frequency.linearRampToValueAtTime(45, now + 0.6);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.6);
+
+    // Chirrido metálico de rejas
+    const metalOsc = this.ctx.createOscillator();
+    const metalGain = this.ctx.createGain();
+    metalOsc.type = 'sawtooth';
+    metalOsc.frequency.setValueAtTime(320, now + 0.05);
+    metalOsc.frequency.linearRampToValueAtTime(180, now + 0.55);
+    metalGain.gain.setValueAtTime(0.12, now + 0.05);
+    metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    metalOsc.connect(metalGain);
+    metalGain.connect(this.ctx.destination);
+    metalOsc.start(now + 0.05);
+    metalOsc.stop(now + 0.55);
+  }
+
   // GESTIÓN DE SONIDO CONTINUO PARA ATAQUES CANALIZADOS (FUEGO Y HIELO)
   private activeStreamType: 'fire' | 'ice' | null = null;
   private streamOsc1: OscillatorNode | null = null;
