@@ -950,10 +950,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
         g.lightningBolts.push(bolt);
       }
-      // 0.1 SOBRECARGA VOLTAICA (RAYO + RAYO): Acumulación eléctrica, descarga principal y rayos encadenados secuenciales
+      // 0.1 SOBRECARGA VOLTAICA (RAYO + RAYO): Lanzamiento directo con toque normal y +50% de daño al mantener presionado
       else if (recipe.id === 'lightning_storm') {
-        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.98);
-        const effectiveRatio = Math.max(0.18, Math.min(1.0, chargeRatio !== undefined ? chargeRatio : (isCharged ? 1.0 : 0.25)));
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const ratio = chargeRatio !== undefined ? Math.max(0, Math.min(1.0, chargeRatio)) : (isCharged ? 1.0 : 0);
+        // Daño base al 100% en toque normal, y +50% adicional si el usuario decide mantener presionado
+        const chargeDamageBoost = 1.0 + 0.50 * (isMaxCharge ? 1.0 : ratio);
 
         const staffX = wizard.x + Math.cos(aimAngle) * 22;
         const staffY = wizard.y + Math.sin(aimAngle) * 22;
@@ -1003,9 +1005,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         elementalSound.playVoltaicDischarge(isMaxCharge);
         g.screenShake = isMaxCharge ? 14 : 7;
 
-        // Daño principal escalado con carga
+        // Daño principal (100% de daño base en toque normal, 150% si se mantiene presionado a carga máxima)
         const baseDmg = recipe.damage + statBonus;
-        const primaryDmg = Math.round(baseDmg * (0.8 + 0.6 * effectiveRatio) * (isMaxCharge ? 1.85 : 1.0));
+        const primaryDmg = Math.round(baseDmg * chargeDamageBoost);
 
         const visited = new Set<string>();
         visited.add(primaryTarget.id);
@@ -1027,7 +1029,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         });
 
         // Saltos subsecuentes entre enemigos cercanos (distancia máxima de salto ~240px)
-        const maxJumpsCount = isMaxCharge ? 7 : Math.round(2 + effectiveRatio * 2.5);
+        const maxJumpsCount = isMaxCharge ? 7 : (ratio > 0.4 ? 5 : 4);
         const maxJumpDist = 240;
 
         let currentSource = primaryTarget;
@@ -1076,7 +1078,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           id: `volt-chain-${now}-${Math.random()}`,
           sourceX: staffX,
           sourceY: staffY,
-          chargeRatio: effectiveRatio,
+          chargeRatio: ratio,
           isMaxCharge,
           jumps,
           elapsedMs: 0,
@@ -1088,7 +1090,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           id: `volt-cast-${now}`,
           x: wizard.x,
           y: wizard.y - 25,
-          text: isMaxCharge ? '⚡⚡ ¡SOBRECARGA VOLTAICA MÁXIMA!' : '⚡⚡ ¡SOBRECARGA VOLTAICA!',
+          text: isMaxCharge ? '⚡⚡ ¡SOBRECARGA VOLTAICA +50%!' : '⚡⚡ ¡SOBRECARGA VOLTAICA!',
           color: isMaxCharge ? '#ffffff' : '#38bdf8',
           fontSize: 14,
           opacity: 1,
@@ -2691,7 +2693,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 id: `volt-txt-${frameNow}-${jIdx}`,
                 x: enemy.x + (Math.random() - 0.5) * 12,
                 y: enemy.y - 18,
-                text: isPrimary && jump.isMaxCharge ? `⚡ ¡TRUENO MAX! -${jump.damage}` : `⚡ -${jump.damage}`,
+                text: isPrimary && jump.isMaxCharge ? `⚡ ¡TRUENO +50%! -${jump.damage}` : `⚡ -${jump.damage}`,
                 color: jump.isMaxCharge ? '#ffffff' : '#38bdf8',
                 fontSize: isPrimary && jump.isMaxCharge ? 14 : 12,
                 opacity: 1,
@@ -3075,8 +3077,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             onPointerCancel={handleAttackPointerUp}
             className={`w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 active:scale-95 border-2 ${
               chargeVisualRatio >= 1.0
-                ? 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse'
-                : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]'
+                ? (activeRecipe.id === 'lightning_storm'
+                    ? 'border-cyan-300 shadow-[0_0_28px_rgba(56,189,248,0.95)] animate-pulse'
+                    : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
+                : (activeRecipe.id === 'lightning_storm'
+                    ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
+                    : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
             <span className="text-2xl">{activeRecipe.icon}</span>
@@ -3088,7 +3094,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 : activeRecipe.id === 'fire_inferno'
                 ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
                 : activeRecipe.id === 'lightning_storm'
-                ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA! ⚡' : isChargingUi ? 'CARGANDO ⚡' : 'CARGAR ⚡')
+                ? (chargeVisualRatio >= 1.0 ? '¡VOLTAICA +50%! ⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'VOLTAICA ⚡⚡')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
