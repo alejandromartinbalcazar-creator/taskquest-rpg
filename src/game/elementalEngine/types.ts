@@ -550,6 +550,38 @@ export interface PermafrostPrisonEntity {
   finished: boolean;
 }
 
+// TORNADO DE PLASMA (FUEGO + RAYO: VÓRTICE MÓVIL, SUCCIÓN, ABSORCIÓN DE PROYECTILES Y DETONACIÓN FINAL)
+export type PlasmaTornadoPhase = 'moving' | 'collapsing' | 'detonating' | 'finished';
+
+export interface PlasmaTornadoEntity {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  startX: number;
+  startY: number;
+  travelDistance: number;
+  maxDistance: number; // ~280px (8 unidades)
+  isCharged: boolean;
+  scale: number; // 1.0 tap, 1.35 charged
+  radius: number; // ~28px tap, ~38px charged (daño y absorción)
+  suctionRadius: number; // ~75px tap, ~102px charged (atracción gravitatoria)
+  phase: PlasmaTornadoPhase;
+  phaseTimer: number;
+  movingDurationMs: number; // ~2400ms max
+  collapseDurationMs: number; // ~140ms
+  detonateDurationMs: number; // ~260ms
+  tickIntervalMs: number; // 200ms
+  lastTickPerEnemy: Record<string, number>;
+  tickDamage: number; // ~24 tap, ~36 charged
+  terminalDamage: number; // ~60 tap, ~90 charged (2.5x tickDamage)
+  hasDetonated: boolean;
+  hitDetonationEnemyIds: string[];
+  swirlAngle: number;
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

@@ -22,6 +22,7 @@ import {
   ConductivePillarNode,
   PermafrostPrisonEntity,
   PermafrostMonolithNode,
+  PlasmaTornadoEntity,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -73,6 +74,7 @@ export class IsometricRenderer {
     thermalVortices: ThermalVortexEntity[] = [],
     conductiveCages: ConductiveCageEntity[] = [],
     permafrostPrisons: PermafrostPrisonEntity[] = [],
+    plasmaTornadoes: PlasmaTornadoEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -129,6 +131,9 @@ export class IsometricRenderer {
     // 3.78 Dibujar Suelo, Fracturas y Escarcha de la Prisión de Permafrost (Hielo + Tierra)
     this.drawPermafrostPrisonFloor(ctx, permafrostPrisons);
 
+    // 3.79 Dibujar Sombras, Suelo y Remolino de Succión del Tornado de Plasma (Fuego + Rayo)
+    this.drawPlasmaTornadoGround(ctx, plasmaTornadoes);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -144,6 +149,8 @@ export class IsometricRenderer {
       this.drawConductiveAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'permafrost') {
       this.drawPermafrostAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'plasma') {
+      this.drawPlasmaTornadoAimTrajectory(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -253,6 +260,16 @@ export class IsometricRenderer {
               draw: () => this.drawPermafrostMonolith(ctx, mono, prison),
             });
           }
+        });
+      }
+    });
+
+    // Tornado de Plasma (Fuego + Rayo) integrado en el Depth Sorting
+    plasmaTornadoes.forEach((tornado) => {
+      if (tornado.phase !== 'finished') {
+        renderList.push({
+          y: tornado.y,
+          draw: () => this.drawPlasmaTornadoBody(ctx, tornado),
         });
       }
     });
@@ -1342,6 +1359,56 @@ export class IsometricRenderer {
             ctx.lineTo(staffX + Math.cos(spAng + 0.25) * spR2, staffY + Math.sin(spAng + 0.25) * spR2);
             ctx.stroke();
           }
+        }
+      }
+
+      // Resplandor de plasma ígneo y vórtice de sobrecalentamiento para Tornado de Plasma (Fuego + Rayo)
+      const isPlasma = wizard.chargeType === 'plasma';
+      if (isPlasma) {
+        ctx.shadowBlur = 0;
+        const sparkCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 7));
+        for (let sc = 0; sc < sparkCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.01 : -0.01) + (sc * Math.PI * 2) / sparkCount;
+          const scDist = 18 + ratio * 10;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? (isReady ? '#ffffff' : '#00e5ff') : (isReady ? '#ffea00' : '#ff6d00');
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 2.8 : 2.0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Núcleo de plasma en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9.5 : 5.5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const plasmaGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        plasmaGrad.addColorStop(0, '#ffffff');
+        plasmaGrad.addColorStop(0.35, '#00e5ff');
+        plasmaGrad.addColorStop(0.7, '#ff6d00');
+        plasmaGrad.addColorStop(0.95, '#7c4dff');
+        plasmaGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+        ctx.fillStyle = plasmaGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Filamentos helicoidales de arco voltaico
+        ctx.strokeStyle = isReady ? '#ffffff' : '#ffea00';
+        ctx.lineWidth = 1.2;
+        const arcCount = isReady ? 4 : 2;
+        for (let sp = 0; sp < arcCount; sp++) {
+          const spAng = Math.random() * Math.PI * 2;
+          const spR1 = pulseR * 0.7;
+          const spR2 = pulseR * 1.7;
+          ctx.beginPath();
+          ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+          ctx.lineTo(staffX + Math.cos(spAng + 0.35) * spR2, staffY + Math.sin(spAng + 0.35) * spR2);
+          ctx.stroke();
         }
       }
 
@@ -4940,6 +5007,276 @@ export class IsometricRenderer {
       isReady ? '¡PRISIÓN 6P (+50% DAÑO/VIDA)! ❄️🌍' : 'PRISIÓN DE PERMAFROST (4 MONOLITOS)',
       0,
       -r * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // TORNADO DE PLASMA (FUEGO + RAYO: SUELO, VÓRTICE MÓVIL Y RETÍCULA TÁCTICA)
+  // =========================================================================
+
+  // 1. Dibuja el remolino de succión en el suelo, marcas de calcinación y onda de choque
+  private static drawPlasmaTornadoGround(
+    ctx: CanvasRenderingContext2D,
+    tornadoes: PlasmaTornadoEntity[]
+  ) {
+    if (!tornadoes || tornadoes.length === 0) return;
+
+    const squish = 0.58;
+
+    tornadoes.forEach((t) => {
+      if (t.phase === 'finished') return;
+
+      const now = Date.now();
+      ctx.save();
+      ctx.translate(t.x, t.y);
+
+      // A. Succión gravitatoria en el suelo
+      if (t.phase === 'moving' || t.phase === 'collapsing') {
+        const suctionR = t.suctionRadius;
+        const groundGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, suctionR);
+        groundGrad.addColorStop(0, 'rgba(255, 109, 0, 0.45)');
+        groundGrad.addColorStop(0.4, 'rgba(0, 229, 255, 0.22)');
+        groundGrad.addColorStop(0.8, 'rgba(124, 77, 255, 0.1)');
+        groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = groundGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, suctionR, suctionR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Brazos en espiral convergentes en el suelo
+        ctx.lineWidth = 1.6;
+        for (let b = 0; b < 3; b++) {
+          const armBaseAng = (b * Math.PI * 2) / 3 + now * 0.008;
+          ctx.strokeStyle = b % 2 === 0 ? 'rgba(255, 234, 0, 0.5)' : 'rgba(0, 229, 255, 0.5)';
+          ctx.beginPath();
+          for (let st = 0; st <= 10; st++) {
+            const frac = st / 10;
+            const curR = suctionR * (1 - frac * 0.85);
+            const curAng = armBaseAng + frac * 2.2;
+            const px = Math.cos(curAng) * curR;
+            const py = Math.sin(curAng) * curR * squish;
+            if (st === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+      }
+
+      // B. Anillo de onda de choque de plasma en el suelo al detonar
+      if (t.phase === 'detonating') {
+        const prog = Math.min(1.0, t.phaseTimer / t.detonateDurationMs);
+        const maxDetonateR = (t.isCharged ? 98 : 70) * (0.3 + 0.7 * Math.sin(prog * Math.PI * 0.5));
+        const alpha = Math.max(0, 1.0 - prog);
+
+        ctx.strokeStyle = `rgba(0, 229, 255, ${alpha * 0.9})`;
+        ctx.lineWidth = 3.5 * (1.0 - prog * 0.6);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, maxDetonateR, maxDetonateR * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 109, 0, ${alpha * 0.8})`;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, maxDetonateR * 0.75, maxDetonateR * 0.75 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja el cuerpo tridimensional del Tornado de Plasma (embudo de fuego/plasma con elipses apiladas y relámpagos)
+  private static drawPlasmaTornadoBody(
+    ctx: CanvasRenderingContext2D,
+    t: PlasmaTornadoEntity
+  ) {
+    const squish = 0.58;
+    const now = Date.now();
+    const scale = t.scale;
+
+    ctx.save();
+    ctx.translate(t.x, t.y);
+
+    // FASE A: VÓRTICE EN MOVIMIENTO
+    if (t.phase === 'moving') {
+      const levels = 6;
+      const totalHeight = 72 * scale;
+
+      // Dibujar los niveles elípticos apilados desde el suelo hasta la cúspide
+      for (let l = 0; l < levels; l++) {
+        const frac = l / (levels - 1);
+        const curY = -frac * totalHeight;
+        const curR = (10 + frac * 26) * scale;
+        const waveOffset = Math.sin(now * 0.015 + l * 0.8) * (3.0 * scale);
+        const rotAng = now * 0.02 + l * 0.5;
+
+        ctx.save();
+        ctx.translate(waveOffset, curY);
+        ctx.rotate(rotAng);
+
+        const ringGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, curR);
+        ringGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        ringGrad.addColorStop(0.3, 'rgba(0, 229, 255, 0.8)');
+        ringGrad.addColorStop(0.65, 'rgba(255, 109, 0, 0.75)');
+        ringGrad.addColorStop(0.9, 'rgba(124, 77, 255, 0.6)');
+        ringGrad.addColorStop(1, 'rgba(255, 109, 0, 0)');
+
+        ctx.fillStyle = ringGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, curR, curR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = l % 2 === 0 ? 'rgba(255, 234, 0, 0.75)' : 'rgba(0, 229, 255, 0.75)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      // Relámpagos helicoidales que serpentean por la columna
+      for (let arc = 0; arc < 2; arc++) {
+        const arcPhase = now * 0.018 + arc * Math.PI;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.6;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+
+        for (let step = 0; step < 5; step++) {
+          const sFrac = step / 4;
+          const sY = -sFrac * totalHeight;
+          const sR = (11 + sFrac * 25) * scale;
+          const sAng = arcPhase + sFrac * Math.PI * 2;
+          const sJitter = (Math.random() - 0.5) * 4;
+          const px = Math.cos(sAng) * sR + sJitter;
+          const py = sY + Math.sin(sAng) * (sR * squish) + sJitter;
+
+          if (step === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur = 0;
+    }
+    // FASE B: COLAPSO E IMPLOSIÓN
+    else if (t.phase === 'collapsing') {
+      const prog = Math.min(1.0, t.phaseTimer / t.collapseDurationMs);
+      const contractScale = Math.max(0.15, (1.0 - prog) * scale);
+      const coreR = 24 * contractScale;
+
+      const collapseGrad = ctx.createRadialGradient(0, -coreR * 0.5, 1, 0, -coreR * 0.5, coreR * 1.5);
+      collapseGrad.addColorStop(0, '#ffffff');
+      collapseGrad.addColorStop(0.4, '#00e5ff');
+      collapseGrad.addColorStop(0.8, '#ff6d00');
+      collapseGrad.addColorStop(1, 'rgba(255, 109, 0, 0)');
+
+      ctx.fillStyle = collapseGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -coreR * 0.5, coreR * 1.5, coreR * 1.5 * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rayos de sobrecalentamiento inward
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.0;
+      for (let i = 0; i < 4; i++) {
+        const ang = (i * Math.PI) / 2 + now * 0.02;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang) * (coreR * 2.2), -coreR * 0.5 + Math.sin(ang) * (coreR * 2.2) * squish);
+        ctx.lineTo(0, -coreR * 0.5);
+        ctx.stroke();
+      }
+    }
+    // FASE C: DETONACIÓN TERMINAL DE PLASMA
+    else if (t.phase === 'detonating') {
+      const prog = Math.min(1.0, t.phaseTimer / t.detonateDurationMs);
+      const blastR = (t.isCharged ? 98 : 70) * Math.sin(prog * Math.PI * 0.5);
+      const alpha = Math.max(0, 1.0 - prog);
+
+      const blastGrad = ctx.createRadialGradient(0, -12, 1, 0, -12, blastR);
+      blastGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.95})`);
+      blastGrad.addColorStop(0.35, `rgba(0, 229, 255, ${alpha * 0.85})`);
+      blastGrad.addColorStop(0.7, `rgba(255, 109, 0, ${alpha * 0.6})`);
+      blastGrad.addColorStop(1, 'rgba(255, 109, 0, 0)');
+
+      ctx.fillStyle = blastGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -12, blastR, blastR * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Descargas radiales bifurcadas de remate
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.lineWidth = 1.8;
+      for (let b = 0; b < 6; b++) {
+        const bAng = (b * Math.PI) / 3 + t.swirlAngle;
+        const bDist = blastR * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        const midX = Math.cos(bAng + 0.15) * (bDist * 0.5);
+        const midY = -12 + Math.sin(bAng + 0.15) * (bDist * 0.5) * squish;
+        const endX = Math.cos(bAng) * bDist;
+        const endY = -12 + Math.sin(bAng) * bDist * squish;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica y trayectoria para Tornado de Plasma
+  private static drawPlasmaTornadoAimTrajectory(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const travelDist = 280;
+    const ang = wizard.facingAngle;
+    const destX = wizard.x + Math.cos(ang) * travelDist;
+    const destY = wizard.y + Math.sin(ang) * travelDist * squish;
+    const destR = isReady ? 98 : 70;
+
+    ctx.save();
+
+    // Línea de trayectoria direccional del tornado
+    ctx.strokeStyle = isReady ? '#00e5ff' : '#ff6d00';
+    ctx.lineWidth = isReady ? 2.6 : 1.8;
+    ctx.setLineDash([10, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(destX, destY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Círculo de detonación terminal proyectado
+    ctx.strokeStyle = isReady ? '#00e5ff' : '#ffea00';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, destR, destR * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Pulso central en el destino
+    ctx.fillStyle = isReady ? '#ffffff' : '#00e5ff';
+    ctx.beginPath();
+    ctx.arc(destX, destY, isReady ? 6 : 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Texto de HUD táctico flotante sobre el destino
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#00e5ff' : '#ffea00';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isReady ? '¡TORNADO SOBRECARGADO (+50% DAÑO/ÁREA)! 🌪️⚡' : 'TORNADO DE PLASMA (AVANCE Y SUCCIÓN)',
+      destX,
+      destY - destR * squish - 14
     );
 
     ctx.restore();

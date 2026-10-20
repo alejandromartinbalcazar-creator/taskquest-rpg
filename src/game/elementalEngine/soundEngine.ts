@@ -294,27 +294,9 @@ class ElementalSoundEngine {
     osc.stop(now + 0.3);
   }
 
-  // 6. Sobrecarga Explosiva (Detonación de Plasma)
+  // 6. Tornado de Plasma (Lanzamiento)
   public playExplosiveOverload() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(650, now);
-    osc.frequency.exponentialRampToValueAtTime(50, now + 0.38);
-
-    gain.gain.setValueAtTime(0.35, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.38);
+    this.playPlasmaTornadoLaunch(false);
   }
 
   // CATACLISMO ELEMENTAL (Supremo)
@@ -1894,6 +1876,108 @@ class ElementalSoundEngine {
     boomGain.connect(this.ctx.destination);
     boom.start(now);
     boom.stop(now + 0.25);
+  }
+
+  // =========================================================================
+  // TORNADO DE PLASMA (FUEGO + RAYO)
+  // =========================================================================
+
+  // 1. Lanzamiento del torbellino acelerado de fuego y electricidad
+  public playPlasmaTornadoLaunch(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Rugido de vórtice ígneo de aire caliente
+    const whoosh = this.ctx.createOscillator();
+    const whooshGain = this.ctx.createGain();
+    whoosh.type = 'sawtooth';
+    whoosh.frequency.setValueAtTime(isCharged ? 380 : 310, now);
+    whoosh.frequency.exponentialRampToValueAtTime(140, now + 0.35);
+
+    whooshGain.gain.setValueAtTime(isCharged ? 0.36 : 0.26, now);
+    whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    whoosh.connect(whooshGain);
+    whooshGain.connect(this.ctx.destination);
+    whoosh.start(now);
+    whoosh.stop(now + 0.35);
+
+    // Zumbido eléctrico de alta frecuencia de plasma
+    const zap = this.ctx.createOscillator();
+    const zapGain = this.ctx.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(isCharged ? 880 : 720, now);
+    zap.frequency.linearRampToValueAtTime(isCharged ? 1240 : 1050, now + 0.28);
+
+    zapGain.gain.setValueAtTime(isCharged ? 0.2 : 0.14, now);
+    zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+    zap.connect(zapGain);
+    zapGain.connect(this.ctx.destination);
+    zap.start(now);
+    zap.stop(now + 0.28);
+  }
+
+  // 2. Ionización y desintegración de proyectiles hostiles absorbidos
+  public playPlasmaDisintegrate() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const zap = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(1450, now);
+    zap.frequency.exponentialRampToValueAtTime(260, now + 0.09);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    zap.connect(gain);
+    gain.connect(this.ctx.destination);
+    zap.start(now);
+    zap.stop(now + 0.09);
+  }
+
+  // 3. Implosión y detonación terminal masiva de plasma
+  public playPlasmaTornadoDetonate(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bajo de implosión y compresión térmica
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(isCharged ? 280 : 220, now);
+    subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.3);
+
+    subGain.gain.setValueAtTime(isCharged ? 0.52 : 0.4, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.3);
+
+    // Explosión de plasma de alta tensión
+    const blast = this.ctx.createOscillator();
+    const blastGain = this.ctx.createGain();
+    blast.type = 'sawtooth';
+    blast.frequency.setValueAtTime(isCharged ? 1150 : 880, now + 0.03);
+    blast.frequency.exponentialRampToValueAtTime(65, now + 0.28);
+
+    blastGain.gain.setValueAtTime(isCharged ? 0.42 : 0.3, now + 0.03);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+    blast.connect(blastGain);
+    blastGain.connect(this.ctx.destination);
+    blast.start(now + 0.03);
+    blast.stop(now + 0.28);
   }
 }
 

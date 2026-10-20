@@ -25,6 +25,7 @@ import {
   ConductivePillarNode,
   PermafrostPrisonEntity,
   PermafrostMonolithNode,
+  PlasmaTornadoEntity,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -478,6 +479,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     thermalVortices: [] as ThermalVortexEntity[],
     conductiveCages: [] as ConductiveCageEntity[],
     permafrostPrisons: [] as PermafrostPrisonEntity[],
+    plasmaTornadoes: [] as PlasmaTornadoEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     particles: [] as Particle[],
@@ -777,6 +779,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.thermalVortices = [];
       g.conductiveCages = [];
       g.permafrostPrisons = [];
+      g.plasmaTornadoes = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -911,17 +914,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'permafrost_prison') {
         // Prisión de Permafrost gestiona sus propios sonidos de erupción telúrica y fragmentación
       }
-      else if (recipe.id === 'explosive_overload' || recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
+      else if (recipe.id === 'explosive_overload') {
+        // Tornado de Plasma gestiona sus propios sonidos de ignición de vórtice, desintegración y detonación
+      }
+      else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
 
-      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico / Bombardeo Volcánico)
+      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico / Bombardeo Volcánico / Tornado de Plasma)
       let aimAngle = wizard.facingAngle;
       let closestDist = 420;
       let targetX = wizard.x + Math.cos(aimAngle) * 110;
       let targetY = wizard.y + Math.sin(aimAngle) * 110;
 
-      if (recipe.id === 'ice_lance' || recipe.id === 'cryo_storm') {
+      if (recipe.id === 'ice_lance' || recipe.id === 'cryo_storm' || recipe.id === 'explosive_overload') {
         // Puntería manual prioritaria mediante arrastre táctil en botón de ataque o ratón en PC
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
@@ -934,6 +940,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           const mdy = mousePosRef.current.y - wizard.y;
           if (Math.hypot(mdx, mdy) > 10) {
             aimAngle = Math.atan2(mdy, mdx);
+          }
+        } else {
+          // Si no hay arrastre manual ni puntero de ratón, orientar automáticamente hacia el enemigo más cercano
+          for (const enemy of g.enemyManager.enemies) {
+            const dx = enemy.x - wizard.x;
+            const dy = enemy.y - wizard.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < closestDist) {
+              closestDist = dist;
+              aimAngle = Math.atan2(dy, dx);
+            }
           }
         }
         targetX = wizard.x + Math.cos(aimAngle) * 260;
@@ -2054,29 +2071,92 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
-      // 6. FUEGO + RAYO (SOBRECARGA EXPLOSIVA)
+      // 6. FUEGO + RAYO: TORNADO DE PLASMA (Tap vs Carga Opcional +50%)
       else if (recipe.id === 'explosive_overload') {
-        g.screenShake = isCharged ? 12 : 8;
-        g.projectiles.push({
-          id: `proj-${now}`,
-          x: wizard.x,
-          y: wizard.y,
-          vx: Math.cos(aimAngle) * 11.0,
-          vy: Math.sin(aimAngle) * 11.0,
-          radius: isCharged ? 16 : 12,
-          color: recipe.color,
-          secondaryColor: '#ffffff',
-          damage: recipe.damage * chargeMultiplier,
-          knockback: recipe.knockback * (isCharged ? 1.5 : 1.0),
-          life: 40,
-          maxLife: 40,
-          pierce: 1,
-          piercedIds: [],
-          isHostile: false,
-          spellType: 'explosive_overload',
-          visualShape: 'plasma_sphere',
-          areaOfEffect: isCharged ? 105 : 80,
+        const scale = isCharged ? 1.35 : 1.0;
+        const radius = Math.round(28 * scale);
+        const suctionRadius = Math.round(75 * scale);
+        const maxDist = 280;
+        const speed = 3.6;
+
+        // Velocidad en el plano isométrico 2.5D (squish 0.58)
+        const vx = Math.cos(aimAngle) * speed;
+        const vy = Math.sin(aimAngle) * speed * 0.58;
+
+        // Daño: Tap vs Carga Opcional (+50% de daño total)
+        // Base tick: ~24 tap, ~36 charged (+ stats)
+        // Terminal detonation: ~60 tap, ~90 charged (+ stats)
+        const statScaledBonus = Math.floor(statBonus * (isCharged ? 1.5 : 1.0));
+        const tickDamage = Math.round((isCharged ? 36 : 24) + statScaledBonus * 0.35);
+        const terminalDamage = Math.round((isCharged ? 92 : 60) + statScaledBonus * 0.9);
+
+        // Sonido de ignición de vórtice de plasma y sacudida de cámara
+        elementalSound.playPlasmaTornadoLaunch(isCharged);
+        g.screenShake = isCharged ? 10 : 6;
+
+        g.plasmaTornadoes.push({
+          id: `plasma_tornado_${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 20,
+          y: wizard.y + Math.sin(aimAngle) * 20 * 0.58,
+          vx,
+          vy,
+          startX: wizard.x,
+          startY: wizard.y,
+          travelDistance: 0,
+          maxDistance: maxDist,
+          isCharged,
+          scale,
+          radius,
+          suctionRadius,
+          phase: 'moving',
+          phaseTimer: 0,
+          movingDurationMs: 2400,
+          collapseDurationMs: 140,
+          detonateDurationMs: 260,
+          tickIntervalMs: 200,
+          lastTickPerEnemy: {},
+          tickDamage,
+          terminalDamage,
+          hasDetonated: false,
+          hitDetonationEnemyIds: [],
+          swirlAngle: 0,
+          finished: false,
         });
+
+        // Partículas iniciales de lanzamiento
+        for (let p = 0; p < (isCharged ? 18 : 12); p++) {
+          const pAng = aimAngle + (Math.random() - 0.5) * 1.2;
+          const pSpd = 2.0 + Math.random() * 4.0;
+          g.particles.push({
+            id: `plasma_launch_${now}_${p}`,
+            x: wizard.x + Math.cos(aimAngle) * 16,
+            y: wizard.y + Math.sin(aimAngle) * 16 * 0.58,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd * 0.58,
+            radius: 1.8 + Math.random() * 2.0,
+            color: p % 2 === 0 ? '#00e5ff' : '#ff6d00',
+            alpha: 1,
+            life: 18,
+          });
+        }
+
+        // Mensaje flotante al lanzar con sobrecarga
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `tornado_charged_${now}`,
+            x: wizard.x,
+            y: wizard.y - 28,
+            text: '🌪️⚡ ¡TORNADO DE PLASMA +50%!',
+            color: '#00e5ff',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.2,
+            life: 35,
+          });
+        }
+
+        setElementQueue([]);
+        return;
       }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
@@ -2242,23 +2322,25 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'permafrost_prison'
-      ? 'permafrost'
-      : (activeRecipe.id === 'crystal_field'
-        ? 'conductive'
-        : (activeRecipe.id === 'thermal_shock'
-          ? 'thermal'
-          : (activeRecipe.id === 'magma_eruption'
-            ? 'volcanic'
-            : (activeRecipe.id === 'cryo_storm'
-              ? 'cryo'
-              : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-                ? 'lightning'
-                : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                  ? 'ice'
-                  : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                    ? 'earth'
-                    : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))));
+    wizard.chargeType = activeRecipe.id === 'explosive_overload'
+      ? 'plasma'
+      : (activeRecipe.id === 'permafrost_prison'
+        ? 'permafrost'
+        : (activeRecipe.id === 'crystal_field'
+          ? 'conductive'
+          : (activeRecipe.id === 'thermal_shock'
+            ? 'thermal'
+            : (activeRecipe.id === 'magma_eruption'
+              ? 'volcanic'
+              : (activeRecipe.id === 'cryo_storm'
+                ? 'cryo'
+                : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+                  ? 'lightning'
+                  : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                    ? 'ice'
+                    : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                      ? 'earth'
+                      : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2274,7 +2356,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+    const wasCharged = (activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2573,7 +2655,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isThermal = activeRecipe.id === 'thermal_shock';
         const isConductive = activeRecipe.id === 'crystal_field';
         const isPermafrost = activeRecipe.id === 'permafrost_prison';
-        const maxChargeTime = (isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isPlasma = activeRecipe.id === 'explosive_overload';
+        const maxChargeTime = (isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2746,6 +2829,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Torbellino de chispas de plasma y ascuas incandescentes convergentes para Tornado de Plasma
+        else if (isPlasma) {
+          if (Math.random() < 0.45 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `plasma-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.4 + wizard.chargeRatio * 2.4),
+              vy: -Math.sin(pAng) * (1.3 + wizard.chargeRatio * 1.4),
+              radius: 1.5 + Math.random() * 1.6,
+              color: Math.random() < 0.5 ? '#00e5ff' : (Math.random() < 0.75 ? '#ff6d00' : '#ffffff'),
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2871,6 +2974,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vx: 0,
               vy: 0,
               radius: 14,
+              color: '#00e5ff',
+              alpha: 1,
+              life: 16,
+              maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isPlasma) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6.5;
+            g.particles.push({
+              id: `plasma-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 15,
               color: '#00e5ff',
               alpha: 1,
               life: 16,
@@ -5524,6 +5643,260 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.10 Actualizar Tornado de Plasma (Fuego + Rayo: Vórtice Móvil, Succión Gravitatoria, Absorción de Proyectiles y Detonación)
+      for (let ptIdx = g.plasmaTornadoes.length - 1; ptIdx >= 0; ptIdx--) {
+        const tornado = g.plasmaTornadoes[ptIdx];
+        tornado.phaseTimer += 16.6;
+        tornado.swirlAngle += 0.28;
+
+        // FASE 1: DESPLAZAMIENTO LINEAL Y VÓRTICE ACTIVO
+        if (tornado.phase === 'moving') {
+          // A. Movimiento continuo
+          tornado.x += tornado.vx;
+          tornado.y += tornado.vy;
+          tornado.travelDistance = Math.hypot(tornado.x - tornado.startX, (tornado.y - tornado.startY) / 0.58);
+
+          // Spawn de partículas de estela en el suelo y chispas
+          if (Math.random() < 0.65) {
+            const trAng = Math.random() * Math.PI * 2;
+            const trDist = Math.random() * tornado.radius * 0.8;
+            g.particles.push({
+              id: `tornado_trail_${frameNow}_${Math.random()}`,
+              x: tornado.x + Math.cos(trAng) * trDist,
+              y: tornado.y + Math.sin(trAng) * trDist * 0.58,
+              vx: -tornado.vx * 0.2 + (Math.random() - 0.5) * 1.5,
+              vy: -tornado.vy * 0.2 + (Math.random() - 0.5) * 1.0,
+              radius: 1.5 + Math.random() * 2.0,
+              color: Math.random() < 0.5 ? '#00e5ff' : (Math.random() < 0.7 ? '#ff6d00' : '#ffffff'),
+              alpha: 0.9,
+              life: 14,
+            });
+          }
+
+          // B. Detección de colisión contra obstáculos sólidos o límites del terreno
+          const hitObstacle = g.terrainManager.obstacles.some((obs) => {
+            if (!obs.solid) return false;
+            const odx = tornado.x - obs.x;
+            const ody = (tornado.y - obs.y) / 0.58;
+            return Math.hypot(odx, ody) < tornado.radius * 0.65 + obs.radius;
+          });
+
+          // Si colisiona con obstáculo, llega a maxDistance o expira movingDurationMs -> colapsar e iniciar detonación
+          if (hitObstacle || tornado.travelDistance >= tornado.maxDistance || tornado.phaseTimer >= tornado.movingDurationMs) {
+            tornado.phase = 'collapsing';
+            tornado.phaseTimer = 0;
+          }
+
+          // C. Intercepción y desintegración de proyectiles hostiles
+          for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {
+            const p = g.projectiles[pIdx];
+            if (!p.isHostile) continue;
+            const pdx = p.x - tornado.x;
+            const pdy = (p.y - tornado.y) / 0.58;
+            const pDist = Math.hypot(pdx, pdy);
+            if (pDist <= tornado.radius + p.radius + 6) {
+              // Absorción y desintegración del proyectil
+              g.projectiles.splice(pIdx, 1);
+              elementalSound.playPlasmaDisintegrate();
+
+              // Chispas de ionización por proyectil absorbido
+              for (let s = 0; s < 5; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `disintegrate_${frameNow}_${Math.random()}`,
+                  x: p.x,
+                  y: p.y,
+                  vx: Math.cos(sAng) * (2.0 + Math.random() * 2.5),
+                  vy: Math.sin(sAng) * (1.2 + Math.random() * 1.5),
+                  radius: 1.4 + Math.random() * 1.4,
+                  color: s % 2 === 0 ? '#00e5ff' : '#ffea00',
+                  alpha: 1,
+                  life: 12,
+                });
+              }
+
+              g.floatingTexts.push({
+                id: `disint_txt_${frameNow}_${pIdx}`,
+                x: p.x,
+                y: p.y - 12,
+                text: '⚡ DISUELTO',
+                color: '#00e5ff',
+                fontSize: 11,
+                opacity: 0.9,
+                vy: -0.9,
+                life: 20,
+              });
+            }
+          }
+
+          // D. Atracción gravitatoria de enemigos (Succión hacia el ojo del vórtice)
+          for (const enemy of g.enemyManager.enemies) {
+            if (enemy.hp <= 0) continue;
+            const edx = tornado.x - enemy.x;
+            const edy = (tornado.y - enemy.y) / 0.58;
+            const eDist = Math.hypot(edx, edy);
+
+            if (eDist <= tornado.suctionRadius) {
+              const pullAngle = Math.atan2(edy, edx);
+              const isBoss = enemy.archetype === 'boss' || enemy.maxHp > 250;
+              // Fuerza gravitatoria: más intensa cerca del núcleo
+              const normalizedDist = Math.max(0, 1 - eDist / (tornado.suctionRadius + 15));
+              const basePull = (1.5 + normalizedDist * 3.5) * (isBoss ? 0.25 : 1.0);
+              const tangentialPull = (1.2 * normalizedDist) * (isBoss ? 0.15 : 1.0);
+
+              // Vector de succión con componente tangencial para generar espiral
+              const pullVx = (Math.cos(pullAngle) * basePull - Math.sin(pullAngle) * tangentialPull);
+              const pullVy = (Math.sin(pullAngle) * basePull + Math.cos(pullAngle) * tangentialPull) * 0.58;
+
+              enemy.x += pullVx;
+              enemy.y += pullVy;
+
+              // Micro-ralentización para que no escapen fácilmente
+              if (!isBoss) {
+                g.enemyManager.applyStatus(enemy, 'slowed', 20);
+              }
+
+              // E. Daño periódico por contacto (ticks cada tickIntervalMs)
+              if (eDist <= tornado.radius + enemy.radius) {
+                const lastTick = tornado.lastTickPerEnemy[enemy.id] || 0;
+                if (frameNow - lastTick >= tornado.tickIntervalMs) {
+                  tornado.lastTickPerEnemy[enemy.id] = frameNow;
+                  enemy.hp -= tornado.tickDamage;
+                  enemy.hitFlash = 8;
+
+                  g.floatingTexts.push({
+                    id: `tornado_tick_${frameNow}_${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 16,
+                    text: `-${tornado.tickDamage} ⚡`,
+                    color: Math.random() < 0.5 ? '#00e5ff' : '#ff6d00',
+                    fontSize: 13,
+                    opacity: 1,
+                    vy: -1.0,
+                    life: 22,
+                  });
+
+                  // Chispas de impacto de plasma
+                  for (let sp = 0; sp < 4; sp++) {
+                    const spAng = Math.random() * Math.PI * 2;
+                    g.particles.push({
+                      id: `plasma_hit_${frameNow}_${Math.random()}`,
+                      x: enemy.x,
+                      y: enemy.y - 10,
+                      vx: Math.cos(spAng) * 2.5,
+                      vy: Math.sin(spAng) * 1.5,
+                      radius: 1.5,
+                      color: sp % 2 === 0 ? '#00e5ff' : '#ffb74d',
+                      alpha: 1,
+                      life: 12,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+        // FASE 2: COLAPSO (contracción previa a la detonación final)
+        else if (tornado.phase === 'collapsing') {
+          // Desacelera y se contrae rápidamente (~140ms)
+          tornado.scale = Math.max(0.6, (tornado.isCharged ? 1.35 : 1.0) * (1 - (tornado.phaseTimer / tornado.collapseDurationMs) * 0.4));
+          tornado.swirlAngle += 0.45; // Acelera rotación en el colapso
+
+          if (tornado.phaseTimer >= tornado.collapseDurationMs) {
+            tornado.phase = 'detonating';
+            tornado.phaseTimer = 0;
+          }
+        }
+        // FASE 3: DETONACIÓN TERMINAL DE PLASMA
+        else if (tornado.phase === 'detonating') {
+          if (!tornado.hasDetonated) {
+            tornado.hasDetonated = true;
+            elementalSound.playPlasmaTornadoDetonate(tornado.isCharged);
+            g.screenShake = Math.max(g.screenShake, tornado.isCharged ? 14 : 9);
+
+            const blastRadius = tornado.isCharged ? 98 : 72;
+
+            // Onda de choque explosiva radial sobre todos los enemigos en alcance
+            for (const enemy of g.enemyManager.enemies) {
+              if (enemy.hp <= 0) continue;
+              const bdx = enemy.x - tornado.x;
+              const bdy = (enemy.y - tornado.y) / 0.58;
+              const bDist = Math.hypot(bdx, bdy);
+
+              if (bDist <= blastRadius) {
+                tornado.hitDetonationEnemyIds.push(enemy.id);
+                enemy.hp -= tornado.terminalDamage;
+                enemy.hitFlash = 16;
+
+                // Empuje explosivo masivo hacia afuera
+                const knockAngle = Math.atan2(bdy, bdx);
+                const knockDist = (tornado.isCharged ? 22 : 15) * Math.max(0.4, 1 - bDist / (blastRadius + 20));
+                enemy.x += Math.cos(knockAngle) * knockDist;
+                enemy.y += Math.sin(knockAngle) * knockDist * 0.58;
+
+                // Aturdimiento breve por conmoción plasmática y choque eléctrico
+                enemy.stunnedTimer = tornado.isCharged ? 65 : 40;
+                g.enemyManager.applyStatus(enemy, 'shocked', tornado.isCharged ? 70 : 45);
+
+                g.floatingTexts.push({
+                  id: `tornado_det_${frameNow}_${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 24,
+                  text: `💥 -${tornado.terminalDamage} PLASMA!`,
+                  color: '#00e5ff',
+                  fontSize: 15,
+                  opacity: 1,
+                  vy: -1.3,
+                  life: 34,
+                });
+              }
+            }
+
+            // Anillo expansivo de onda de choque
+            g.particles.push({
+              id: `plasma_ring_${frameNow}`,
+              x: tornado.x,
+              y: tornado.y,
+              vx: 0,
+              vy: 0,
+              radius: 12,
+              color: '#00e5ff',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+
+            // Explosión de chispas de plasma y rayos
+            const blastParticles = tornado.isCharged ? 28 : 18;
+            for (let bp = 0; bp < blastParticles; bp++) {
+              const bpAng = Math.random() * Math.PI * 2;
+              const bpSpd = 3.0 + Math.random() * 5.5;
+              g.particles.push({
+                id: `plasma_blast_pt_${frameNow}_${bp}`,
+                x: tornado.x,
+                y: tornado.y - 8,
+                vx: Math.cos(bpAng) * bpSpd,
+                vy: Math.sin(bpAng) * bpSpd * 0.58,
+                radius: 1.8 + Math.random() * 2.5,
+                color: bp % 3 === 0 ? '#00e5ff' : (bp % 3 === 1 ? '#ff6d00' : '#ffffff'),
+                alpha: 1,
+                life: 20 + Math.floor(Math.random() * 8),
+              });
+            }
+          }
+
+          if (tornado.phaseTimer >= tornado.detonateDurationMs) {
+            tornado.phase = 'finished';
+          }
+        }
+
+        // Limpieza de tornados terminados
+        if (tornado.phase === 'finished') {
+          g.plasmaTornadoes.splice(ptIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -5595,6 +5968,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.thermalVortices,
             g.conductiveCages,
             g.permafrostPrisons,
+            g.plasmaTornadoes,
             g.forestLevel ?? undefined
           );
         }
@@ -5858,6 +6232,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
                     : activeRecipe.id === 'permafrost_prison'
                     ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'explosive_overload'
+                    ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -5874,6 +6250,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     : activeRecipe.id === 'crystal_field'
                     ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
                     : activeRecipe.id === 'permafrost_prison'
+                    ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
+                    : activeRecipe.id === 'explosive_overload'
                     ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
@@ -5902,6 +6280,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
                 : activeRecipe.id === 'permafrost_prison'
                 ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
+                : activeRecipe.id === 'explosive_overload'
+                ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -5926,6 +6306,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-cyan-400 shadow-[0_0_8px_#eab308]'
                       : activeRecipe.id === 'permafrost_prison'
                       ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-slate-400 shadow-[0_0_8px_#00e5ff]'
+                      : activeRecipe.id === 'explosive_overload'
+                      ? 'bg-gradient-to-r from-orange-500 via-amber-400 to-cyan-400 shadow-[0_0_8px_#00e5ff]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
