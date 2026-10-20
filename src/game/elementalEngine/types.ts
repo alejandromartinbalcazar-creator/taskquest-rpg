@@ -399,6 +399,56 @@ export interface CryoBeamEntity {
   dissipateTimer: number;
 }
 
+// BOMBARDEO VOLCÁNICO (FUEGO + TIERRA: GRIETAS, COLUMNAS DE MAGMA Y BOMBAS DE LAVA BALÍSTICAS)
+export type VolcanicPhase = 'warning' | 'eruption' | 'cooling' | 'finished';
+
+export interface LavaBombEntity {
+  id: string;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  currentX: number;
+  currentY: number;
+  currentHeight: number; // Elevación parabólica sobre el suelo (máx ~35-50px)
+  progress: number; // 0.0 a 1.0
+  durationMs: number; // ~320-400 ms
+  elapsedMs: number;
+  damage: number; // 40% del daño de impacto de columna
+  radius: number; // radio de la bomba ~6-9px
+  hasExploded: boolean;
+}
+
+export interface VolcanicFissureEntity {
+  id: string;
+  x: number;
+  y: number;
+  radius: number; // ~28-36px
+  delayMs: number; // Escalonamiento orgánico entre fisuras (0, 45, 90, 135, 180 ms)
+  elapsedMs: number;
+  phase: VolcanicPhase;
+  columnHeight: number; // 0 subiendo hasta maxColumnHeight
+  maxColumnHeight: number; // ~85-115px
+  warningDurationMs: number; // ~280ms
+  eruptionDurationMs: number; // ~260ms
+  coolingDurationMs: number; // ~260ms
+  crackAngles: number[];
+  hasDealtDamage: boolean;
+  bombsSpawned: boolean;
+  hitEnemyIds: string[];
+}
+
+export interface VolcanicBombardmentEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  isCharged: boolean;
+  totalDamage: number;
+  fissures: VolcanicFissureEntity[];
+  lavaBombs: LavaBombEntity[];
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

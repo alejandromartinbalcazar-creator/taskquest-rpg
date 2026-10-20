@@ -1458,6 +1458,156 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.14);
   }
+
+  // =========================================================================
+  // BOMBARDEO VOLCÁNICO (FUEGO + TIERRA: RUGIDO SUBTERRÁNEO, COLUMNAS Y BOMBAS)
+  // =========================================================================
+
+  // 1. Rugido sísmico y fractura magmática subterránea
+  public playVolcanicRumble(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Oscilador grave de sub-graves
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(isCharged ? 95 : 78, now);
+    osc.frequency.exponentialRampToValueAtTime(26, now + 0.38);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(160, now);
+    filter.frequency.exponentialRampToValueAtTime(45, now + 0.38);
+
+    gain.gain.setValueAtTime(isCharged ? 0.36 : 0.26, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.38);
+
+    // Segundo oscilador con modulación de vibración para emular crujido de tierra
+    const osc2 = this.ctx.createOscillator();
+    const gain2 = this.ctx.createGain();
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(55, now);
+    osc2.frequency.linearRampToValueAtTime(30, now + 0.28);
+
+    const filter2 = this.ctx.createBiquadFilter();
+    filter2.type = 'lowpass';
+    filter2.frequency.setValueAtTime(110, now);
+
+    gain2.gain.setValueAtTime(isCharged ? 0.20 : 0.14, now);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.30);
+
+    osc2.connect(filter2);
+    filter2.connect(gain2);
+    gain2.connect(this.ctx.destination);
+    osc2.start(now);
+    osc2.stop(now + 0.30);
+  }
+
+  // 2. Erupción violenta de columna de magma y géiser de fuego
+  public playMagmaGeyser() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.28);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(380, now);
+    filter.Q.setValueAtTime(2.2, now);
+
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.28);
+
+    // Ruido sibilante de vapor/lava hirviente
+    const bufferSize = this.ctx.sampleRate * 0.24;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.45;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(650, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(140, now + 0.24);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.18, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.24);
+  }
+
+  // 3. Impacto y salpicadura pesada de bomba de lava (Lava Splat)
+  public playLavaSplat() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.16);
+
+    // Pequeño chisporroteo viscoso
+    const bufferSize = this.ctx.sampleRate * 0.12;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.3;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.12, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    noise.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.12);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

@@ -17,6 +17,9 @@ import {
   GlacialSpikeSegment,
   TectonicFistEntity,
   CryoBeamEntity,
+  VolcanicBombardmentEntity,
+  VolcanicFissureEntity,
+  LavaBombEntity,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -466,6 +469,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     glacialEruptions: [] as GlacialEruptionEntity[],
     tectonicFists: [] as TectonicFistEntity[],
     cryoBeams: [] as CryoBeamEntity[],
+    volcanicBombardments: [] as VolcanicBombardmentEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     particles: [] as Particle[],
@@ -761,6 +765,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.glacialEruptions = [];
       g.tectonicFists = [];
       g.cryoBeams = [];
+      g.volcanicBombardments = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -881,7 +886,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         // Puño Tectónico tiene su propio rugido sísmico de invocación
       }
       else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
-      else if (recipe.id === 'magma_eruption') elementalSound.playMagmaEruption();
+      else if (recipe.id === 'magma_eruption') {
+        // Bombardeo Volcánico gestiona sus propios sonidos de rugido sísmico, géiseres y splat
+      }
       else if (recipe.id === 'crystal_field') elementalSound.playCrystalField();
       else if (recipe.id === 'cryo_storm') {
         // Rayo Criogénico gestiona su propio sonido de disparo / sobrecarga
@@ -891,7 +898,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
 
-      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico con auto-bloqueo)
+      // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico / Bombardeo Volcánico)
       let aimAngle = wizard.facingAngle;
       let closestDist = 420;
       let targetX = wizard.x + Math.cos(aimAngle) * 110;
@@ -914,15 +921,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
         targetX = wizard.x + Math.cos(aimAngle) * 260;
         targetY = wizard.y + Math.sin(aimAngle) * 260;
-      } else if (recipe.id === 'earth_megalith') {
-        // Apuntado de Puño Tectónico: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = recipe.id === 'magma_eruption' ? 180 : 220;
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
           if (Math.hypot(adx, ady) > 7) {
             aimAngle = Math.atan2(ady, adx);
-            targetX = wizard.x + Math.cos(aimAngle) * 220;
-            targetY = wizard.y + Math.sin(aimAngle) * 220 * 0.58;
+            targetX = wizard.x + Math.cos(aimAngle) * targetDist;
+            targetY = wizard.y + Math.sin(aimAngle) * targetDist * 0.58;
           }
         } else if (mousePosRef.current.active) {
           targetX = mousePosRef.current.x;
@@ -1517,30 +1525,106 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           areaOfEffect: isCharged ? 90 : 65,
         });
       }
-      // 3. FUEGO + TIERRA (ERUPCIÓN DE MAGMA)
+      // 3. FUEGO + TIERRA (BOMBARDEO VOLCÁNICO: RETARDO, FISURAS MAGMÁTICAS, GÉISERES Y BOMBAS BALÍSTICAS)
       else if (recipe.id === 'magma_eruption') {
-        g.screenShake = isCharged ? 9 : 6;
-        g.projectiles.push({
-          id: `proj-${now}`,
-          x: wizard.x,
-          y: wizard.y,
-          vx: Math.cos(aimAngle) * 5.8,
-          vy: Math.sin(aimAngle) * 5.8,
-          radius: isCharged ? 18 : 15,
-          color: recipe.color,
-          secondaryColor: recipe.secondaryColor,
-          damage: recipe.damage * chargeMultiplier,
-          knockback: recipe.knockback * (isCharged ? 1.4 : 1.0),
-          life: 50,
-          maxLife: 50,
-          pierce: 1,
-          piercedIds: [],
-          isHostile: false,
-          spellType: 'magma_eruption',
-          visualShape: 'magma_rock',
-          onHitSpawn: 'magma_fissure',
-          areaOfEffect: isCharged ? 80 : 60,
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const ratio = chargeRatio !== undefined ? Math.max(0, Math.min(1.0, chargeRatio)) : (isCharged ? 1.0 : 0);
+        // Daño base al 100% en toque normal, y +50% adicional si el usuario decide mantener presionado (1.5x)
+        const chargeDamageBoost = 1.0 + 0.50 * (isMaxCharge ? 1.0 : ratio);
+
+        const baseDmg = recipe.damage + statBonus;
+        const finalDmg = Math.round(baseDmg * chargeDamageBoost);
+
+        elementalSound.playVolcanicRumble(isMaxCharge);
+        g.screenShake = isMaxCharge ? 12 : 7;
+
+        // Distribución espacial anclada en el mundo (no giran con el mago)
+        const squish = 0.58;
+        const fissureRadius = isMaxCharge ? 36 : 30;
+        const maxColHeight = isMaxCharge ? 115 : 95;
+
+        // Fissure offsets: 3 en toque normal (tap), 5 si se mantiene cargado
+        const fissureConfigs: Array<{ dx: number; dy: number; delayMs: number }> = isMaxCharge
+          ? [
+              { dx: 0, dy: 0, delayMs: 0 },
+              { dx: Math.cos(0.3) * 62, dy: Math.sin(0.3) * 62 * squish, delayMs: 45 },
+              { dx: Math.cos(1.8) * 62, dy: Math.sin(1.8) * 62 * squish, delayMs: 90 },
+              { dx: Math.cos(3.4) * 62, dy: Math.sin(3.4) * 62 * squish, delayMs: 135 },
+              { dx: Math.cos(4.9) * 62, dy: Math.sin(4.9) * 62 * squish, delayMs: 180 },
+            ]
+          : [
+              { dx: 0, dy: 0, delayMs: 0 },
+              { dx: Math.cos(2.2) * 48, dy: Math.sin(2.2) * 48 * squish, delayMs: 50 },
+              { dx: Math.cos(-2.2) * 48, dy: Math.sin(-2.2) * 48 * squish, delayMs: 100 },
+            ];
+
+        const fissures: VolcanicFissureEntity[] = fissureConfigs.map((cfg, fIdx) => ({
+          id: `fissure-${now}-${fIdx}-${Math.random()}`,
+          x: targetX + cfg.dx,
+          y: targetY + cfg.dy,
+          radius: fissureRadius,
+          delayMs: cfg.delayMs,
+          elapsedMs: 0,
+          phase: 'warning',
+          columnHeight: 0,
+          maxColumnHeight: maxColHeight,
+          warningDurationMs: 280,
+          eruptionDurationMs: 260,
+          coolingDurationMs: 240,
+          crackAngles: [
+            0.4 + (Math.random() - 0.5) * 0.3,
+            1.6 + (Math.random() - 0.5) * 0.3,
+            2.9 + (Math.random() - 0.5) * 0.3,
+            4.2 + (Math.random() - 0.5) * 0.3,
+            5.4 + (Math.random() - 0.5) * 0.3,
+          ],
+          hasDealtDamage: false,
+          bombsSpawned: false,
+          hitEnemyIds: [],
+        }));
+
+        g.volcanicBombardments.push({
+          id: `bombardment-${now}-${Math.random()}`,
+          centerX: targetX,
+          centerY: targetY,
+          isCharged: isMaxCharge,
+          totalDamage: finalDmg,
+          fissures,
+          lavaBombs: [],
+          finished: false,
         });
+
+        // Partículas iniciales de fractura en el terreno
+        for (let p = 0; p < (isMaxCharge ? 16 : 10); p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pDist = Math.random() * (isMaxCharge ? 70 : 50);
+          g.particles.push({
+            id: `volc-init-${now}-${p}`,
+            x: targetX + Math.cos(pAng) * pDist,
+            y: targetY + Math.sin(pAng) * pDist * squish,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: -1.2 - Math.random() * 2.0,
+            radius: 2 + Math.random() * 2,
+            color: p % 2 === 0 ? '#ff6d00' : '#fff176',
+            alpha: 1,
+            life: 24,
+          });
+        }
+
+        g.floatingTexts.push({
+          id: `volc-text-${now}`,
+          x: wizard.x,
+          y: wizard.y - 25,
+          text: isMaxCharge ? '🌋🔥 ¡BOMBARDEO VOLCÁNICO +50%!' : '🌋🔥 ¡BOMBARDEO VOLCÁNICO!',
+          color: isMaxCharge ? '#fff176' : '#ff6d00',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.3,
+          life: 38,
+        });
+
+        setElementQueue([]);
+        return;
       }
       // 4. RAYO + TIERRA (CAMPO DE CRISTALES ENERGIZADOS)
       else if (recipe.id === 'crystal_field') {
@@ -1819,15 +1903,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'cryo_storm'
-      ? 'cryo'
-      : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-        ? 'lightning'
-        : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-          ? 'ice'
-          : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-            ? 'earth'
-            : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))));
+    wizard.chargeType = activeRecipe.id === 'magma_eruption'
+      ? 'volcanic'
+      : (activeRecipe.id === 'cryo_storm'
+        ? 'cryo'
+        : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+          ? 'lightning'
+          : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+            ? 'ice'
+            : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+              ? 'earth'
+              : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -1843,7 +1929,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = activeRecipe.id === 'cryo_storm'
+    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption')
       ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2138,7 +2224,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isGlacial = activeRecipe.id === 'ice_lance';
         const isTectonic = activeRecipe.id === 'earth_megalith';
         const isCryo = activeRecipe.id === 'cryo_storm';
-        const maxChargeTime = isCryo ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isVolcanic = activeRecipe.id === 'magma_eruption';
+        const maxChargeTime = (isCryo || isVolcanic) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2231,6 +2318,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Partículas ígneas y fragmentos de roca ardiente convergentes para Bombardeo Volcánico
+        else if (isVolcanic) {
+          if (Math.random() < 0.4 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `volc-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.2 + wizard.chargeRatio * 2.2),
+              vy: -Math.sin(pAng) * (1.2 + wizard.chargeRatio * 1.3),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.5 ? '#ff6d00' : '#fff176',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2293,6 +2400,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 14,
               color: '#00f0ff',
+              alpha: 1,
+              life: 16,
+              maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isVolcanic) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6.5;
+            g.particles.push({
+              id: `volc-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 14,
+              color: '#ff6d00',
               alpha: 1,
               life: 16,
               maxLife: 16,
@@ -4097,6 +4220,275 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.7 Actualizar Bombardeo Volcánico (Fuego + Tierra: Fracturas, Columnas de Magma y Bombas de Lava Balísticas)
+      for (let bmbIdx = g.volcanicBombardments.length - 1; bmbIdx >= 0; bmbIdx--) {
+        const bombardment = g.volcanicBombardments[bmbIdx];
+        let allFissuresDone = true;
+
+        // Actualizar cada fisura volcánica
+        bombardment.fissures.forEach((fissure) => {
+          fissure.elapsedMs += dt;
+          if (fissure.elapsedMs < fissure.delayMs) {
+            allFissuresDone = false;
+            return;
+          }
+
+          const localElapsed = fissure.elapsedMs - fissure.delayMs;
+
+          // FASE A: ADVERTENCIA (280 ms)
+          if (fissure.phase === 'warning') {
+            allFissuresDone = false;
+
+            // Chispas y brasas emergentes durante la fractura
+            if (Math.random() < 0.35) {
+              const pAng = Math.random() * Math.PI * 2;
+              const pDist = Math.random() * fissure.radius * 0.7;
+              g.particles.push({
+                id: `volc-warn-${frameNow}-${Math.random()}`,
+                x: fissure.x + Math.cos(pAng) * pDist,
+                y: fissure.y + Math.sin(pAng) * pDist * 0.58,
+                vx: (Math.random() - 0.5) * 0.8,
+                vy: -0.9 - Math.random() * 1.4,
+                radius: 1.4 + Math.random() * 1.5,
+                color: Math.random() < 0.6 ? '#ff6d00' : '#fff176',
+                alpha: 0.85,
+                life: 18,
+              });
+            }
+
+            if (localElapsed >= fissure.warningDurationMs) {
+              fissure.phase = 'eruption';
+              elementalSound.playMagmaGeyser();
+              g.screenShake = Math.max(g.screenShake, bombardment.isCharged ? 8 : 5);
+
+              // Estallido de magma y rocas en la base de la columna
+              for (let b = 0; b < 12; b++) {
+                const bAng = Math.random() * Math.PI * 2;
+                const bSpd = 2.0 + Math.random() * 4.5;
+                g.particles.push({
+                  id: `volc-erupt-${frameNow}-${b}`,
+                  x: fissure.x,
+                  y: fissure.y,
+                  vx: Math.cos(bAng) * bSpd,
+                  vy: Math.sin(bAng) * bSpd * 0.58 - (2.5 + Math.random() * 3.5),
+                  radius: 2 + Math.random() * 2.5,
+                  color: Math.random() < 0.4 ? '#ffffff' : (Math.random() < 0.5 ? '#ff6d00' : '#d50000'),
+                  alpha: 1,
+                  life: 22,
+                });
+              }
+            }
+          }
+
+          // FASE B: ERUPCIÓN VIOLENTA (260 ms)
+          else if (fissure.phase === 'eruption') {
+            allFissuresDone = false;
+            const eruptElapsed = localElapsed - fissure.warningDurationMs;
+            const prog = Math.min(1.0, eruptElapsed / fissure.eruptionDurationMs);
+            const easeOut = Math.sin(prog * Math.PI * 0.5);
+            fissure.columnHeight = fissure.maxColumnHeight * easeOut;
+
+            // Detección de daño directo de la columna de magma (1 solo impacto por enemigo por columna)
+            if (!fissure.hasDealtDamage && prog >= 0.35) {
+              fissure.hasDealtDamage = true;
+
+              for (const enemy of g.enemyManager.enemies) {
+                if (enemy.hp <= 0) continue;
+                const dist = Math.hypot(enemy.x - fissure.x, (enemy.y - fissure.y) / 0.58);
+                if (dist <= enemy.radius + fissure.radius) {
+                  enemy.hp -= bombardment.totalDamage;
+                  enemy.hitFlash = 12;
+
+                  // Interrupción táctica leve y quemadura
+                  enemy.isTelegraphing = false;
+                  enemy.attackCooldown = 0;
+                  g.enemyManager.applyStatus(enemy, 'burning', 180);
+
+                  // Knock-up sutil y desplazamiento ligero
+                  const isBoss = enemy.archetype === 'boss';
+                  if (!isBoss) {
+                    const pushAng = Math.atan2(enemy.y - fissure.y, enemy.x - fissure.x);
+                    enemy.x += Math.cos(pushAng) * 14;
+                    enemy.y -= 12; // Elevación vertical
+                  }
+
+                  g.floatingTexts.push({
+                    id: `volc-hit-${frameNow}-${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 25,
+                    text: `🌋 -${bombardment.totalDamage} [MAGMA]`,
+                    color: bombardment.isCharged ? '#fff176' : '#ff6d00',
+                    fontSize: 14,
+                    opacity: 1,
+                    vy: -1.5,
+                    life: 38,
+                  });
+
+                  // Chispas ígneas al impactar
+                  for (let h = 0; h < 6; h++) {
+                    const hAng = Math.random() * Math.PI * 2;
+                    g.particles.push({
+                      id: `volc-hit-spark-${frameNow}-${enemy.id}-${h}`,
+                      x: enemy.x,
+                      y: enemy.y - 10,
+                      vx: Math.cos(hAng) * 3.5,
+                      vy: Math.sin(hAng) * 3.5,
+                      radius: 2,
+                      color: '#fff176',
+                      alpha: 1,
+                      life: 16,
+                    });
+                  }
+                }
+              }
+
+              // Daño a obstáculos en el epicentro de la columna
+              g.terrainManager.obstacles.forEach((obs) => {
+                const dist = Math.hypot(obs.x - fissure.x, (obs.y - fissure.y) / 0.58);
+                if (dist <= obs.radius + fissure.radius) {
+                  obs.hp -= bombardment.totalDamage;
+                }
+              });
+            }
+
+            // Expulsión balística de bombas de lava al alcanzar el ápice
+            if (!fissure.bombsSpawned && prog >= 0.55) {
+              fissure.bombsSpawned = true;
+              const bombCount = bombardment.isCharged ? 3 : 2;
+              const bombDmg = Math.max(1, Math.round(bombardment.totalDamage * 0.40));
+
+              for (let b = 0; b < bombCount; b++) {
+                const bAng = (b * ((Math.PI * 2) / bombCount)) + (Math.random() - 0.5) * 0.6;
+                const bDist = 55 + Math.random() * 50;
+                const bombTargetX = fissure.x + Math.cos(bAng) * bDist;
+                const bombTargetY = fissure.y + Math.sin(bAng) * bDist * 0.58;
+
+                bombardment.lavaBombs.push({
+                  id: `lava_bomb_${frameNow}_${b}_${Math.random().toString(36).substring(2, 5)}`,
+                  startX: fissure.x,
+                  startY: fissure.y,
+                  targetX: bombTargetX,
+                  targetY: bombTargetY,
+                  currentX: fissure.x,
+                  currentY: fissure.y,
+                  currentHeight: 0,
+                  progress: 0,
+                  durationMs: 340 + Math.random() * 60,
+                  elapsedMs: 0,
+                  damage: bombDmg,
+                  radius: 7,
+                  hasExploded: false,
+                });
+              }
+            }
+
+            if (eruptElapsed >= fissure.eruptionDurationMs) {
+              fissure.phase = 'cooling';
+            }
+          }
+
+          // FASE C: ENFRIAMIENTO Y DISIPACIÓN (240 ms)
+          else if (fissure.phase === 'cooling') {
+            const coolElapsed = localElapsed - fissure.warningDurationMs - fissure.eruptionDurationMs;
+            const prog = Math.min(1.0, coolElapsed / fissure.coolingDurationMs);
+            fissure.columnHeight = fissure.maxColumnHeight * (1.0 - prog);
+
+            if (coolElapsed >= fissure.coolingDurationMs) {
+              fissure.phase = 'finished';
+            } else {
+              allFissuresDone = false;
+            }
+          }
+        });
+
+        // Actualizar bombas de lava balísticas
+        let allBombsDone = true;
+        bombardment.lavaBombs.forEach((bomb) => {
+          if (bomb.hasExploded) return;
+          allBombsDone = false;
+
+          bomb.elapsedMs += dt;
+          bomb.progress = Math.min(1.0, bomb.elapsedMs / bomb.durationMs);
+
+          // Interpolación lineal horizontal y arco parabólico vertical
+          bomb.currentX = bomb.startX + (bomb.targetX - bomb.startX) * bomb.progress;
+          bomb.currentY = bomb.startY + (bomb.targetY - bomb.startY) * bomb.progress;
+          bomb.currentHeight = Math.sin(bomb.progress * Math.PI) * 46;
+
+          // Estela de humo y chispas durante el vuelo balístico
+          if (Math.random() < 0.45) {
+            g.particles.push({
+              id: `bomb-trail-${frameNow}-${Math.random()}`,
+              x: bomb.currentX + (Math.random() - 0.5) * 4,
+              y: bomb.currentY - bomb.currentHeight + (Math.random() - 0.5) * 4,
+              vx: (Math.random() - 0.5) * 0.6,
+              vy: 0.3 + Math.random() * 0.6,
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#ff6d00' : '#261c14',
+              alpha: 0.85,
+              life: 14,
+            });
+          }
+
+          // Impacto en el suelo al completar la trayectoria
+          if (bomb.progress >= 1.0) {
+            bomb.hasExploded = true;
+            elementalSound.playLavaSplat();
+            g.screenShake = Math.max(g.screenShake, 3.5);
+
+            // Generar charco de magma residual en el punto de aterrizaje
+            g.terrainManager.spawnMagmaFissure(bomb.targetX, bomb.targetY, 24);
+
+            // Daño en área de salpicadura (splash) y quemadura
+            const splashRadius = 38;
+            for (const enemy of g.enemyManager.enemies) {
+              if (enemy.hp <= 0) continue;
+              const dist = Math.hypot(enemy.x - bomb.targetX, (enemy.y - bomb.targetY) / 0.58);
+              if (dist <= enemy.radius + splashRadius) {
+                enemy.hp -= bomb.damage;
+                enemy.hitFlash = 10;
+                g.enemyManager.applyStatus(enemy, 'burning', 140);
+
+                g.floatingTexts.push({
+                  id: `bomb-hit-${frameNow}-${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 18,
+                  text: `🔥 -${bomb.damage} [LAVA]`,
+                  color: '#f97316',
+                  fontSize: 12,
+                  opacity: 1,
+                  vy: -1.2,
+                  life: 30,
+                });
+              }
+            }
+
+            // Gotas de magma salpicadas hacia afuera al reventar
+            for (let s = 0; s < 8; s++) {
+              const sAng = Math.random() * Math.PI * 2;
+              const sSpd = 1.8 + Math.random() * 3.5;
+              g.particles.push({
+                id: `splat-p-${frameNow}-${s}`,
+                x: bomb.targetX,
+                y: bomb.targetY,
+                vx: Math.cos(sAng) * sSpd,
+                vy: Math.sin(sAng) * sSpd * 0.58 - 1.2,
+                radius: 1.8 + Math.random() * 1.8,
+                color: Math.random() < 0.5 ? '#fff176' : '#ff6d00',
+                alpha: 1,
+                life: 18,
+              });
+            }
+          }
+        });
+
+        // Limpieza de bombardeos que han terminado todas sus fases y bombas
+        if (allFissuresDone && allBombsDone) {
+          bombardment.finished = true;
+          g.volcanicBombardments.splice(bmbIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -4164,6 +4556,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.glacialEruptions,
             g.tectonicFists,
             g.cryoBeams,
+            g.volcanicBombardments,
             g.forestLevel ?? undefined
           );
         }
@@ -4419,6 +4812,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-300 shadow-[0_0_28px_rgba(245,158,11,0.95)] animate-pulse'
                     : activeRecipe.id === 'cryo_storm'
                     ? 'border-cyan-200 shadow-[0_0_30px_rgba(0,240,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'magma_eruption'
+                    ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -4428,6 +4823,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.6)]'
                     : activeRecipe.id === 'cryo_storm'
                     ? 'border-cyan-300 shadow-[0_0_20px_rgba(0,240,255,0.7)]'
+                    : activeRecipe.id === 'magma_eruption'
+                    ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -4447,6 +4844,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡VOLTAICA +50%! ⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'VOLTAICA ⚡⚡')
                 : activeRecipe.id === 'cryo_storm'
                 ? (chargeVisualRatio >= 1.0 ? '¡CRÍO +50%! ❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️⚡' : 'RAYO CRÍO ❄️⚡')
+                : activeRecipe.id === 'magma_eruption'
+                ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -4463,6 +4862,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
                       : activeRecipe.id === 'cryo_storm'
                       ? 'bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_8px_#00f0ff]'
+                      : activeRecipe.id === 'magma_eruption'
+                      ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff6d00]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

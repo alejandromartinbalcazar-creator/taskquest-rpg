@@ -14,6 +14,9 @@ import {
   GlacialSpikeSegment,
   TectonicFistEntity,
   CryoBeamEntity,
+  VolcanicBombardmentEntity,
+  VolcanicFissureEntity,
+  LavaBombEntity,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -61,6 +64,7 @@ export class IsometricRenderer {
     glacialEruptions: GlacialEruptionEntity[] = [],
     tectonicFists: TectonicFistEntity[] = [],
     cryoBeams: CryoBeamEntity[] = [],
+    volcanicBombardments: VolcanicBombardmentEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -105,6 +109,9 @@ export class IsometricRenderer {
     // 3.7 Dibujar Cráter y Runa Sísmica de Puño Tectónico (Tierra + Tierra)
     this.drawTectonicFistFloor(ctx, tectonicFists);
 
+    // 3.75 Dibujar Suelo, Grietas y Sombras de Bombardeo Volcánico (Fuego + Tierra)
+    this.drawVolcanicBombardmentFloor(ctx, volcanicBombardments);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -112,6 +119,8 @@ export class IsometricRenderer {
       this.drawTectonicAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'cryo') {
       this.drawCryoAimTrajectory(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'volcanic') {
+      this.drawVolcanicAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -177,6 +186,26 @@ export class IsometricRenderer {
           draw: () => this.drawTectonicFist(ctx, fist),
         });
       }
+    });
+
+    // Columnas de Magma y Bombas Balísticas de Bombardeo Volcánico (Fuego + Tierra)
+    volcanicBombardments.forEach((bombardment) => {
+      bombardment.fissures.forEach((fissure) => {
+        if (fissure.phase === 'eruption' || fissure.phase === 'cooling') {
+          renderList.push({
+            y: fissure.y,
+            draw: () => this.drawVolcanicMagmaColumn(ctx, fissure),
+          });
+        }
+      });
+      bombardment.lavaBombs.forEach((bomb) => {
+        if (!bomb.hasExploded) {
+          renderList.push({
+            y: bomb.currentY,
+            draw: () => this.drawLavaBomb(ctx, bomb),
+          });
+        }
+      });
     });
 
     // Mago (Jugador)
@@ -1047,6 +1076,59 @@ export class IsometricRenderer {
         if (isReady) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 1.2;
+          for (let sp = 0; sp < 3; sp++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const spR1 = pulseR * 0.8;
+            const spR2 = pulseR * 1.6;
+            ctx.beginPath();
+            ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+            ctx.lineTo(staffX + Math.cos(spAng + 0.3) * spR2, staffY + Math.sin(spAng + 0.3) * spR2);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Magma incandescente y esquirlas volcánicas para Bombardeo Volcánico (Fuego + Tierra)
+      const isVolcanic = wizard.chargeType === 'volcanic';
+      if (isVolcanic) {
+        ctx.shadowBlur = 0;
+        const magmaCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 7));
+        for (let mc = 0; mc < magmaCount; mc++) {
+          const mcAng = Date.now() * 0.006 + (mc * Math.PI * 2) / magmaCount;
+          const mcDist = 18 + ratio * 10;
+          const mx = Math.cos(mcAng) * mcDist;
+          const my = 8 + Math.sin(mcAng) * (mcDist * 0.58);
+
+          ctx.save();
+          ctx.translate(mx, my);
+          ctx.rotate(mcAng + Math.PI / 4);
+          ctx.fillStyle = isReady ? '#fff176' : (mc % 2 === 0 ? '#ff6d00' : '#d50000');
+          ctx.fillRect(-2.5, -2.5, 5, 5);
+          ctx.strokeStyle = '#261c14';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(-2.5, -2.5, 5, 5);
+          ctx.restore();
+        }
+
+        // Esfera de magma solar en el báculo al cargar
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9 : 5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const magmaGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        magmaGrad.addColorStop(0, '#ffffff');
+        magmaGrad.addColorStop(0.25, '#fff176');
+        magmaGrad.addColorStop(0.65, '#ff6d00');
+        magmaGrad.addColorStop(0.9, '#d50000');
+        magmaGrad.addColorStop(1, 'rgba(213, 0, 0, 0)');
+        ctx.fillStyle = magmaGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Chispas ígneas y micro-destellos alrededor del báculo si está en sobrecarga
+        if (isReady) {
+          ctx.strokeStyle = '#fff176';
+          ctx.lineWidth = 1.3;
           for (let sp = 0; sp < 3; sp++) {
             const spAng = Math.random() * Math.PI * 2;
             const spR1 = pulseR * 0.8;
@@ -2822,6 +2904,425 @@ export class IsometricRenderer {
 
       ctx.restore();
     });
+  }
+
+  // =========================================================================
+  // BOMBARDEO VOLCÁNICO (FUEGO + TIERRA: SUELO, FISURAS, COLUMNAS Y BOMBAS)
+  // =========================================================================
+
+  // 1. Suelo: Fracturas magmáticas incandescentes, calderas de lava y sombras de proyectiles
+  private static drawVolcanicBombardmentFloor(
+    ctx: CanvasRenderingContext2D,
+    bombardments: VolcanicBombardmentEntity[]
+  ) {
+    if (!bombardments || bombardments.length === 0) return;
+
+    bombardments.forEach((bombardment) => {
+      // Dibujar fisuras y calderas
+      bombardment.fissures.forEach((fissure) => {
+        if (fissure.phase === 'finished') return;
+        if (fissure.elapsedMs < fissure.delayMs) return;
+
+        const localElapsed = fissure.elapsedMs - fissure.delayMs;
+        const squish = 0.58;
+
+        // FASE A: ADVERTENCIA Y FRACTURA MAGMÁTICA (0 a warningDurationMs)
+        if (fissure.phase === 'warning') {
+          const prog = Math.min(1.0, localElapsed / fissure.warningDurationMs);
+          const pulse = 0.85 + Math.sin(Date.now() * 0.015 + fissure.x) * 0.15;
+          const currentR = fissure.radius * (0.6 + 0.4 * prog);
+
+          ctx.save();
+          ctx.translate(fissure.x, fissure.y);
+
+          // Resplandor térmico subterráneo pulsante
+          const heatGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, currentR * 1.3);
+          heatGrad.addColorStop(0, `rgba(255, 241, 118, ${0.7 * prog * pulse})`);
+          heatGrad.addColorStop(0.35, `rgba(255, 109, 0, ${0.85 * prog * pulse})`);
+          heatGrad.addColorStop(0.7, `rgba(213, 0, 0, ${0.45 * prog * pulse})`);
+          heatGrad.addColorStop(1, 'rgba(213, 0, 0, 0)');
+          ctx.fillStyle = heatGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, currentR * 1.3, currentR * 1.3 * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Grietas telúricas fracturadas que se abren desde el centro
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          fissure.crackAngles.forEach((ang, idx) => {
+            const crackLen = currentR * (0.8 + 0.3 * Math.sin(idx * 2));
+            const midX1 = Math.cos(ang) * (crackLen * 0.35) + Math.sin(idx) * 4;
+            const midY1 = Math.sin(ang) * (crackLen * 0.35 * squish) + Math.cos(idx) * 2;
+            const midX2 = Math.cos(ang) * (crackLen * 0.7) - Math.sin(idx) * 3;
+            const midY2 = Math.sin(ang) * (crackLen * 0.7 * squish) - Math.cos(idx) * 2;
+            const endX = Math.cos(ang) * crackLen;
+            const endY = Math.sin(ang) * crackLen * squish;
+
+            // Trazo exterior de roca basáltica carbonizada
+            ctx.strokeStyle = '#261c14';
+            ctx.lineWidth = 3.6;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(midX1, midY1);
+            ctx.lineTo(midX2, midY2);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Núcleo incandescente de magma líquido
+            ctx.strokeStyle = idx % 2 === 0 ? '#fff176' : '#ff9100';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(midX1, midY1);
+            ctx.lineTo(midX2, midY2);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+          });
+
+          ctx.restore();
+        }
+
+        // FASE B: ERUPCIÓN VIOLENTA (CALDERA DE LAVA ACTIVA)
+        else if (fissure.phase === 'eruption') {
+          const currentR = fissure.radius;
+
+          ctx.save();
+          ctx.translate(fissure.x, fissure.y);
+
+          // Borde carbonizado de roca volcánica
+          ctx.fillStyle = '#1b120c';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, currentR * 1.25, currentR * 1.25 * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cráter ardiente con lava fundida
+          const lavaGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, currentR);
+          lavaGrad.addColorStop(0, '#ffffff');
+          lavaGrad.addColorStop(0.25, '#fff176');
+          lavaGrad.addColorStop(0.6, '#ff6d00');
+          lavaGrad.addColorStop(0.85, '#d50000');
+          lavaGrad.addColorStop(1, '#3e2723');
+          ctx.fillStyle = lavaGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, currentR, currentR * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Burbujas incandescentes en el cráter
+          const now = Date.now();
+          for (let b = 0; b < 3; b++) {
+            const bAng = now * 0.004 + b * 2.1;
+            const bDist = currentR * 0.45;
+            const bx = Math.cos(bAng) * bDist;
+            const by = Math.sin(bAng) * bDist * squish;
+            const bR = 2.5 + Math.sin(now * 0.01 + b) * 1.5;
+
+            ctx.fillStyle = '#fffde7';
+            ctx.beginPath();
+            ctx.arc(bx, by, Math.max(1, bR), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+
+        // FASE C: ENFRIAMIENTO Y SOLIDIFICACIÓN (Lava endureciéndose en basalto)
+        else if (fissure.phase === 'cooling') {
+          const coolElapsed = localElapsed - fissure.warningDurationMs - fissure.eruptionDurationMs;
+          const prog = Math.min(1.0, coolElapsed / fissure.coolingDurationMs);
+          const currentR = fissure.radius;
+          const alpha = 1.0 - prog;
+
+          ctx.save();
+          ctx.translate(fissure.x, fissure.y);
+
+          // Costra basáltica oscura enfriada
+          ctx.fillStyle = '#212121';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, currentR * 1.15, currentR * 1.15 * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Resto de calor residual desvaneciéndose
+          if (alpha > 0.05) {
+            const residualGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, currentR * 0.8);
+            residualGrad.addColorStop(0, `rgba(255, 109, 0, ${0.6 * alpha})`);
+            residualGrad.addColorStop(0.6, `rgba(213, 0, 0, ${0.4 * alpha})`);
+            residualGrad.addColorStop(1, 'rgba(33, 33, 33, 0)');
+            ctx.fillStyle = residualGrad;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, currentR * 0.8, currentR * 0.8 * squish, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+      });
+
+      // Dibujar sombras de las bombas de lava balísticas en el suelo
+      bombardment.lavaBombs.forEach((bomb) => {
+        if (bomb.hasExploded) return;
+
+        const hRatio = Math.max(0, Math.min(1.0, bomb.currentHeight / 48));
+        const shadowRx = bomb.radius * (1.3 - 0.45 * hRatio);
+        const shadowRy = shadowRx * 0.55;
+        const shadowAlpha = Math.max(0.12, 0.55 - 0.35 * hRatio);
+
+        ctx.save();
+        ctx.fillStyle = `rgba(18, 12, 10, ${shadowAlpha})`;
+        ctx.beginPath();
+        ctx.ellipse(bomb.currentX, bomb.currentY, shadowRx, shadowRy, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    });
+  }
+
+  // 2. Columna de Magma Eruptivo en Y-Sorting (Fluidos, crestas incandescentes y vapor volcánico)
+  private static drawVolcanicMagmaColumn(
+    ctx: CanvasRenderingContext2D,
+    fissure: VolcanicFissureEntity
+  ) {
+    if (fissure.columnHeight <= 2) return;
+
+    const height = fissure.columnHeight;
+    const baseW = fissure.radius * 0.95;
+    const midW = fissure.radius * 0.75 + Math.sin(Date.now() * 0.02 + fissure.x) * 3;
+    const topW = fissure.radius * 0.5;
+
+    // Calcular alpha si está en fase de enfriamiento
+    let alpha = 1.0;
+    if (fissure.phase === 'cooling') {
+      const localElapsed = fissure.elapsedMs - fissure.delayMs;
+      const coolElapsed = localElapsed - fissure.warningDurationMs - fissure.eruptionDurationMs;
+      const prog = Math.min(1.0, coolElapsed / fissure.coolingDurationMs);
+      alpha = Math.max(0, 1.0 - prog);
+    }
+
+    ctx.save();
+    ctx.translate(fissure.x, fissure.y);
+    ctx.globalAlpha = alpha;
+
+    // A. Halo exterior incandescente
+    const auraGrad = ctx.createLinearGradient(0, 0, 0, -height);
+    auraGrad.addColorStop(0, 'rgba(255, 109, 0, 0.6)');
+    auraGrad.addColorStop(0.6, 'rgba(255, 61, 0, 0.4)');
+    auraGrad.addColorStop(1, 'rgba(255, 241, 118, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.moveTo(-baseW * 1.35, 0);
+    ctx.lineTo(-midW * 1.3, -height * 0.5);
+    ctx.lineTo(-topW * 1.4, -height * 1.08);
+    ctx.lineTo(topW * 1.4, -height * 1.08);
+    ctx.lineTo(midW * 1.3, -height * 0.5);
+    ctx.lineTo(baseW * 1.35, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // B. Cuerpo principal de la columna de roca líquida
+    const columnGrad = ctx.createLinearGradient(0, 0, 0, -height);
+    columnGrad.addColorStop(0, '#d50000');
+    columnGrad.addColorStop(0.3, '#ff6d00');
+    columnGrad.addColorStop(0.7, '#ff9100');
+    columnGrad.addColorStop(0.95, '#fff176');
+    columnGrad.addColorStop(1, '#ffffff');
+
+    ctx.fillStyle = columnGrad;
+    ctx.strokeStyle = '#ff3d00';
+    ctx.lineWidth = 1.6;
+
+    // Silueta orgánica sinuosa con lóbulos de magma
+    const wave1 = Math.sin(Date.now() * 0.015) * 4;
+    const wave2 = Math.cos(Date.now() * 0.018) * 3;
+
+    ctx.beginPath();
+    ctx.moveTo(-baseW, 4);
+    // Borde izquierdo con curvaturas
+    ctx.quadraticCurveTo(-midW + wave1, -height * 0.45, -topW + wave2, -height);
+    // Corona eruptiva en el ápice (3 espículas de lava)
+    ctx.lineTo(-topW * 0.5, -height * 1.07);
+    ctx.lineTo(0, -height * 1.15);
+    ctx.lineTo(topW * 0.5, -height * 1.07);
+    ctx.lineTo(topW - wave2, -height);
+    // Borde derecho con curvaturas
+    ctx.quadraticCurveTo(midW + wave1, -height * 0.45, baseW, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // C. Núcleo interior supercaliente (White-Hot Core)
+    const coreGrad = ctx.createLinearGradient(0, 0, 0, -height);
+    coreGrad.addColorStop(0, 'rgba(255, 109, 0, 0.4)');
+    coreGrad.addColorStop(0.5, 'rgba(255, 241, 118, 0.9)');
+    coreGrad.addColorStop(1, '#ffffff');
+
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.moveTo(-baseW * 0.4, 0);
+    ctx.quadraticCurveTo(-midW * 0.35 + wave1 * 0.5, -height * 0.45, -topW * 0.3, -height * 0.95);
+    ctx.lineTo(0, -height * 1.05);
+    ctx.lineTo(topW * 0.3, -height * 0.95);
+    ctx.quadraticCurveTo(midW * 0.35 + wave1 * 0.5, -height * 0.45, baseW * 0.4, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // D. Gotas y chorros de magma ascendente
+    ctx.fillStyle = '#fffde7';
+    for (let d = 0; d < 3; d++) {
+      const dropProg = ((Date.now() * 0.003 + d * 0.33) % 1.0);
+      const dy = -dropProg * height;
+      const dx = Math.sin(dropProg * 8 + d) * (midW * 0.5);
+      const dr = 2 + (1 - dropProg) * 2;
+      ctx.beginPath();
+      ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Bomba de Lava Balística en Y-Sorting (Proyectil parabólico incandescente con estela)
+  private static drawLavaBomb(
+    ctx: CanvasRenderingContext2D,
+    bomb: LavaBombEntity
+  ) {
+    if (bomb.hasExploded) return;
+
+    const drawX = bomb.currentX;
+    const drawY = bomb.currentY - bomb.currentHeight;
+    const r = bomb.radius;
+
+    ctx.save();
+    ctx.translate(drawX, drawY);
+
+    // Halo térmico exterior de la bomba
+    const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, r * 2.2);
+    glow.addColorStop(0, 'rgba(255, 241, 118, 0.9)');
+    glow.addColorStop(0.4, 'rgba(255, 109, 0, 0.7)');
+    glow.addColorStop(0.8, 'rgba(213, 0, 0, 0.35)');
+    glow.addColorStop(1, 'rgba(213, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Núcleo rocoso fundido irregular (polígono deformado que rota ligeramente)
+    const rot = bomb.progress * Math.PI * 4;
+    ctx.rotate(rot);
+
+    ctx.fillStyle = '#ff6d00';
+    ctx.strokeStyle = '#fff176';
+    ctx.lineWidth = 1.4;
+
+    ctx.beginPath();
+    const vertices = 7;
+    for (let v = 0; v < vertices; v++) {
+      const vAng = (v * Math.PI * 2) / vertices;
+      const wobble = 0.82 + 0.28 * Math.sin(v * 3 + bomb.id.charCodeAt(v % bomb.id.length));
+      const vx = Math.cos(vAng) * r * wobble;
+      const vy = Math.sin(vAng) * r * wobble;
+      if (v === 0) ctx.moveTo(vx, vy);
+      else ctx.lineTo(vx, vy);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Núcleo blanco-dorado en el centro
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // 4. Previsualización de retícula táctica y fisuras proyectadas para Bombardeo Volcánico
+  private static drawVolcanicAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ang = wizard.facingAngle;
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const dist = 180;
+    const squish = 0.58;
+    const tx = wizard.x + Math.cos(ang) * dist;
+    const ty = wizard.y + Math.sin(ang) * dist * squish;
+    const areaRadius = isReady ? 75 : 55;
+
+    ctx.save();
+
+    // Línea directriz punteada desde el báculo hacia la zona de bombardeo
+    ctx.strokeStyle = isReady ? 'rgba(255, 241, 118, 0.65)' : 'rgba(255, 109, 0, 0.45)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.translate(tx, ty);
+
+    // Círculo exterior de cobertura de bombardeo
+    ctx.strokeStyle = isReady ? '#fff176' : '#ff6d00';
+    ctx.lineWidth = isReady ? 2.2 : 1.6;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Previsualización de las fisuras (3 en toque normal, 5 si está sobrecargado)
+    const fissureOffsets: Array<{ dx: number; dy: number }> = isReady
+      ? [
+          { dx: 0, dy: 0 },
+          { dx: Math.cos(0.3) * 58, dy: Math.sin(0.3) * 58 * squish },
+          { dx: Math.cos(1.8) * 58, dy: Math.sin(1.8) * 58 * squish },
+          { dx: Math.cos(3.4) * 58, dy: Math.sin(3.4) * 58 * squish },
+          { dx: Math.cos(4.9) * 58, dy: Math.sin(4.9) * 58 * squish },
+        ]
+      : [
+          { dx: 0, dy: 0 },
+          { dx: Math.cos(2.2) * 44, dy: Math.sin(2.2) * 44 * squish },
+          { dx: Math.cos(-2.2) * 44, dy: Math.sin(-2.2) * 44 * squish },
+        ];
+
+    fissureOffsets.forEach((fo) => {
+      ctx.save();
+      ctx.translate(fo.dx, fo.dy);
+
+      // Micro-cráter proyectado
+      ctx.strokeStyle = isReady ? '#fef08a' : '#f97316';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 14, 14 * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Cruz o fractura central
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(7, 0);
+      ctx.moveTo(0, -7 * squish);
+      ctx.lineTo(0, 7 * squish);
+      ctx.stroke();
+
+      ctx.restore();
+    });
+
+    // Texto de HUD táctico flotante sobre la retícula
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#fff176' : '#ff9100';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isReady ? '¡SOBRECARGA VOLCÁNICA +50%! 🌋 (5 FISURAS)' : 'BOMBARDEO VOLCÁNICO 🌋 (3 FISURAS)',
+      0,
+      -areaRadius * squish - 12
+    );
+
+    ctx.restore();
   }
 
   // CAPA 1: SUELO DEL BOSQUE EXTENDIDO (Chunks con Frustum Culling + Sendero Sinuoso + Plazas)
