@@ -9,6 +9,7 @@ import {
   LightningBoltEffect,
   RoomType,
   ChanneledStreamState,
+  InfernalCrownEntity,
 } from './types';
 import { drawWizardSprite } from '../renderWizard';
 
@@ -44,7 +45,8 @@ export class IsometricRenderer {
     electricArcs: ElectricArc[],
     screenShake: number,
     roomType: RoomType,
-    currentBoss: GameEnemy | null
+    currentBoss: GameEnemy | null,
+    infernalCrowns: InfernalCrownEntity[] = []
   ) {
     ctx.save();
 
@@ -72,6 +74,9 @@ export class IsometricRenderer {
 
     // 3. Dibujar Zonas de Terreno (Magma, Hielo, Charcos de Agua, Vapor)
     this.drawTerrainZones(ctx, terrainZones);
+
+    // 3.5 Dibujar Suelo y Grietas de Corona Infernal (Fuego + Fuego)
+    this.drawInfernalCrownFloor(ctx, infernalCrowns);
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
     this.drawElectricArcs(ctx, electricArcs);
@@ -114,6 +119,9 @@ export class IsometricRenderer {
     if (wizard.channeledStream && wizard.channeledStream.active) {
       this.drawChanneledStream(ctx, wizard, wizard.channeledStream);
     }
+
+    // 5.6 Dibujar Llamas Vivas de Corona Infernal en 2.5D (Fuego + Fuego)
+    this.drawInfernalCrownFlames(ctx, infernalCrowns);
 
     // 6. Dibujar Proyectiles con SILUETAS FÍSICAS DIFERENCIADAS (Fuego, Rayo, Hielo, Tierra, etc.)
     this.drawProjectiles(ctx, projectiles);
@@ -276,6 +284,187 @@ export class IsometricRenderer {
       }
       ctx.lineTo(arc.x2, arc.y2);
       ctx.stroke();
+
+      ctx.restore();
+    });
+  }
+
+  // Dibuja el suelo, runas, grietas y cráter calcinado de la Corona Infernal (Fase A, B, C, D)
+  private static drawInfernalCrownFloor(ctx: CanvasRenderingContext2D, crowns: InfernalCrownEntity[]) {
+    if (!crowns || crowns.length === 0) return;
+
+    crowns.forEach((crown) => {
+      ctx.save();
+      ctx.translate(crown.x, crown.y);
+
+      const squish = 0.58;
+
+      if (crown.phase === 'preparation') {
+        const prog = Math.min(1, crown.phaseTimer / crown.prepDurationMs);
+        // 1. Mancha calcinada central en crecimiento con resplandor ígneo
+        const scorchRadius = 24 + prog * 24;
+        const scorchGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, scorchRadius);
+        scorchGrad.addColorStop(0, 'rgba(40, 15, 8, 0.88)');
+        scorchGrad.addColorStop(0.65, 'rgba(30, 10, 5, 0.5)');
+        scorchGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = scorchGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, scorchRadius, scorchRadius * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Grietas incandescentes que se ramifican por las losas del suelo
+        crown.crackAngles.forEach((ang, idx) => {
+          const crackLen = (28 + prog * 45) * (0.85 + (idx % 3) * 0.15);
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.9)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          const midX = Math.cos(ang + 0.12) * (crackLen * 0.5);
+          const midY = Math.sin(ang + 0.12) * (crackLen * 0.5) * squish;
+          const endX = Math.cos(ang - 0.08) * crackLen;
+          const endY = Math.sin(ang - 0.08) * crackLen * squish;
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+
+          // Filamento central de oro blanco al rojo vivo
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 1.0;
+          ctx.stroke();
+        });
+
+        // 3. Delimitación sutil del radio final de la corona (telegrafo táctico)
+        const boundaryAlpha = 0.22 + 0.18 * Math.sin(crown.phaseTimer * 0.02);
+        ctx.strokeStyle = `rgba(249, 115, 22, ${boundaryAlpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, crown.maxRadius, crown.maxRadius * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (crown.phase === 'expansion') {
+        const r = crown.currentRadius;
+
+        // 1. Disco calcinado en expansión
+        const discGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, r);
+        discGrad.addColorStop(0, 'rgba(67, 20, 7, 0.88)');
+        discGrad.addColorStop(0.75, 'rgba(124, 45, 18, 0.55)');
+        discGrad.addColorStop(1, 'rgba(234, 88, 12, 0.12)');
+        ctx.fillStyle = discGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Grietas de magma que siguen la onda expansiva
+        crown.crackAngles.forEach((ang) => {
+          const len = r * 0.92;
+          ctx.strokeStyle = '#f97316';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(ang) * len, Math.sin(ang) * len * squish);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 1.0;
+          ctx.stroke();
+        });
+
+        // 3. Frente ígneo en el suelo
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.95)';
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 2.0;
+        ctx.stroke();
+      } else if (crown.phase === 'ring') {
+        const r = crown.maxRadius;
+
+        // 1. Interior calcinado permanente con brillo de brasas
+        const ashGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, r);
+        ashGrad.addColorStop(0, 'rgba(20, 5, 4, 0.92)');
+        ashGrad.addColorStop(0.68, 'rgba(38, 9, 5, 0.8)');
+        ashGrad.addColorStop(0.92, 'rgba(120, 25, 10, 0.45)');
+        ashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = ashGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Anillo de brasas incandescentes donde brotan las llamas
+        const pulse = Math.sin(crown.phaseTimer * 0.007) * 0.15;
+        ctx.strokeStyle = `rgba(234, 88, 12, ${0.72 + pulse})`;
+        ctx.lineWidth = 5.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(254, 240, 138, ${0.85 + pulse})`;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        // 3. Grietas de magma irradiando en el suelo
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+        ctx.lineWidth = 1.8;
+        crown.crackAngles.forEach((ang) => {
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ang) * (r * 0.15), Math.sin(ang) * (r * 0.15) * squish);
+          ctx.lineTo(Math.cos(ang) * (r * 0.88), Math.sin(ang) * (r * 0.88) * squish);
+          ctx.stroke();
+        });
+
+        // 4. Glifos rúnicos incrustados en la piedra
+        for (let g = 0; g < 6; g++) {
+          const gAng = (g / 6) * Math.PI * 2 + crown.phaseTimer * 0.0003;
+          const gx = Math.cos(gAng) * (r * 0.78);
+          const gy = Math.sin(gAng) * (r * 0.78) * squish;
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(gx, gy, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (crown.phase === 'detonation') {
+        const r = crown.maxRadius;
+        if (crown.phaseTimer < 180) {
+          // Energía del suelo contrayéndose y sobrecalentándose
+          const curR = crown.currentRadius;
+          const brightGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, Math.max(10, curR));
+          brightGrad.addColorStop(0, '#ffffff');
+          brightGrad.addColorStop(0.4, '#fef08a');
+          brightGrad.addColorStop(0.85, '#f97316');
+          brightGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+          ctx.fillStyle = brightGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, curR, curR * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Cráter calcinado post-detonación desvaneciéndose
+          const fadeProg = (crown.phaseTimer - 180) / Math.max(1, crown.detonationDurationMs - 180);
+          const alpha = Math.max(0, 1 - fadeProg);
+          ctx.globalAlpha = alpha;
+
+          const blastR = r * 1.25;
+          const craterGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, blastR);
+          craterGrad.addColorStop(0, 'rgba(15, 4, 3, 0.92)');
+          craterGrad.addColorStop(0.55, 'rgba(67, 20, 7, 0.65)');
+          craterGrad.addColorStop(0.88, 'rgba(234, 88, 12, 0.35)');
+          craterGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = craterGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, blastR, blastR * squish, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Anillo de choque residual en el suelo
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
+          ctx.lineWidth = 3.5 * alpha;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, blastR * 0.95, blastR * 0.95 * squish, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
 
       ctx.restore();
     });
@@ -1139,6 +1328,181 @@ export class IsometricRenderer {
     }
 
     ctx.restore();
+  }
+
+  // Dibuja las llamas vivas en 2.5D, vórtice de implosión y la detonación estelar de la Corona Infernal
+  private static drawInfernalCrownFlames(ctx: CanvasRenderingContext2D, crowns: InfernalCrownEntity[]) {
+    if (!crowns || crowns.length === 0) return;
+
+    const squish = 0.58;
+
+    crowns.forEach((crown) => {
+      ctx.save();
+
+      if (crown.phase === 'preparation') {
+        const prog = Math.min(1, crown.phaseTimer / crown.prepDurationMs);
+        // Pequeño orbe de ignición que vibra y crece en el centro
+        const coreR = 5 + prog * 9 + Math.sin(crown.phaseTimer * 0.04) * 2;
+        const coreGrad = ctx.createRadialGradient(crown.x, crown.y - 8, 2, crown.x, crown.y - 8, coreR * 1.8);
+        coreGrad.addColorStop(0, '#ffffff');
+        coreGrad.addColorStop(0.3, '#fef08a');
+        coreGrad.addColorStop(0.7, '#f97316');
+        coreGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(crown.x, crown.y - 8, coreR * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (crown.phase === 'expansion') {
+        const r = crown.currentRadius;
+        const count = 20;
+
+        // Pared de fuego expansiva proyectada en 2.5D
+        for (let i = 0; i < count; i++) {
+          const ang = (i / count) * Math.PI * 2 + crown.phaseTimer * 0.002;
+          const bx = crown.x + Math.cos(ang) * r;
+          const by = crown.y + Math.sin(ang) * r * squish;
+          const h = 20 + Math.sin(crown.phaseTimer * 0.015 + i * 1.7) * 8;
+          const w = 7;
+
+          // Lengua de fuego viva
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.85)';
+          ctx.beginPath();
+          ctx.moveTo(bx - w, by);
+          ctx.quadraticCurveTo(bx - w * 0.6, by - h * 0.6, bx, by - h);
+          ctx.quadraticCurveTo(bx + w * 0.6, by - h * 0.6, bx + w, by);
+          ctx.closePath();
+          ctx.fill();
+
+          // Núcleo brillante
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.moveTo(bx - w * 0.4, by);
+          ctx.quadraticCurveTo(bx, by - h * 0.5, bx, by - h * 0.7);
+          ctx.quadraticCurveTo(bx, by - h * 0.5, bx + w * 0.4, by);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else if (crown.phase === 'ring') {
+        // CORONA DE LLAMAS VIVAS EN 2.5D (Fase C)
+        const r = crown.maxRadius;
+        const numFlames = 28;
+
+        for (let i = 0; i < numFlames; i++) {
+          const ang = (i / numFlames) * Math.PI * 2 + crown.phaseTimer * 0.0004;
+          const bx = crown.x + Math.cos(ang) * r;
+          const by = crown.y + Math.sin(ang) * r * squish;
+
+          // Altura y curvatura de la llama viva
+          const wave = Math.sin(crown.phaseTimer * 0.009 + i * 1.4);
+          const wave2 = Math.cos(crown.phaseTimer * 0.018 + i * 2.1);
+          const h = 28 + wave * 14 + wave2 * 6;
+          const w = 9 + Math.sin(crown.phaseTimer * 0.01 + i) * 2;
+          const tipX = bx + wave * 5;
+          const tipY = by - h;
+
+          // 1. Capa de resplandor exterior rojo fuego
+          ctx.fillStyle = 'rgba(234, 88, 12, 0.6)';
+          ctx.beginPath();
+          ctx.moveTo(bx - w * 1.3, by);
+          ctx.quadraticCurveTo(bx - w, by - h * 0.55, tipX, tipY - 4);
+          ctx.quadraticCurveTo(bx + w, by - h * 0.55, bx + w * 1.3, by);
+          ctx.closePath();
+          ctx.fill();
+
+          // 2. Cuerpo de llama naranja vivo
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.9)';
+          ctx.beginPath();
+          ctx.moveTo(bx - w, by);
+          ctx.quadraticCurveTo(bx - w * 0.7, by - h * 0.6, tipX, tipY);
+          ctx.quadraticCurveTo(bx + w * 0.7, by - h * 0.6, bx + w, by);
+          ctx.closePath();
+          ctx.fill();
+
+          // 3. Núcleo incandescente amarillo-blanco
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.moveTo(bx - w * 0.45, by);
+          ctx.quadraticCurveTo(bx - w * 0.3, by - h * 0.5, tipX * 0.8 + bx * 0.2, tipY + h * 0.35);
+          ctx.quadraticCurveTo(bx + w * 0.3, by - h * 0.5, bx + w * 0.45, by);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Cinta conectora de la corona (arco de energía ígnea ondulante entre las puntas)
+        ctx.strokeStyle = 'rgba(254, 240, 138, 0.7)';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (let i = 0; i <= numFlames; i++) {
+          const ang = (i / numFlames) * Math.PI * 2 + crown.phaseTimer * 0.0004;
+          const bx = crown.x + Math.cos(ang) * r;
+          const by = crown.y + Math.sin(ang) * r * squish;
+          const h = 24 + Math.sin(crown.phaseTimer * 0.009 + i * 1.4) * 10;
+          const px = bx;
+          const py = by - h * 0.6;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      } else if (crown.phase === 'detonation') {
+        if (crown.phaseTimer < 180) {
+          // Vórtice colapsando rápidamente hacia el centro (Fase D: Convergencia)
+          const collapseProg = crown.phaseTimer / 180;
+          const curR = crown.currentRadius;
+          const count = 16;
+          for (let i = 0; i < count; i++) {
+            const ang = (i / count) * Math.PI * 2 + collapseProg * Math.PI;
+            const bx = crown.x + Math.cos(ang) * curR;
+            const by = crown.y + Math.sin(ang) * curR * squish;
+            const tipX = crown.x + Math.cos(ang) * (curR * 0.3);
+            const tipY = crown.y + Math.sin(ang) * (curR * 0.3) * squish - 12;
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3.5 * (1 - collapseProg * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(tipX, tipY);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#f97316';
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+          }
+        } else {
+          // ¡GRAN DETONACIÓN FINAL! (Fase D: Estallido)
+          const prog = (crown.phaseTimer - 180) / Math.max(1, crown.detonationDurationMs - 180);
+          const alpha = Math.max(0, 1 - prog);
+          ctx.globalAlpha = alpha;
+
+          const blastR = crown.maxRadius * (0.4 + prog * 0.95);
+
+          // Resplandor cegador con gradiente radial masivo
+          const blastGrad = ctx.createRadialGradient(crown.x, crown.y - 15, 5, crown.x, crown.y - 15, blastR);
+          blastGrad.addColorStop(0, '#ffffff');
+          blastGrad.addColorStop(0.2, '#fef08a');
+          blastGrad.addColorStop(0.55, '#f97316');
+          blastGrad.addColorStop(0.85, '#dc2626');
+          blastGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+          ctx.fillStyle = blastGrad;
+          ctx.beginPath();
+          ctx.ellipse(crown.x, crown.y - 15, blastR, blastR * squish * 1.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Destellos en estrella de 8 puntas
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3 * alpha;
+          for (let s = 0; s < 8; s++) {
+            const sAng = (s / 8) * Math.PI * 2;
+            const sLen = blastR * 1.25;
+            ctx.beginPath();
+            ctx.moveTo(crown.x, crown.y - 15);
+            ctx.lineTo(crown.x + Math.cos(sAng) * sLen, crown.y - 15 + Math.sin(sAng) * sLen * squish);
+            ctx.stroke();
+          }
+        }
+      }
+
+      ctx.restore();
+    });
   }
 
   // BARRA DE SALUD SUPERIOR DEL JEFE (HUD)

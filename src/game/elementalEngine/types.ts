@@ -265,6 +265,30 @@ export interface OverloadCoreEntity {
   damage: number;
 }
 
+export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';
+
+export interface InfernalCrownEntity {
+  id: string;
+  x: number;
+  y: number;
+  currentRadius: number;
+  maxRadius: number;
+  phase: InfernalCrownPhase;
+  phaseTimer: number;
+  prepDurationMs: number;
+  expansionDurationMs: number;
+  ringDurationMs: number;
+  detonationDurationMs: number;
+  periodicDamage: number;
+  periodicIntervalMs: number;
+  detonationDamage: number;
+  knockback: number;
+  lastDamagePerEnemy: Record<string, number>;
+  hasDetonated: boolean;
+  crackAngles: number[];
+  isCharged?: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

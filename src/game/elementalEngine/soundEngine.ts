@@ -754,6 +754,97 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.05);
   }
+
+  // --- CORONA INFERNAL (FUEGO + FUEGO) ---
+
+  // 1. Fase A: Ignición y acumulación de energía ígnea
+  public playInfernalCrownIgnition() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(320, now + 0.35);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.25);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(350, now);
+    filter.frequency.linearRampToValueAtTime(800, now + 0.35);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.36);
+  }
+
+  // 2. Fase B: Expansión violenta de la onda de fuego
+  public playInfernalCrownExpand() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.exponentialRampToValueAtTime(85, now + 0.38);
+
+    gain.gain.setValueAtTime(0.32, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  }
+
+  // 3. Fase D: Detonación Final Contundente (Impacto con sub-graves masivos)
+  public playInfernalCrownDetonation() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bajo sísmico profundo
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(95, now);
+    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.55);
+
+    subGain.gain.setValueAtTime(0.48, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.55);
+
+    // Onda de choque explosiva
+    const blastOsc = this.ctx.createOscillator();
+    const blastGain = this.ctx.createGain();
+    blastOsc.type = 'triangle';
+    blastOsc.frequency.setValueAtTime(160, now);
+    blastOsc.frequency.exponentialRampToValueAtTime(45, now + 0.42);
+
+    blastGain.gain.setValueAtTime(0.38, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+    blastOsc.connect(blastGain);
+    blastGain.connect(this.ctx.destination);
+    blastOsc.start(now);
+    blastOsc.stop(now + 0.42);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();
