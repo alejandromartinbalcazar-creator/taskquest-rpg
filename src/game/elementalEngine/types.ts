@@ -211,6 +211,8 @@ export interface LightningBoltEffect {
   chainLines: Array<{ x1: number; y1: number; x2: number; y2: number }>;
   life: number;
   maxLife: number;
+  isCelestial?: boolean;
+  widthMultiplier?: number;
 }
 
 export type EnemyArchetype = 'chaser' | 'ranged' | 'brute' | 'boss';
@@ -287,6 +289,31 @@ export interface InfernalCrownEntity {
   hasDetonated: boolean;
   crackAngles: number[];
   isCharged?: boolean;
+}
+
+export interface VoltaicJump {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  targetEnemyId: string;
+  damage: number;
+  isMaxCharge: boolean;
+  delayMs: number;
+  struck: boolean;
+  isFinishRemate?: boolean;
+}
+
+export interface VoltaicChainEntity {
+  id: string;
+  sourceX: number;
+  sourceY: number;
+  chargeRatio: number;
+  isMaxCharge: boolean;
+  jumps: VoltaicJump[];
+  elapsedMs: number;
+  finished: boolean;
+  visitedEnemyIds: string[];
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas

@@ -11,6 +11,8 @@ import {
   LightningBoltEffect,
   ChanneledStreamState,
   InfernalCrownEntity,
+  VoltaicChainEntity,
+  VoltaicJump,
 } from './types';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
@@ -155,6 +157,67 @@ function generateLightningBolt(
     chainLines: [],
     life: 7,
     maxLife: 7,
+  };
+}
+
+// Relámpago celestial masivo que desciende desde lo alto (Sobrecarga Voltaica a Carga Máxima)
+function generateCelestialLightningBolt(targetX: number, targetY: number): LightningBoltEffect {
+  const startX = targetX + (Math.random() - 0.5) * 20;
+  const startY = targetY - 320;
+  const dx = targetX - startX;
+  const dy = targetY - startY;
+  const dist = Math.hypot(dx, dy);
+  const segments = 14;
+
+  const points: Array<{ x: number; y: number }> = [{ x: startX, y: startY }];
+  const branches: Array<Array<{ x: number; y: number }>> = [];
+
+  const nx = dist > 0 ? -dy / dist : 0;
+  const ny = dist > 0 ? dx / dist : 1;
+
+  for (let i = 1; i < segments; i++) {
+    const t = i / segments;
+    const bx = startX + dx * t;
+    const by = startY + dy * t;
+    const envelope = Math.sin(t * Math.PI);
+    const jitter = (Math.random() - 0.5) * 48 * envelope;
+    const px = bx + nx * jitter;
+    const py = by + ny * jitter;
+    points.push({ x: px, y: py });
+
+    if (i > 1 && i < segments - 1 && Math.random() < 0.6 && branches.length < 5) {
+      const branchPoints: Array<{ x: number; y: number }> = [{ x: px, y: py }];
+      const branchLength = (35 + Math.random() * 50) * envelope;
+      const branchAngle = Math.PI / 2 + (Math.random() > 0.5 ? 0.6 : -0.6);
+      const branchSteps = 3;
+      let currBx = px;
+      let currBy = py;
+      for (let b = 1; b <= branchSteps; b++) {
+        currBx += Math.cos(branchAngle) * (branchLength / branchSteps) + (Math.random() - 0.5) * 12;
+        currBy += Math.sin(branchAngle) * (branchLength / branchSteps) + (Math.random() - 0.5) * 12;
+        branchPoints.push({ x: currBx, y: currBy });
+      }
+      branches.push(branchPoints);
+    }
+  }
+
+  points.push({ x: targetX, y: targetY });
+
+  return {
+    id: `celestial-${Date.now()}-${Math.random()}`,
+    startX,
+    startY,
+    targetX,
+    targetY,
+    color: '#ffffff',
+    glowColor: '#38bdf8',
+    points,
+    branches,
+    chainLines: [],
+    life: 12,
+    maxLife: 12,
+    isCelestial: true,
+    widthMultiplier: 2.0,
   };
 }
 
@@ -364,6 +427,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       isCharging: false,
       chargeStartTime: 0,
       chargeRatio: 0,
+      chargeType: 'arcane' as string,
       chargeSoundPlayed: false,
       channeledStream: {
         active: false,
@@ -392,6 +456,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     projectiles: [] as Projectile[],
     lightningBolts: [] as LightningBoltEffect[],
     infernalCrowns: [] as InfernalCrownEntity[],
+    voltaicChains: [] as VoltaicChainEntity[],
+    lastVoltaicHumTime: 0,
     particles: [] as Particle[],
     floatingTexts: [] as FloatingText[],
     screenShake: 0,
@@ -546,6 +612,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.camera.y = 600;
       g.projectiles = [];
       g.infernalCrowns = [];
+      g.voltaicChains = [];
 
       const nextRoom = DUNGEON_ROOMS[nextIndex];
       g.terrainManager.setupRoomTerrain(nextRoom.roomType);
@@ -626,7 +693,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Lanzamiento de Hechizo (con soporte para variante Cargada)
   const handleAttack = useCallback(
-    (isCharged: boolean = false) => {
+    (isCharged: boolean = false, chargeRatio?: number) => {
       if (isDefeated || isVictorious) return;
       const now = Date.now();
       const g = gameStateRef.current;
@@ -640,7 +707,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // Reproducir sonido característico de cada hechizo
       if (recipe.id === 'basic_spark') elementalSound.playBasicSpark();
       else if (recipe.id === 'fire_shot') elementalSound.playFireShot();
-      else if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') elementalSound.playLightningBolt();
+      else if (recipe.id === 'lightning_bolt') elementalSound.playLightningBolt();
       else if (recipe.id === 'ice_shard' || recipe.id === 'ice_lance') elementalSound.playIceShard();
       else if (recipe.id === 'earth_toss' || recipe.id === 'earth_megalith') elementalSound.playEarthToss();
       else if (recipe.id === 'thermal_shock') elementalSound.playThermalShock();
@@ -693,10 +760,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       // COMPORTAMIENTOS ESPECÍFICOS Y FÍSICOS DE LAS HABILIDADES:
 
-      // 0. RAYO (DESCARGA ELÉCTRICA INSTANTÁNEA, RAMIFICADA Y EN CADENA)
-      if (recipe.id === 'lightning_bolt' || recipe.id === 'lightning_storm') {
-        const isStorm = recipe.id === 'lightning_storm';
-        g.screenShake = (isStorm ? 9 : 5) * (isCharged ? 1.5 : 1.0);
+      // 0. RAYO (DESCARGA ELÉCTRICA BÁSICA)
+      if (recipe.id === 'lightning_bolt') {
+        g.screenShake = 5 * (isCharged ? 1.5 : 1.0);
         elementalSound.playLightningBolt();
 
         const startX = wizard.x + Math.cos(aimAngle) * 22;
@@ -728,12 +794,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           }
         }
 
-        const baseDmg = (recipe.damage + statBonus) * (isStorm ? 1.35 : 1.0) * chargeMultiplier;
+        const baseDmg = (recipe.damage + statBonus) * chargeMultiplier;
 
         if (struckEnemy) {
           struckEnemy.hp -= baseDmg;
           struckEnemy.hitFlash = 12;
-          struckEnemy.stunnedTimer = isCharged ? 50 : isStorm ? 45 : 30;
+          struckEnemy.stunnedTimer = isCharged ? 50 : 30;
           g.enemyManager.applyStatus(struckEnemy, 'shocked', 150);
 
           const knock = (recipe.knockback || 1.5) * (isCharged ? 5.0 : 3.5);
@@ -768,7 +834,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
 
-          const maxChains = isCharged ? 5 : isStorm ? 4 : 2;
+          const maxChains = isCharged ? 3 : 1;
           let chainsCount = 0;
           for (const other of g.enemyManager.enemies) {
             if (other.id === struckEnemy.id) continue;
@@ -883,6 +949,152 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
 
         g.lightningBolts.push(bolt);
+      }
+      // 0.1 SOBRECARGA VOLTAICA (RAYO + RAYO): Acumulación eléctrica, descarga principal y rayos encadenados secuenciales
+      else if (recipe.id === 'lightning_storm') {
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.98);
+        const effectiveRatio = Math.max(0.18, Math.min(1.0, chargeRatio !== undefined ? chargeRatio : (isCharged ? 1.0 : 0.25)));
+
+        const staffX = wizard.x + Math.cos(aimAngle) * 22;
+        const staffY = wizard.y + Math.sin(aimAngle) * 22;
+
+        // Seleccionar enemigo principal mediante regla de proximidad y alcance de Rayo (~420px)
+        let primaryTarget: GameEnemy | null = null;
+        let minTargetDist = 420;
+        for (const enemy of g.enemyManager.enemies) {
+          if (enemy.hp <= 0) continue;
+          const dist = Math.hypot(enemy.x - wizard.x, enemy.y - wizard.y);
+          if (dist < minTargetDist) {
+            minTargetDist = dist;
+            primaryTarget = enemy;
+          }
+        }
+
+        // Si NO hay enemigos válidos al liberar: descarga al aire en dirección de apuntado (sin daño fantasma)
+        if (!primaryTarget) {
+          elementalSound.playVoltaicDischarge(false);
+          const fizzleEndX = wizard.x + Math.cos(aimAngle) * 320;
+          const fizzleEndY = wizard.y + Math.sin(aimAngle) * 320;
+          const fizzleBolt = generateLightningBolt(staffX, staffY, fizzleEndX, fizzleEndY, '#38bdf8', '#ffffff');
+          fizzleBolt.life = 6;
+          fizzleBolt.maxLife = 6;
+          g.lightningBolts.push(fizzleBolt);
+
+          for (let s = 0; s < 8; s++) {
+            const spAng = Math.random() * Math.PI * 2;
+            g.particles.push({
+              id: `fizzle-sp-${now}-${s}`,
+              x: fizzleEndX,
+              y: fizzleEndY,
+              vx: Math.cos(spAng) * 3,
+              vy: Math.sin(spAng) * 3,
+              radius: 1.5,
+              color: '#38bdf8',
+              alpha: 1,
+              life: 14,
+            });
+          }
+
+          setElementQueue([]);
+          return;
+        }
+
+        // Si HAY enemigo: liberar descarga con nivel de carga
+        elementalSound.playVoltaicDischarge(isMaxCharge);
+        g.screenShake = isMaxCharge ? 14 : 7;
+
+        // Daño principal escalado con carga
+        const baseDmg = recipe.damage + statBonus;
+        const primaryDmg = Math.round(baseDmg * (0.8 + 0.6 * effectiveRatio) * (isMaxCharge ? 1.85 : 1.0));
+
+        const visited = new Set<string>();
+        visited.add(primaryTarget.id);
+
+        const jumps: VoltaicJump[] = [];
+        const jumpInterval = 55; // 55 ms entre saltos para lectura clara
+
+        // Salto 0: Desde el mago hacia el primer objetivo
+        jumps.push({
+          fromX: staffX,
+          fromY: staffY,
+          toX: primaryTarget.x,
+          toY: primaryTarget.y,
+          targetEnemyId: primaryTarget.id,
+          damage: primaryDmg,
+          isMaxCharge,
+          delayMs: 0,
+          struck: false,
+        });
+
+        // Saltos subsecuentes entre enemigos cercanos (distancia máxima de salto ~240px)
+        const maxJumpsCount = isMaxCharge ? 7 : Math.round(2 + effectiveRatio * 2.5);
+        const maxJumpDist = 240;
+
+        let currentSource = primaryTarget;
+        let currentDmg = primaryDmg;
+
+        for (let j = 1; j < maxJumpsCount; j++) {
+          let nextTarget: GameEnemy | null = null;
+          let nextDist = maxJumpDist;
+
+          for (const cand of g.enemyManager.enemies) {
+            if (cand.hp <= 0 || visited.has(cand.id)) continue;
+            const d = Math.hypot(cand.x - currentSource.x, cand.y - currentSource.y);
+            if (d < nextDist) {
+              nextDist = d;
+              nextTarget = cand;
+            }
+          }
+
+          if (!nextTarget) break;
+
+          visited.add(nextTarget.id);
+          currentDmg = Math.round(currentDmg * 0.78);
+
+          jumps.push({
+            fromX: currentSource.x,
+            fromY: currentSource.y,
+            toX: nextTarget.x,
+            toY: nextTarget.y,
+            targetEnemyId: nextTarget.id,
+            damage: Math.max(14, currentDmg),
+            isMaxCharge,
+            delayMs: j * jumpInterval,
+            struck: false,
+            isFinishRemate: false,
+          });
+
+          currentSource = nextTarget;
+        }
+
+        // Marcar último salto si fue a Carga Máxima para el remate
+        if (isMaxCharge && jumps.length > 0) {
+          jumps[jumps.length - 1].isFinishRemate = true;
+        }
+
+        g.voltaicChains.push({
+          id: `volt-chain-${now}-${Math.random()}`,
+          sourceX: staffX,
+          sourceY: staffY,
+          chargeRatio: effectiveRatio,
+          isMaxCharge,
+          jumps,
+          elapsedMs: 0,
+          finished: false,
+          visitedEnemyIds: Array.from(visited),
+        });
+
+        g.floatingTexts.push({
+          id: `volt-cast-${now}`,
+          x: wizard.x,
+          y: wizard.y - 25,
+          text: isMaxCharge ? '⚡⚡ ¡SOBRECARGA VOLTAICA MÁXIMA!' : '⚡⚡ ¡SOBRECARGA VOLTAICA!',
+          color: isMaxCharge ? '#ffffff' : '#38bdf8',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.3,
+          life: 38,
+        });
       }
       // 1. HIELO + TIERRA (PRISIÓN DE PERMAFROST: ESTACAS TÁCTICAS + CONGELACIÓN)
       else if (recipe.id === 'permafrost_prison') {
@@ -1202,10 +1414,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
+    wizard.chargeType = activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+      ? 'lightning'
+      : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane');
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
-    elementalSound.playChargeStart();
-  }, [activeRecipe.id, isDefeated, isVictorious, startChanneledAttack]);
+    if (activeRecipe.id !== 'lightning_storm') {
+      elementalSound.playChargeStart();
+    }
+  }, [activeRecipe.elements, activeRecipe.id, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
     const wizard = gameStateRef.current.wizard;
@@ -1215,11 +1432,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const wasCharged = wizard.chargeRatio >= 1.0;
+    const finalRatio = wizard.chargeRatio;
     wizard.isCharging = false;
     wizard.chargeRatio = 0;
     setIsChargingUi(false);
     setChargeVisualRatio(0);
-    handleAttack(wasCharged);
+    handleAttack(wasCharged, finalRatio);
   }, [handleAttack, stopChanneledAttack]);
 
   // Manejo de puntería manual y arrastre táctil en el botón de Ataque
@@ -1502,11 +1720,58 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       // Actualizar Carga Mágica del Mago
       if (wizard.isCharging) {
+        const isVoltaic = activeRecipe.id === 'lightning_storm';
+        const maxChargeTime = isVoltaic ? 1800 : 380;
         const elapsed = Date.now() - wizard.chargeStartTime;
-        wizard.chargeRatio = Math.min(1.0, elapsed / 380);
+        wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
+
+        // Zumbido eléctrico progresivo y partículas hacia el báculo para Sobrecarga Voltaica
+        if (isVoltaic) {
+          if (frameNow - (g.lastVoltaicHumTime || 0) >= 75) {
+            g.lastVoltaicHumTime = frameNow;
+            elementalSound.playVoltaicChargeHum(wizard.chargeRatio);
+          }
+
+          if (Math.random() < 0.4 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 26;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 10 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `volt-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.0 + wizard.chargeRatio * 2.2),
+              vy: -Math.sin(pAng) * (1.2 + wizard.chargeRatio * 1.3),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#38bdf8' : '#ffffff',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
+
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
-          elementalSound.playChargeReady();
+          if (isVoltaic) {
+            elementalSound.playVoltaicMaxChargeReady();
+            g.screenShake = 6;
+            g.particles.push({
+              id: `volt-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 12,
+              color: '#38bdf8',
+              alpha: 1,
+              life: 15,
+              maxLife: 15,
+              type: 'ring',
+            });
+          } else {
+            elementalSound.playChargeReady();
+          }
         }
         setChargeVisualRatio(wizard.chargeRatio);
       }
@@ -2345,6 +2610,161 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.3 Actualizar Sobrecarga Voltaica (Rayo + Rayo: Rayos Encadenados Secuenciales y Remate)
+      for (let cIdx = g.voltaicChains.length - 1; cIdx >= 0; cIdx--) {
+        const chain = g.voltaicChains[cIdx];
+        chain.elapsedMs += dt;
+
+        let allStruck = true;
+
+        for (let jIdx = 0; jIdx < chain.jumps.length; jIdx++) {
+          const jump = chain.jumps[jIdx];
+          if (jump.struck) continue;
+
+          if (chain.elapsedMs >= jump.delayMs) {
+            jump.struck = true;
+
+            const enemy = g.enemyManager.enemies.find((e) => e.id === jump.targetEnemyId);
+            const targetX = enemy ? enemy.x : jump.toX;
+            const targetY = enemy ? enemy.y : jump.toY;
+            const isPrimary = jIdx === 0;
+
+            // 1. Generación de rayos y efectos visuales
+            if (isPrimary && jump.isMaxCharge) {
+              // Relámpago celestial colosal
+              const celestialBolt = generateCelestialLightningBolt(targetX, targetY);
+              g.lightningBolts.push(celestialBolt);
+
+              // Rayo directo desde el báculo
+              const primaryBolt = generateLightningBolt(jump.fromX, jump.fromY, targetX, targetY, '#ffffff', '#38bdf8');
+              primaryBolt.life = 10;
+              primaryBolt.maxLife = 10;
+              g.lightningBolts.push(primaryBolt);
+
+              elementalSound.playVoltaicThunderFinish();
+              g.screenShake = Math.max(g.screenShake, 14);
+
+              // Anillo de choque eléctrico
+              g.particles.push({
+                id: `volt-ring-${frameNow}`,
+                x: targetX,
+                y: targetY,
+                vx: 0,
+                vy: 0,
+                radius: 14,
+                color: '#38bdf8',
+                alpha: 1,
+                life: 16,
+                maxLife: 16,
+                type: 'ring',
+              });
+            } else {
+              // Salto encadenado o primario normal
+              const jumpBolt = generateLightningBolt(
+                jump.fromX,
+                jump.fromY,
+                targetX,
+                targetY,
+                jump.isMaxCharge ? '#38bdf8' : '#facc15',
+                jump.isMaxCharge ? '#ffffff' : '#67e8f9'
+              );
+              jumpBolt.life = 8;
+              jumpBolt.maxLife = 8;
+              g.lightningBolts.push(jumpBolt);
+
+              elementalSound.playVoltaicChainZap(jIdx);
+            }
+
+            // 2. Aplicar Daño y Efectos al Objetivo si continúa vivo
+            if (enemy && enemy.hp > 0) {
+              enemy.hp -= jump.damage;
+              enemy.hitFlash = 12;
+              enemy.stunnedTimer = jump.isMaxCharge ? 45 : 30;
+              g.enemyManager.applyStatus(enemy, 'shocked', 160);
+
+              const kAng = Math.atan2(targetY - jump.fromY, targetX - jump.fromX);
+              const knockAmt = jump.isMaxCharge ? 4.5 : 2.5;
+              enemy.x += Math.cos(kAng) * knockAmt;
+              enemy.y += Math.sin(kAng) * knockAmt;
+
+              g.floatingTexts.push({
+                id: `volt-txt-${frameNow}-${jIdx}`,
+                x: enemy.x + (Math.random() - 0.5) * 12,
+                y: enemy.y - 18,
+                text: isPrimary && jump.isMaxCharge ? `⚡ ¡TRUENO MAX! -${jump.damage}` : `⚡ -${jump.damage}`,
+                color: jump.isMaxCharge ? '#ffffff' : '#38bdf8',
+                fontSize: isPrimary && jump.isMaxCharge ? 14 : 12,
+                opacity: 1,
+                vy: -1.3,
+                life: 35,
+              });
+
+              const sparkCount = isPrimary && jump.isMaxCharge ? 18 : 8;
+              for (let s = 0; s < sparkCount; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                const spd = 2 + Math.random() * (jump.isMaxCharge ? 5 : 3);
+                g.particles.push({
+                  id: `volt-spark-${frameNow}-${jIdx}-${s}`,
+                  x: targetX,
+                  y: targetY,
+                  vx: Math.cos(sAng) * spd,
+                  vy: Math.sin(sAng) * spd,
+                  radius: 1.5 + Math.random() * 2,
+                  color: s % 2 === 0 ? '#ffffff' : '#38bdf8',
+                  alpha: 1,
+                  life: 16,
+                });
+              }
+            }
+
+            // 3. Remate de Carga Máxima en el último salto alcanzado
+            if (jump.isFinishRemate) {
+              g.screenShake = Math.max(g.screenShake, 8);
+              elementalSound.playVoltaicThunderFinish();
+
+              for (let fs = 0; fs < 14; fs++) {
+                const fsAng = (fs / 14) * Math.PI * 2;
+                const fsSpeed = 3.5 + Math.random() * 3.5;
+                g.particles.push({
+                  id: `volt-finish-${frameNow}-${fs}`,
+                  x: targetX,
+                  y: targetY,
+                  vx: Math.cos(fsAng) * fsSpeed,
+                  vy: Math.sin(fsAng) * fsSpeed,
+                  radius: 2.5 + Math.random() * 2,
+                  color: '#facc15',
+                  alpha: 1,
+                  life: 20,
+                });
+              }
+
+              g.floatingTexts.push({
+                id: `volt-remate-${frameNow}`,
+                x: targetX,
+                y: targetY - 30,
+                text: '⚡ ¡REMATE VOLTAICO!',
+                color: '#38bdf8',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.5,
+                life: 35,
+              });
+            }
+          } else {
+            allStruck = false;
+          }
+        }
+
+        const lastJumpDelay = chain.jumps.length > 0 ? chain.jumps[chain.jumps.length - 1].delayMs : 0;
+        if (allStruck && chain.elapsedMs >= lastJumpDelay + 120) {
+          chain.finished = true;
+        }
+
+        if (chain.finished) {
+          g.voltaicChains.splice(cIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -2667,6 +3087,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? 'CANALIZAR'
                 : activeRecipe.id === 'fire_inferno'
                 ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
+                : activeRecipe.id === 'lightning_storm'
+                ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA! ⚡' : isChargingUi ? 'CARGANDO ⚡' : 'CARGAR ⚡')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -2674,7 +3096,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             {isChargingUi && chargeVisualRatio < 1.0 && (
               <div className="w-12 bg-black/50 h-1.5 rounded-full mt-1 overflow-hidden">
                 <div
-                  className="h-full bg-amber-400 transition-all duration-75"
+                  className={`h-full transition-all duration-75 ${
+                    activeRecipe.id === 'lightning_storm'
+                      ? 'bg-cyan-400 shadow-[0_0_8px_#38bdf8]'
+                      : 'bg-amber-400'
+                  }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
                 />
               </div>

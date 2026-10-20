@@ -845,6 +845,154 @@ class ElementalSoundEngine {
     blastOsc.start(now);
     blastOsc.stop(now + 0.42);
   }
+
+  // --- SOBRECARGA VOLTAICA (RAYO + RAYO) ---
+
+  // 1. Zumbido progresivo de acumulación eléctrica
+  public playVoltaicChargeHum(ratio: number) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    const startFreq = 120 + ratio * 340;
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(startFreq + 50, now + 0.08);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(400 + ratio * 850, now);
+    filter.Q.setValueAtTime(3.0, now);
+
+    const vol = 0.04 + ratio * 0.12;
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
+  // 2. Resonancia y chispazo de Carga Máxima alcanzada
+  public playVoltaicMaxChargeReady() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Tono armónico agudo de sobrecarga
+    const osc1 = this.ctx.createOscillator();
+    const gain1 = this.ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.exponentialRampToValueAtTime(1760, now + 0.18);
+    gain1.gain.setValueAtTime(0.24, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc1.connect(gain1);
+    gain1.connect(this.ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.22);
+
+    // Chispazo de arco estático
+    const osc2 = this.ctx.createOscillator();
+    const gain2 = this.ctx.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(1250, now);
+    osc2.frequency.linearRampToValueAtTime(380, now + 0.12);
+    gain2.gain.setValueAtTime(0.18, now);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc2.connect(gain2);
+    gain2.connect(this.ctx.destination);
+    osc2.start(now);
+    osc2.stop(now + 0.12);
+  }
+
+  // 3. Liberación de la descarga principal
+  public playVoltaicDischarge(isMaxCharge: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(isMaxCharge ? 1250 : 850, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + (isMaxCharge ? 0.28 : 0.18));
+
+    gain.gain.setValueAtTime(isMaxCharge ? 0.38 : 0.26, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (isMaxCharge ? 0.28 : 0.18));
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + (isMaxCharge ? 0.28 : 0.18));
+  }
+
+  // 4. Salto de rayo en cadena (Chain Zap)
+  public playVoltaicChainZap(jumpIndex: number) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    // Escala ascendente para dar sensación de salto encadenado rápido
+    const baseFreq = 650 + (jumpIndex % 6) * 120;
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, now + 0.1);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  }
+
+  // 5. Trueno colosal celestial (Impacto de carga máxima y remate final)
+  public playVoltaicThunderFinish() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-grave de trueno
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(140, now);
+    subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.45);
+    subGain.gain.setValueAtTime(0.42, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.45);
+
+    // Chasis de distorsión eléctrica
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'sawtooth';
+    crackOsc.frequency.setValueAtTime(750, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(90, now + 0.35);
+    crackGain.gain.setValueAtTime(0.3, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    crackOsc.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.35);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

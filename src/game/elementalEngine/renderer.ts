@@ -33,6 +33,7 @@ export class IsometricRenderer {
       dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
       isCharging?: boolean;
       chargeRatio?: number;
+      chargeType?: string;
       channeledStream?: ChanneledStreamState | null;
     },
     enemies: GameEnemy[],
@@ -594,6 +595,7 @@ export class IsometricRenderer {
       dashTrail?: Array<{ x: number; y: number; facingAngle: number; alpha: number }>;
       isCharging?: boolean;
       chargeRatio?: number;
+      chargeType?: string;
       channeledStream?: ChanneledStreamState | null;
     }
   ) {
@@ -622,8 +624,9 @@ export class IsometricRenderer {
     if (wizard.isCharging) {
       const ratio = wizard.chargeRatio || 0;
       const isReady = ratio >= 1.0;
+      const isLightning = wizard.chargeType === 'lightning' || wizard.staffOrbColor === '#38bdf8' || wizard.staffOrbColor === '#facc15';
       ctx.save();
-      const auraColor = isReady ? '#facc15' : wizard.staffOrbColor || '#38bdf8';
+      const auraColor = isReady ? (isLightning ? '#38bdf8' : '#facc15') : wizard.staffOrbColor || '#38bdf8';
       ctx.strokeStyle = auraColor;
       ctx.lineWidth = isReady ? 3.5 : 2;
       ctx.shadowColor = auraColor;
@@ -640,16 +643,57 @@ export class IsometricRenderer {
       ctx.stroke();
 
       // Destellos mágicos que convergen hacia el báculo
-      const numSparks = isReady ? 6 : 4;
+      const numSparks = isReady ? (isLightning ? 8 : 6) : 4;
       for (let i = 0; i < numSparks; i++) {
-        const ang = Date.now() * 0.006 + (i * Math.PI * 2) / numSparks;
-        const progress = ((Date.now() * 0.004 + i * 0.25) % 1);
-        const r = (1 - progress) * 28;
-        ctx.fillStyle = isReady ? '#ffffff' : '#fef08a';
+        const ang = Date.now() * (isLightning ? 0.009 : 0.006) + (i * Math.PI * 2) / numSparks;
+        const progress = ((Date.now() * (isLightning ? 0.006 : 0.004) + i * 0.2) % 1);
+        const r = (1 - progress) * (26 + ratio * 12);
+        ctx.fillStyle = isReady ? (isLightning ? '#ffffff' : '#facc15') : '#38bdf8';
         ctx.beginPath();
         ctx.arc(Math.cos(ang) * r, -10 + Math.sin(ang) * r * 0.4, 2 + (isReady ? 1.5 : 0), 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Arcos eléctricos específicos de Sobrecarga Voltaica
+      if (isLightning) {
+        ctx.shadowBlur = 0;
+        const arcCount = isReady ? 5 : Math.max(1, Math.floor(ratio * 3.5));
+        for (let a = 0; a < arcCount; a++) {
+          const aAng = Date.now() * 0.008 + a * 1.5;
+          const aDist = 14 + (a % 3) * 8;
+          const ax1 = Math.cos(aAng) * aDist;
+          const ay1 = -10 + Math.sin(aAng) * (aDist * 0.6);
+          const ax2 = ax1 + (Math.random() - 0.5) * 14;
+          const ay2 = ay1 + (Math.random() - 0.5) * 14;
+          const midAx = (ax1 + ax2) / 2 + (Math.random() - 0.5) * 8;
+          const midAy = (ay1 + ay2) / 2 + (Math.random() - 0.5) * 8;
+
+          ctx.strokeStyle = isReady ? '#ffffff' : '#38bdf8';
+          ctx.lineWidth = isReady ? 2.2 : 1.4;
+          ctx.beginPath();
+          ctx.moveTo(ax1, ay1);
+          ctx.lineTo(midAx, midAy);
+          ctx.lineTo(ax2, ay2);
+          ctx.stroke();
+        }
+
+        // Esfera de plasma en el báculo al alcanzar carga máxima
+        if (isReady) {
+          const staffX = Math.cos(wizard.facingAngle) * 16;
+          const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+          const pulseR = 7 + Math.sin(Date.now() * 0.02) * 2;
+          const plasmaGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2);
+          plasmaGrad.addColorStop(0, '#ffffff');
+          plasmaGrad.addColorStop(0.35, '#38bdf8');
+          plasmaGrad.addColorStop(0.7, '#0284c7');
+          plasmaGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+          ctx.fillStyle = plasmaGrad;
+          ctx.beginPath();
+          ctx.arc(staffX, staffY, pulseR * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       ctx.restore();
     }
 
@@ -765,14 +809,35 @@ export class IsometricRenderer {
     bolts.forEach((bolt) => {
       ctx.save();
       const alpha = Math.min(1, bolt.life / 2.5);
+      const widthMult = bolt.isCelestial ? (bolt.widthMultiplier || 1.85) : 1.0;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
+      // Impacto radiante en el suelo si es un relámpago celestial masivo
+      if (bolt.isCelestial) {
+        const squish = 0.58;
+        const groundGrad = ctx.createRadialGradient(bolt.targetX, bolt.targetY, 4, bolt.targetX, bolt.targetY, 44);
+        groundGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        groundGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.85)');
+        groundGrad.addColorStop(0.7, 'rgba(2, 132, 199, 0.35)');
+        groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = groundGrad;
+        ctx.beginPath();
+        ctx.ellipse(bolt.targetX, bolt.targetY, 44, 44 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(bolt.targetX, bolt.targetY, 26, 26 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       if (bolt.points.length > 1) {
         // 1. Resplandor exterior amplio translúcido (Ultra rápido, 0 lag de GPU)
-        ctx.globalAlpha = alpha * 0.35;
+        ctx.globalAlpha = alpha * (bolt.isCelestial ? 0.45 : 0.35);
         ctx.strokeStyle = bolt.glowColor || '#38bdf8';
-        ctx.lineWidth = 11;
+        ctx.lineWidth = 11 * widthMult;
         ctx.beginPath();
         ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
         for (let i = 1; i < bolt.points.length; i++) {
@@ -781,9 +846,9 @@ export class IsometricRenderer {
         ctx.stroke();
 
         // 2. Trazo eléctrico medio vibrante
-        ctx.globalAlpha = alpha * 0.8;
+        ctx.globalAlpha = alpha * 0.85;
         ctx.strokeStyle = bolt.color || '#facc15';
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 5 * widthMult;
         ctx.beginPath();
         ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
         for (let i = 1; i < bolt.points.length; i++) {
@@ -794,11 +859,11 @@ export class IsometricRenderer {
         // 3. Núcleo interior blanco candente de alta energía
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.2 * widthMult;
         ctx.beginPath();
         ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
         for (let i = 1; i < bolt.points.length; i++) {
-          const jitter = (Math.random() - 0.5) * 3;
+          const jitter = (Math.random() - 0.5) * (bolt.isCelestial ? 5 : 3);
           ctx.lineTo(bolt.points[i].x + jitter, bolt.points[i].y + jitter);
         }
         ctx.stroke();
