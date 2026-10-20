@@ -470,6 +470,49 @@ export interface ThermalVortexEntity {
   ringSeed: number;
 }
 
+// JAULA DE PILARES CONDUCTORES (RAYO + TIERRA: MONOLITOS CONDUCTORES, VALLA VOLTAICA Y COLAPSO SÍSMICO)
+export type ConductiveCagePhase = 'erupting' | 'igniting' | 'active' | 'collapsing' | 'finished';
+
+export interface ConductivePillarNode {
+  id: string;
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number; // ~60-75px
+  radius: number; // ~14-16px radio de colisión
+  crackAngles: number[];
+  pulseTimer: number;
+}
+
+export interface ConductiveFenceSegment {
+  p1Index: number;
+  p2Index: number;
+  isDiagonal?: boolean;
+}
+
+export interface ConductiveCageEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  isCharged: boolean;
+  pillars: ConductivePillarNode[];
+  segments: ConductiveFenceSegment[];
+  phase: ConductiveCagePhase;
+  phaseTimer: number;
+  eruptDurationMs: number; // ~220ms
+  igniteDurationMs: number; // ~140ms
+  activeDurationMs: number; // ~3200ms
+  collapseDurationMs: number; // ~280ms
+  tickIntervalMs: number; // ~180ms
+  lastTickPerEnemy: Record<string, number>;
+  contactDamage: number;
+  implosionDamage: number;
+  hasImploded: boolean;
+  hitImplosionEnemyIds: string[];
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

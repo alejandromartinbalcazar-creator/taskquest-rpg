@@ -18,6 +18,8 @@ import {
   VolcanicFissureEntity,
   LavaBombEntity,
   ThermalVortexEntity,
+  ConductiveCageEntity,
+  ConductivePillarNode,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -67,6 +69,7 @@ export class IsometricRenderer {
     cryoBeams: CryoBeamEntity[] = [],
     volcanicBombardments: VolcanicBombardmentEntity[] = [],
     thermalVortices: ThermalVortexEntity[] = [],
+    conductiveCages: ConductiveCageEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -117,6 +120,9 @@ export class IsometricRenderer {
     // 3.76 Dibujar Vórtices de Choque Térmico (Fuego + Hielo: Ondas radiales de vapor y micro-anillos concéntricos)
     this.drawThermalVortices(ctx, thermalVortices);
 
+    // 3.77 Dibujar Suelo, Glifos y Arcos Voltaicos de la Jaula de Pilares Conductores (Rayo + Tierra)
+    this.drawConductiveCageFloor(ctx, conductiveCages);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -128,6 +134,8 @@ export class IsometricRenderer {
       this.drawVolcanicAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'thermal') {
       this.drawThermalAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'conductive') {
+      this.drawConductiveAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -213,6 +221,18 @@ export class IsometricRenderer {
           });
         }
       });
+    });
+
+    // Monolitos conductores de Jaula de Pilares (Rayo + Tierra) integrados en el Depth Sorting
+    conductiveCages.forEach((cage) => {
+      if (cage.phase !== 'finished') {
+        cage.pillars.forEach((pillar) => {
+          renderList.push({
+            y: pillar.y,
+            draw: () => this.drawConductivePillar(ctx, pillar, cage),
+          });
+        });
+      }
     });
 
     // Mago (Jugador)
@@ -1195,6 +1215,56 @@ export class IsometricRenderer {
             ctx.lineTo(staffX + Math.cos(spAng + 0.3) * spR2, staffY + Math.sin(spAng + 0.3) * spR2);
             ctx.stroke();
           }
+        }
+      }
+
+      // Resplandor telúrico y electro-magnético para Jaula de Pilares Conductores (Rayo + Tierra)
+      const isConductive = wizard.chargeType === 'conductive';
+      if (isConductive) {
+        ctx.shadowBlur = 0;
+        const sparkCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 7));
+        for (let sc = 0; sc < sparkCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.008 : -0.008) + (sc * Math.PI * 2) / sparkCount;
+          const scDist = 18 + ratio * 10;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? (isReady ? '#fef08a' : '#eab308') : (isReady ? '#ffffff' : '#38bdf8');
+          ctx.beginPath();
+          ctx.rect(-1.5, -1.5, isReady ? 3.2 : 2.2, isReady ? 3.2 : 2.2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Esfera de resonancia de cuarzo y arcos en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9 : 5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const condGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        condGrad.addColorStop(0, '#ffffff');
+        condGrad.addColorStop(0.3, '#fde047');
+        condGrad.addColorStop(0.65, '#eab308');
+        condGrad.addColorStop(0.9, '#38bdf8');
+        condGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = condGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Micro-arcos voltaicos alrededor de la gema del báculo
+        ctx.strokeStyle = isReady ? '#ffffff' : '#fef08a';
+        ctx.lineWidth = 1.2;
+        const arcCount = isReady ? 4 : 2;
+        for (let sp = 0; sp < arcCount; sp++) {
+          const spAng = Math.random() * Math.PI * 2;
+          const spR1 = pulseR * 0.7;
+          const spR2 = pulseR * 1.7;
+          ctx.beginPath();
+          ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+          ctx.lineTo(staffX + Math.cos(spAng + 0.35) * spR2, staffY + Math.sin(spAng + 0.35) * spR2);
+          ctx.stroke();
         }
       }
 
@@ -4043,5 +4113,413 @@ export class IsometricRenderer {
 
       ctx.restore();
     });
+  }
+
+  // =========================================================================
+  // JAULA DE PILARES CONDUCTORES (RAYO + TIERRA: SUELO, VALLA VOLTAICA Y MONOLITOS)
+  // =========================================================================
+
+  // 1. Dibuja el suelo, glifos electromagnéticos, enlaces voltaicos y muros de energía de la Jaula
+  private static drawConductiveCageFloor(
+    ctx: CanvasRenderingContext2D,
+    cages: ConductiveCageEntity[]
+  ) {
+    if (!cages || cages.length === 0) return;
+
+    const squish = 0.58;
+
+    cages.forEach((cage) => {
+      if (cage.phase === 'finished') return;
+
+      const now = Date.now();
+      let cageAlpha = 1.0;
+      if (cage.phase === 'erupting') {
+        cageAlpha = Math.min(1.0, 0.4 + (cage.phaseTimer / cage.eruptDurationMs) * 0.6);
+      } else if (cage.phase === 'collapsing') {
+        cageAlpha = Math.max(0, 1.0 - cage.phaseTimer / cage.collapseDurationMs);
+      }
+
+      ctx.save();
+
+      // A. Suelo Rúnico y Calcinación Central
+      const r = cage.radius;
+      const groundGrad = ctx.createRadialGradient(cage.centerX, cage.centerY, 10, cage.centerX, cage.centerY, r * 1.15);
+      groundGrad.addColorStop(0, `rgba(45, 30, 10, ${0.45 * cageAlpha})`);
+      groundGrad.addColorStop(0.7, `rgba(234, 179, 8, ${0.18 * cageAlpha})`);
+      groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = groundGrad;
+      ctx.beginPath();
+      ctx.ellipse(cage.centerX, cage.centerY, r * 1.15, r * 1.15 * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Círculo magnético perimetral rúnico en el suelo
+      ctx.strokeStyle = `rgba(234, 179, 8, ${0.4 * cageAlpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.ellipse(cage.centerX, cage.centerY, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Grietas de energía desde el centro hacia la base de cada pilar
+      cage.pillars.forEach((p) => {
+        ctx.strokeStyle = `rgba(253, 224, 71, ${0.65 * cageAlpha})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cage.centerX, cage.centerY);
+        const midX = (cage.centerX + p.x) * 0.5 + Math.sin(now * 0.005 + p.pulseTimer) * 4;
+        const midY = (cage.centerY + p.y) * 0.5 + Math.cos(now * 0.005 + p.pulseTimer) * 2;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      });
+
+      // B. Vallas y Arcos Voltaicos entre Segmentos Conectados
+      if (cage.phase !== 'erupting' || cage.phaseTimer > cage.eruptDurationMs * 0.6) {
+        cage.segments.forEach((seg) => {
+          const p1 = cage.pillars[seg.p1Index];
+          const p2 = cage.pillars[seg.p2Index];
+          if (!p1 || !p2) return;
+
+          const isDiag = seg.isDiagonal;
+          const segAlpha = isDiag ? cageAlpha * 0.75 : cageAlpha;
+
+          // B.1 Cortina o Muro de Energía Láser / Reja Voltaica translúcida
+          const wallGrad = ctx.createLinearGradient(0, p1.y, 0, p1.y - p1.height);
+          wallGrad.addColorStop(0, `rgba(234, 179, 8, ${0.2 * segAlpha})`);
+          wallGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.16 * segAlpha})`);
+          wallGrad.addColorStop(1, `rgba(254, 240, 138, ${0.32 * segAlpha})`);
+
+          ctx.fillStyle = wallGrad;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineTo(p2.x, p2.y - p2.height * 0.9);
+          ctx.lineTo(p1.x, p1.y - p1.height * 0.9);
+          ctx.closePath();
+          ctx.fill();
+
+          // Líneas de escaneo horizontal sutiles en la valla
+          const scanOffset = (now * 0.04) % 18;
+          ctx.strokeStyle = `rgba(254, 240, 138, ${0.22 * segAlpha})`;
+          ctx.lineWidth = 1;
+          for (let step = 0; step < 3; step++) {
+            const hRatio = ((step * 14 + scanOffset) % (p1.maxHeight || 60)) / (p1.maxHeight || 60);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y - p1.height * hRatio);
+            ctx.lineTo(p2.x, p2.y - p2.height * hRatio);
+            ctx.stroke();
+          }
+
+          // B.2 Arcos Eléctricos en Zig-Zag Superior e Inferior
+          // Arco superior (conecta las puntas de cuarzo)
+          const top1X = p1.x;
+          const top1Y = p1.y - p1.height * 0.85;
+          const top2X = p2.x;
+          const top2Y = p2.y - p2.height * 0.85;
+
+          ctx.strokeStyle = `rgba(234, 179, 8, ${0.85 * segAlpha})`;
+          ctx.lineWidth = isDiag ? 2.0 : 2.8;
+          ctx.beginPath();
+          ctx.moveTo(top1X, top1Y);
+          const segSteps = 5;
+          for (let s = 1; s < segSteps; s++) {
+            const frac = s / segSteps;
+            const mx = top1X + (top2X - top1X) * frac;
+            const my = top1Y + (top2Y - top1Y) * frac;
+            const jitterSeed = Math.sin(now * 0.03 + s * 13 + seg.p1Index * 7);
+            const jitter = jitterSeed * (isDiag ? 5 : 7);
+            ctx.lineTo(mx + jitter * 0.7, my + jitter * 0.5);
+          }
+          ctx.lineTo(top2X, top2Y);
+          ctx.stroke();
+
+          // Núcleo blanco brillante del rayo superior
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * segAlpha})`;
+          ctx.lineWidth = isDiag ? 0.9 : 1.3;
+          ctx.stroke();
+
+          // Arco inferior rasante al suelo
+          const bot1Y = p1.y - 4;
+          const bot2Y = p2.y - 4;
+          ctx.strokeStyle = `rgba(56, 189, 248, ${0.7 * segAlpha})`;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, bot1Y);
+          for (let s = 1; s < 4; s++) {
+            const frac = s / 4;
+            const mx = p1.x + (p2.x - p1.x) * frac;
+            const my = bot1Y + (bot2Y - bot1Y) * frac;
+            const jitter = Math.cos(now * 0.04 + s * 17) * 4;
+            ctx.lineTo(mx, my + jitter * squish);
+          }
+          ctx.lineTo(p2.x, bot2Y);
+          ctx.stroke();
+        });
+      }
+
+      // C. Implosión Inward durante el colapso final
+      if (cage.phase === 'collapsing') {
+        const collapseProg = Math.min(1.0, cage.phaseTimer / cage.collapseDurationMs);
+        const implosionR = Math.max(4, r * (1.0 - collapseProg));
+
+        const implGrad = ctx.createRadialGradient(cage.centerX, cage.centerY, 1, cage.centerX, cage.centerY, implosionR);
+        implGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        implGrad.addColorStop(0.4, 'rgba(253, 224, 71, 0.85)');
+        implGrad.addColorStop(0.8, 'rgba(56, 189, 248, 0.5)');
+        implGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+
+        ctx.fillStyle = implGrad;
+        ctx.beginPath();
+        ctx.ellipse(cage.centerX, cage.centerY, implosionR, implosionR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rayos convergentes hacia el centro
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.0;
+        for (let i = 0; i < 6; i++) {
+          const ang = (i * Math.PI) / 3 + now * 0.01;
+          const startDist = implosionR * 1.6;
+          ctx.beginPath();
+          ctx.moveTo(cage.centerX + Math.cos(ang) * startDist, cage.centerY + Math.sin(ang) * startDist * squish);
+          ctx.lineTo(cage.centerX, cage.centerY);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja un Monolito Conductor (columna facetada de roca, vetas de cuarzo y corona eléctrica)
+  private static drawConductivePillar(
+    ctx: CanvasRenderingContext2D,
+    pillar: ConductivePillarNode,
+    cage: ConductiveCageEntity
+  ) {
+    const squish = 0.58;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Temblor en fase de implosión / erupción
+    let shakeX = 0;
+    let shakeY = 0;
+    if (cage.phase === 'collapsing') {
+      const shakeAmt = (cage.phaseTimer / cage.collapseDurationMs) * 4;
+      shakeX = (Math.random() - 0.5) * shakeAmt;
+      shakeY = (Math.random() - 0.5) * shakeAmt;
+    } else if (cage.phase === 'erupting') {
+      shakeX = (Math.random() - 0.5) * 2.5;
+      shakeY = (Math.random() - 0.5) * 2.5;
+    }
+
+    ctx.translate(pillar.x + shakeX, pillar.y + shakeY);
+
+    // A. Sombra proyectada en el suelo
+    const baseR = pillar.radius;
+    const shadowGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, baseR * 1.5);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+    shadowGrad.addColorStop(0.7, 'rgba(15, 23, 42, 0.35)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, baseR * 1.5, baseR * 1.5 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // B. Collar de grietas terrestres alrededor de la base
+    pillar.crackAngles.forEach((ang) => {
+      const crackLen = baseR * 1.6;
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ang) * (baseR * 0.7), Math.sin(ang) * (baseR * 0.7) * squish);
+      ctx.lineTo(Math.cos(ang) * crackLen, Math.sin(ang) * crackLen * squish);
+      ctx.stroke();
+    });
+
+    const h = pillar.height;
+    if (h > 4) {
+      const halfW = baseR * 0.95;
+      const topHalfW = baseR * 0.75;
+      const topY = -h;
+
+      // C. Prisma monolítico facetado de 3 caras visibles (Izquierda: sombra, Centro: medio, Derecha: luz)
+      // Cara izquierda (sombra oscura)
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(-halfW, 0);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(0, topY + 2);
+      ctx.lineTo(-topHalfW, topY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cara derecha (iluminación de roca)
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.moveTo(0, 3);
+      ctx.lineTo(halfW, 0);
+      ctx.lineTo(topHalfW, topY);
+      ctx.lineTo(0, topY + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Borde de bisel central vertical
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 3);
+      ctx.lineTo(0, topY + 2);
+      ctx.stroke();
+
+      // D. Vetas de Cuarzo Conductor Incrustadas (pulsantes con luz electromagnética)
+      const pulseGlow = 0.6 + Math.sin(now * 0.008 + pillar.pulseTimer) * 0.35;
+      ctx.strokeStyle = `rgba(253, 224, 71, ${pulseGlow})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-halfW * 0.45, -2);
+      ctx.lineTo(-halfW * 0.2, topY * 0.4);
+      ctx.lineTo(-topHalfW * 0.35, topY * 0.85);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(56, 189, 248, ${pulseGlow * 0.9})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(halfW * 0.35, -2);
+      ctx.lineTo(halfW * 0.5, topY * 0.5);
+      ctx.lineTo(topHalfW * 0.25, topY * 0.9);
+      ctx.stroke();
+
+      // E. Capitel / Corona de Cristales de Cuarzo en la Cúspide
+      const crystalTopY = topY - 14;
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.moveTo(0, topY + 2);
+      ctx.lineTo(-topHalfW, topY);
+      ctx.lineTo(0, crystalTopY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(0, topY + 2);
+      ctx.lineTo(topHalfW, topY);
+      ctx.lineTo(0, crystalTopY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Resplandor de corona piezoeléctrica
+      const haloGrad = ctx.createRadialGradient(0, crystalTopY + 4, 1, 0, crystalTopY + 4, 18);
+      haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      haloGrad.addColorStop(0.35, 'rgba(253, 224, 71, 0.7)');
+      haloGrad.addColorStop(0.75, 'rgba(56, 189, 248, 0.4)');
+      haloGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(0, crystalTopY + 4, 18, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chispas de descarga en la punta del monolito
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.0;
+      for (let sp = 0; sp < 2; sp++) {
+        const sparkAng = Math.random() * Math.PI * 2;
+        const sDist1 = 3;
+        const sDist2 = 9 + Math.random() * 5;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(sparkAng) * sDist1, crystalTopY + 4 + Math.sin(sparkAng) * sDist1);
+        ctx.lineTo(Math.cos(sparkAng + 0.3) * sDist2, crystalTopY + 4 + Math.sin(sparkAng + 0.3) * sDist2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Jaula de Pilares Conductores
+  private static drawConductiveAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const targetDist = 135;
+    const cx = wizard.x + Math.cos(wizard.facingAngle) * targetDist;
+    const cy = wizard.y + Math.sin(wizard.facingAngle) * targetDist * squish;
+    const r = isReady ? 102 : 68;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Perímetro poligonal y postes proyectados
+    const pillarPoints: Array<{ x: number; y: number }> = [];
+    if (!isReady) {
+      // 3 Pilares: Triángulo equilátero
+      pillarPoints.push({ x: 0, y: -r * squish });
+      pillarPoints.push({ x: r * Math.cos(Math.PI / 6), y: r * Math.sin(Math.PI / 6) * squish });
+      pillarPoints.push({ x: -r * Math.cos(Math.PI / 6), y: r * Math.sin(Math.PI / 6) * squish });
+    } else {
+      // 4 Pilares: Rombo / Cuadrilátero expandido (+50% daño y arcos cruzados)
+      pillarPoints.push({ x: 0, y: -r * squish });
+      pillarPoints.push({ x: r, y: 0 });
+      pillarPoints.push({ x: 0, y: r * squish });
+      pillarPoints.push({ x: -r, y: 0 });
+    }
+
+    // Líneas perimetrales punteadas
+    ctx.strokeStyle = isReady ? '#fef08a' : '#eab308';
+    ctx.lineWidth = isReady ? 2.4 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    pillarPoints.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+
+    // Diagonales internas en modo cargado
+    if (isReady) {
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(pillarPoints[0].x, pillarPoints[0].y);
+      ctx.lineTo(pillarPoints[2].x, pillarPoints[2].y);
+      ctx.moveTo(pillarPoints[1].x, pillarPoints[1].y);
+      ctx.lineTo(pillarPoints[3].x, pillarPoints[3].y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Puntos de ubicación de los monolitos con halo
+    pillarPoints.forEach((pt) => {
+      ctx.fillStyle = isReady ? '#ffffff' : '#fef08a';
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, isReady ? 5.5 : 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = isReady ? '#38bdf8' : '#eab308';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, isReady ? 9 : 7, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // Cruz y texto de HUD táctico flotante
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#fef08a' : '#eab308';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isReady ? '¡JAULA DE 4 PILARES (+50% DAÑO)!' : 'JAULA CONDUCTORA (3 PILARES)',
+      0,
+      -r * squish - 14
+    );
+
+    ctx.restore();
   }
 }

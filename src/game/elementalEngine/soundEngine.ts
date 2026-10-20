@@ -1699,6 +1699,112 @@ class ElementalSoundEngine {
     pop.start(now);
     pop.stop(now + 0.15);
   }
+
+  // =========================================================================
+  // JAULA DE PILARES CONDUCTORES (RAYO + TIERRA)
+  // =========================================================================
+
+  // 1. Erupción telúrica de monolitos conductores y activación de cuarzo resonante
+  public playConductivePillarErupt(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-golpe telúrico de impacto en el suelo
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(isCharged ? 130 : 160, now);
+    thud.frequency.exponentialRampToValueAtTime(35, now + 0.28);
+
+    thudGain.gain.setValueAtTime(isCharged ? 0.42 : 0.32, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.28);
+
+    // Resonancia de cuarzo piezoeléctrico escalonada
+    [480, 720, 960].forEach((freq, idx) => {
+      const delay = idx * 0.045;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      osc.frequency.linearRampToValueAtTime(freq * 1.35, now + delay + 0.2);
+
+      gain.gain.setValueAtTime(isCharged ? 0.15 : 0.1, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.22);
+    });
+  }
+
+  // 2. Chispazo / descarga de alta tensión al cruzar la valla electrificada
+  public playConductiveFenceZap() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Chispa rápida cortante tipo taser/arco voltaico
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(980, now);
+    osc.frequency.linearRampToValueAtTime(180, now + 0.09);
+
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  // 3. Implosión final de sobrecarga y colapso gravitatorio/eléctrico
+  public playConductiveCageImplosion(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Descenso y compresión rápida de frecuencia inward
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(isCharged ? 320 : 260, now);
+    subOsc.frequency.exponentialRampToValueAtTime(40, now + 0.26);
+
+    subGain.gain.setValueAtTime(isCharged ? 0.5 : 0.38, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.26);
+
+    // Crujido eléctrico y fractura de roca en el instante del colapso
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(isCharged ? 1100 : 850, now + 0.04);
+    crack.frequency.exponentialRampToValueAtTime(80, now + 0.22);
+
+    crackGain.gain.setValueAtTime(isCharged ? 0.35 : 0.25, now + 0.04);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    crack.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crack.start(now + 0.04);
+    crack.stop(now + 0.22);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

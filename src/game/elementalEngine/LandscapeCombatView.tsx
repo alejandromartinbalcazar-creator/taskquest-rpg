@@ -21,6 +21,8 @@ import {
   VolcanicFissureEntity,
   LavaBombEntity,
   ThermalVortexEntity,
+  ConductiveCageEntity,
+  ConductivePillarNode,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -472,6 +474,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     cryoBeams: [] as CryoBeamEntity[],
     volcanicBombardments: [] as VolcanicBombardmentEntity[],
     thermalVortices: [] as ThermalVortexEntity[],
+    conductiveCages: [] as ConductiveCageEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     particles: [] as Particle[],
@@ -769,6 +772,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.cryoBeams = [];
       g.volcanicBombardments = [];
       g.thermalVortices = [];
+      g.conductiveCages = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -894,7 +898,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'magma_eruption') {
         // Bombardeo Volcánico gestiona sus propios sonidos de rugido sísmico, géiseres y splat
       }
-      else if (recipe.id === 'crystal_field') elementalSound.playCrystalField();
+      else if (recipe.id === 'crystal_field') {
+        // Jaula de Pilares Conductores gestiona sus propios sonidos de erupción telúrica y zaps
+      }
       else if (recipe.id === 'cryo_storm') {
         // Rayo Criogénico gestiona su propio sonido de disparo / sobrecarga
       }
@@ -947,9 +953,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = recipe.id === 'magma_eruption' ? 180 : 220;
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = recipe.id === 'magma_eruption' ? 180 : (recipe.id === 'crystal_field' ? 140 : 220);
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -1693,31 +1699,170 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
-      // 4. RAYO + TIERRA (CAMPO DE CRISTALES ENERGIZADOS)
+      // 4. RAYO + TIERRA (JAULA DE PILARES CONDUCTORES: MONOLITOS, VALLAS VOLTAICAS Y COLAPSO FINAL)
       else if (recipe.id === 'crystal_field') {
-        const spawnX = wizard.x + Math.cos(aimAngle) * 95;
-        const spawnY = wizard.y + Math.sin(aimAngle) * 95;
-        g.terrainManager.spawnEnergizedCrystals(spawnX, spawnY);
-        if (isCharged) {
-          g.terrainManager.obstacles.push({
-            id: `crystal-${now}-charged`,
-            x: spawnX,
-            y: spawnY - 35,
+        const isOverloaded = isCharged;
+        const baseDmg = recipe.damage + statBonus;
+        const contactDamage = Math.round(baseDmg * (isOverloaded ? 1.5 : 1.0));
+        const implosionDamage = Math.round(contactDamage * 1.7);
+        const cageRadius = isOverloaded ? 102 : 68;
+        const squish = 0.58;
+
+        g.screenShake = isOverloaded ? 8 : 5;
+        elementalSound.playConductivePillarErupt(isOverloaded);
+
+        const pillars: ConductivePillarNode[] = [];
+        const segments: { p1Index: number; p2Index: number; isDiagonal?: boolean }[] = [];
+
+        if (!isOverloaded) {
+          // 3 Pilares (Triángulo Equilátero)
+          pillars.push({
+            id: `pillar_${now}_0`,
+            x: targetX,
+            y: targetY - cageRadius * squish,
+            height: 0,
+            maxHeight: 62,
             radius: 15,
-            width: 30,
-            height: 30,
-            obstacleType: 'energized_crystal',
-            hp: 90,
-            maxHp: 90,
-            color: '#eab308',
-            solid: true,
-            blocksProjectiles: false,
-            meltable: false,
-            electrified: true,
-            chargeTimer: 0,
+            crackAngles: [0.3, 2.1, 4.2],
+            pulseTimer: 0,
           });
+          pillars.push({
+            id: `pillar_${now}_1`,
+            x: targetX + cageRadius * Math.cos(Math.PI / 6),
+            y: targetY + cageRadius * Math.sin(Math.PI / 6) * squish,
+            height: 0,
+            maxHeight: 62,
+            radius: 15,
+            crackAngles: [1.1, 3.2, 5.0],
+            pulseTimer: 1.2,
+          });
+          pillars.push({
+            id: `pillar_${now}_2`,
+            x: targetX - cageRadius * Math.cos(Math.PI / 6),
+            y: targetY + cageRadius * Math.sin(Math.PI / 6) * squish,
+            height: 0,
+            maxHeight: 62,
+            radius: 15,
+            crackAngles: [0.8, 2.7, 4.6],
+            pulseTimer: 2.4,
+          });
+
+          segments.push({ p1Index: 0, p2Index: 1 });
+          segments.push({ p1Index: 1, p2Index: 2 });
+          segments.push({ p1Index: 2, p2Index: 0 });
+        } else {
+          // 4 Pilares (Rombo / Cuadrilátero expandido con arcos diagonales cruzados)
+          pillars.push({
+            id: `pillar_${now}_0`,
+            x: targetX,
+            y: targetY - cageRadius * squish,
+            height: 0,
+            maxHeight: 74,
+            radius: 16,
+            crackAngles: [0.2, 1.9, 3.8],
+            pulseTimer: 0,
+          });
+          pillars.push({
+            id: `pillar_${now}_1`,
+            x: targetX + cageRadius,
+            y: targetY,
+            height: 0,
+            maxHeight: 74,
+            radius: 16,
+            crackAngles: [0.9, 2.8, 4.9],
+            pulseTimer: 0.9,
+          });
+          pillars.push({
+            id: `pillar_${now}_2`,
+            x: targetX,
+            y: targetY + cageRadius * squish,
+            height: 0,
+            maxHeight: 74,
+            radius: 16,
+            crackAngles: [0.5, 2.3, 4.1],
+            pulseTimer: 1.8,
+          });
+          pillars.push({
+            id: `pillar_${now}_3`,
+            x: targetX - cageRadius,
+            y: targetY,
+            height: 0,
+            maxHeight: 74,
+            radius: 16,
+            crackAngles: [1.2, 3.1, 5.3],
+            pulseTimer: 2.7,
+          });
+
+          // Perímetro
+          segments.push({ p1Index: 0, p2Index: 1 });
+          segments.push({ p1Index: 1, p2Index: 2 });
+          segments.push({ p1Index: 2, p2Index: 3 });
+          segments.push({ p1Index: 3, p2Index: 0 });
+          // Diagonales cruzadas (+50% daño y densidad de arcos)
+          segments.push({ p1Index: 0, p2Index: 2, isDiagonal: true });
+          segments.push({ p1Index: 1, p2Index: 3, isDiagonal: true });
         }
-        g.screenShake = isCharged ? 8 : 5;
+
+        // Crear la entidad de Jaula Conductora
+        const cageEntity: ConductiveCageEntity = {
+          id: `conductive_cage_${now}_${Math.random().toString(36).substring(2, 6)}`,
+          centerX: targetX,
+          centerY: targetY,
+          radius: cageRadius,
+          isCharged: isOverloaded,
+          pillars,
+          segments,
+          phase: 'erupting',
+          phaseTimer: 0,
+          eruptDurationMs: 220,
+          igniteDurationMs: 140,
+          activeDurationMs: 3200,
+          collapseDurationMs: 280,
+          tickIntervalMs: 180,
+          lastTickPerEnemy: {},
+          contactDamage,
+          implosionDamage,
+          hasImploded: false,
+          hitImplosionEnemyIds: [],
+          finished: false,
+        };
+
+        g.conductiveCages.push(cageEntity);
+
+        // Polvo y esquirlas de roca en la base de cada pilar al brotar
+        pillars.forEach((p) => {
+          for (let i = 0; i < 8; i++) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pSpd = 1.2 + Math.random() * 2.5;
+            g.particles.push({
+              x: p.x,
+              y: p.y,
+              vx: Math.cos(pAng) * pSpd,
+              vy: Math.sin(pAng) * pSpd * squish,
+              radius: 1.5 + Math.random() * 2,
+              color: i % 2 === 0 ? '#eab308' : '#78716c',
+              alpha: 0.9,
+              life: 25 + Math.random() * 15,
+              type: i % 2 === 0 ? 'spark' : 'stone_chip',
+            });
+          }
+        });
+
+        // Notificación de texto flotante
+        g.floatingTexts.push({
+          id: `ft_cage_${now}`,
+          x: targetX,
+          y: targetY - 45,
+          text: isOverloaded ? '⚡🏛️ ¡JAULA CONDUCTORA +50%!' : '⚡🏛️ JAULA CONDUCTORA',
+          color: isOverloaded ? '#fef08a' : '#eab308',
+          fontSize: isOverloaded ? 16 : 14,
+          opacity: 1,
+          vy: -1.2,
+          life: 42,
+        });
+
+        setElementQueue([]);
+        return;
       }
       // 5. HIELO + RAYO (RAYO CRIOGÉNICO: HAZ PENETRANTE CONTINUO CON CERO ABSOLUTO Y ESPIRALES VOLTAICAS)
       else if (recipe.id === 'cryo_storm') {
@@ -1970,19 +2115,21 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'thermal_shock'
-      ? 'thermal'
-      : (activeRecipe.id === 'magma_eruption'
-        ? 'volcanic'
-        : (activeRecipe.id === 'cryo_storm'
-          ? 'cryo'
-          : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-            ? 'lightning'
-            : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-              ? 'ice'
-              : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                ? 'earth'
-                : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))));
+    wizard.chargeType = activeRecipe.id === 'crystal_field'
+      ? 'conductive'
+      : (activeRecipe.id === 'thermal_shock'
+        ? 'thermal'
+        : (activeRecipe.id === 'magma_eruption'
+          ? 'volcanic'
+          : (activeRecipe.id === 'cryo_storm'
+            ? 'cryo'
+            : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+              ? 'lightning'
+              : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                ? 'ice'
+                : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                  ? 'earth'
+                  : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -1998,7 +2145,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock')
+    const wasCharged = (activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field')
       ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2295,7 +2442,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isCryo = activeRecipe.id === 'cryo_storm';
         const isVolcanic = activeRecipe.id === 'magma_eruption';
         const isThermal = activeRecipe.id === 'thermal_shock';
-        const maxChargeTime = (isCryo || isVolcanic || isThermal) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isConductive = activeRecipe.id === 'crystal_field';
+        const maxChargeTime = (isCryo || isVolcanic || isThermal || isConductive) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2428,6 +2576,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Fragmentos de cuarzo y chispas piezoeléctricas convergentes para Jaula de Pilares Conductores
+        else if (isConductive) {
+          if (Math.random() < 0.4 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `conductive-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.2 + wizard.chargeRatio * 2.2),
+              vy: -Math.sin(pAng) * (1.2 + wizard.chargeRatio * 1.3),
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.5 ? '#fde047' : '#38bdf8',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2522,6 +2690,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 14,
               color: '#80d8ff',
+              alpha: 1,
+              life: 16,
+              maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isConductive) {
+            elementalSound.playChargeReady();
+            g.screenShake = 6.5;
+            g.particles.push({
+              id: `conductive-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 14,
+              color: '#fde047',
               alpha: 1,
               life: 16,
               maxLife: 16,
@@ -4745,6 +4929,256 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.9 Actualizar Jaula de Pilares Conductores (Rayo + Tierra: Erupción, Valla Voltaica, Daño Continuo, Repulsión y Colapso)
+      for (let cIdx = g.conductiveCages.length - 1; cIdx >= 0; cIdx--) {
+        const cage = g.conductiveCages[cIdx];
+        cage.phaseTimer += dt;
+
+        // FASE 1: ERUPCIÓN TELÚRICA (220 ms)
+        if (cage.phase === 'erupting') {
+          const prog = Math.min(1.0, cage.phaseTimer / cage.eruptDurationMs);
+          // Crecimiento vertical de cada pilar con efecto resorte suave
+          cage.pillars.forEach((p) => {
+            p.height = p.maxHeight * Math.sin(prog * Math.PI * 0.5);
+          });
+
+          if (cage.phaseTimer >= cage.eruptDurationMs) {
+            cage.phase = 'igniting';
+            cage.phaseTimer = 0;
+            cage.pillars.forEach((p) => {
+              p.height = p.maxHeight;
+            });
+            elementalSound.playConductiveFenceZap();
+          }
+        }
+        // FASE 2: IGNICIÓN DE VALLA VOLTAICA (140 ms)
+        else if (cage.phase === 'igniting') {
+          if (cage.phaseTimer >= cage.igniteDurationMs) {
+            cage.phase = 'active';
+            cage.phaseTimer = 0;
+          }
+        }
+        // FASE 3: VALLA ACTIVA Y REJILLA ELECTRIFICADA (3200 ms)
+        else if (cage.phase === 'active') {
+          // A. Colisión sólida de los monolitos con el Mago
+          cage.pillars.forEach((p) => {
+            const dx = wizard.x - p.x;
+            const dy = (wizard.y - p.y) / 0.58;
+            const dist = Math.hypot(dx, dy);
+            const minDist = p.radius + 14;
+            if (dist < minDist && dist > 0.01) {
+              const overlap = minDist - dist;
+              wizard.x += (dx / dist) * overlap;
+              wizard.y += (dy / dist) * overlap * 0.58;
+            }
+          });
+
+          // B. Colisión física y daño por contacto con valla para cada enemigo
+          for (const enemy of g.enemyManager.enemies) {
+            if (enemy.hp <= 0) continue;
+
+            // B.1 Obstáculo físico: separar enemigo si colisiona con el monolito
+            cage.pillars.forEach((p) => {
+              const dx = enemy.x - p.x;
+              const dy = (enemy.y - p.y) / 0.58;
+              const dist = Math.hypot(dx, dy);
+              const minDist = p.radius + enemy.radius;
+              if (dist < minDist && dist > 0.01) {
+                const overlap = minDist - dist;
+                enemy.x += (dx / dist) * overlap;
+                enemy.y += (dy / dist) * overlap * 0.58;
+              }
+            });
+
+            // B.2 Detección de contacto con los segmentos de valla electrificada
+            const lastHit = cage.lastTickPerEnemy[enemy.id] || 0;
+            const canTick = frameNow - lastHit >= cage.tickIntervalMs;
+
+            for (const seg of cage.segments) {
+              const p1 = cage.pillars[seg.p1Index];
+              const p2 = cage.pillars[seg.p2Index];
+              if (!p1 || !p2) continue;
+
+              // Distancia punto a segmento de recta en espacio 2.5D
+              const dx = p2.x - p1.x;
+              const dy = (p2.y - p1.y) / 0.58;
+              const l2 = dx * dx + dy * dy;
+              let distToFence = 999;
+              let projX = p1.x;
+              let projY = p1.y;
+
+              if (l2 === 0) {
+                distToFence = Math.hypot(enemy.x - p1.x, (enemy.y - p1.y) / 0.58);
+              } else {
+                const t = Math.max(0, Math.min(1, ((enemy.x - p1.x) * dx + ((enemy.y - p1.y) / 0.58) * dy) / l2));
+                projX = p1.x + t * dx;
+                projY = p1.y + t * (p2.y - p1.y);
+                distToFence = Math.hypot(enemy.x - projX, (enemy.y - projY) / 0.58);
+              }
+
+              const hitThreshold = 14 + enemy.radius;
+              if (distToFence < hitThreshold) {
+                // Electro-repulsión: Empujar hacia afuera del segmento para impedir cruzar impunemente
+                let repulseX = enemy.x - projX;
+                let repulseY = (enemy.y - projY) / 0.58;
+                const repDist = Math.hypot(repulseX, repulseY);
+                if (repDist > 0.01) {
+                  repulseX /= repDist;
+                  repulseY /= repDist;
+                } else {
+                  const cdx = enemy.x - cage.centerX;
+                  const cdy = (enemy.y - cage.centerY) / 0.58;
+                  const cDist = Math.hypot(cdx, cdy) || 1;
+                  repulseX = cdx / cDist;
+                  repulseY = cdy / cDist;
+                }
+
+                // Aplicar separación física instantánea
+                enemy.x += repulseX * 8;
+                enemy.y += repulseY * 8 * 0.58;
+
+                // Si ha pasado el intervalo de tick (~180 ms), aplicar daño y electrocución
+                if (canTick) {
+                  cage.lastTickPerEnemy[enemy.id] = frameNow;
+                  enemy.hp -= cage.contactDamage;
+                  enemy.hitFlash = 12;
+
+                  // Micro-aturdimiento e interrupción de ataques
+                  enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, 18);
+                  enemy.isTelegraphing = false;
+
+                  // Estado electrocutado (shocked)
+                  const existingShock = enemy.statuses.find((s) => s.type === 'shocked');
+                  if (existingShock) {
+                    existingShock.duration = 120;
+                  } else {
+                    enemy.statuses.push({
+                      type: 'shocked',
+                      duration: 120,
+                      maxDuration: 120,
+                    });
+                  }
+
+                  elementalSound.playConductiveFenceZap();
+
+                  // Chispas voltaicas y texto de daño
+                  for (let sp = 0; sp < 6; sp++) {
+                    const spAng = Math.random() * Math.PI * 2;
+                    const spSpd = 2.0 + Math.random() * 3.5;
+                    g.particles.push({
+                      x: enemy.x,
+                      y: enemy.y - 10,
+                      vx: Math.cos(spAng) * spSpd,
+                      vy: Math.sin(spAng) * spSpd * 0.58,
+                      radius: 1.5 + Math.random() * 1.5,
+                      color: sp % 2 === 0 ? '#fef08a' : '#38bdf8',
+                      alpha: 1,
+                      life: 18,
+                      type: 'spark',
+                    });
+                  }
+
+                  g.floatingTexts.push({
+                    id: `cage_hit_${frameNow}_${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 20,
+                    text: `-${cage.contactDamage} ⚡`,
+                    color: '#fde047',
+                    fontSize: 14,
+                    opacity: 1,
+                    vy: -1.0,
+                    life: 25,
+                  });
+                }
+                break; // Un impacto de segmento por frame
+              }
+            }
+          }
+
+          if (cage.phaseTimer >= cage.activeDurationMs) {
+            cage.phase = 'collapsing';
+            cage.phaseTimer = 0;
+          }
+        }
+        // FASE 4: IMPLOSIÓN Y COLAPSO SÍSMICO (280 ms)
+        else if (cage.phase === 'collapsing') {
+          const prog = Math.min(1.0, cage.phaseTimer / cage.collapseDurationMs);
+
+          // Hundimiento y fragmentación de los pilares
+          cage.pillars.forEach((p) => {
+            p.height = p.maxHeight * (1.0 - prog);
+          });
+
+          // Implosión instantánea en el primer tick del colapso
+          if (!cage.hasImploded) {
+            cage.hasImploded = true;
+            elementalSound.playConductiveCageImplosion(cage.isCharged);
+            g.screenShake = Math.max(g.screenShake, cage.isCharged ? 9 : 6);
+
+            // Daño y vórtice de implosión para todos los enemigos atrapados dentro o cerca
+            const implosionRadius = cage.radius + 18;
+            for (const enemy of g.enemyManager.enemies) {
+              if (enemy.hp <= 0) continue;
+              const dist = Math.hypot(enemy.x - cage.centerX, (enemy.y - cage.centerY) / 0.58);
+              if (dist <= implosionRadius) {
+                enemy.hp -= cage.implosionDamage;
+                enemy.hitFlash = 18;
+                enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, 35);
+                enemy.isTelegraphing = false;
+
+                // Succión gravitatoria / atracción hacia el centro
+                const pullAngle = Math.atan2(cage.centerY - enemy.y, cage.centerX - enemy.x);
+                const pullDist = Math.min(30, dist * 0.4);
+                enemy.x += Math.cos(pullAngle) * pullDist;
+                enemy.y += Math.sin(pullAngle) * pullDist * 0.58;
+
+                g.floatingTexts.push({
+                  id: `cage_implode_${frameNow}_${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 25,
+                  text: `-${cage.implosionDamage} ¡COLAPSO! 💥⚡`,
+                  color: '#ffffff',
+                  fontSize: 16,
+                  opacity: 1,
+                  vy: -1.4,
+                  life: 38,
+                });
+              }
+            }
+
+            // Partículas masivas de escombros y relámpagos inward
+            for (let p = 0; p < 24; p++) {
+              const pAng = Math.random() * Math.PI * 2;
+              const pDist = cage.radius * (0.5 + Math.random() * 0.7);
+              const px = cage.centerX + Math.cos(pAng) * pDist;
+              const py = cage.centerY + Math.sin(pAng) * pDist * 0.58;
+              const inwardAng = Math.atan2(cage.centerY - py, cage.centerX - px);
+              const pSpd = 3.0 + Math.random() * 4.0;
+
+              g.particles.push({
+                x: px,
+                y: py,
+                vx: Math.cos(inwardAng) * pSpd,
+                vy: Math.sin(inwardAng) * pSpd * 0.58,
+                radius: 2 + Math.random() * 2.5,
+                color: p % 2 === 0 ? '#fef08a' : (p % 3 === 0 ? '#38bdf8' : '#78716c'),
+                alpha: 1,
+                life: 25,
+                type: p % 3 === 0 ? 'spark' : 'stone_chip',
+              });
+            }
+          }
+
+          if (cage.phaseTimer >= cage.collapseDurationMs) {
+            cage.phase = 'finished';
+          }
+        }
+
+        if (cage.phase === 'finished') {
+          g.conductiveCages.splice(cIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -4814,6 +5248,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.cryoBeams,
             g.volcanicBombardments,
             g.thermalVortices,
+            g.conductiveCages,
             g.forestLevel ?? undefined
           );
         }
@@ -5073,6 +5508,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
                     : activeRecipe.id === 'thermal_shock'
                     ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
+                    : activeRecipe.id === 'crystal_field'
+                    ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -5086,6 +5523,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
                     : activeRecipe.id === 'thermal_shock'
                     ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
+                    : activeRecipe.id === 'crystal_field'
+                    ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -5109,6 +5548,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
                 : activeRecipe.id === 'thermal_shock'
                 ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
+                : activeRecipe.id === 'crystal_field'
+                ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -5129,6 +5570,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff6d00]'
                       : activeRecipe.id === 'thermal_shock'
                       ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-cyan-400 shadow-[0_0_8px_#f43f5e]'
+                      : activeRecipe.id === 'crystal_field'
+                      ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-cyan-400 shadow-[0_0_8px_#eab308]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
