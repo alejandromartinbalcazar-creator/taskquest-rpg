@@ -13,6 +13,7 @@ import {
   GlacialEruptionEntity,
   GlacialSpikeSegment,
   TectonicFistEntity,
+  CryoBeamEntity,
 } from './types';
 import { drawWizardSprite } from '../renderWizard';
 
@@ -52,7 +53,8 @@ export class IsometricRenderer {
     currentBoss: GameEnemy | null,
     infernalCrowns: InfernalCrownEntity[] = [],
     glacialEruptions: GlacialEruptionEntity[] = [],
-    tectonicFists: TectonicFistEntity[] = []
+    tectonicFists: TectonicFistEntity[] = [],
+    cryoBeams: CryoBeamEntity[] = []
   ) {
     ctx.save();
 
@@ -95,6 +97,8 @@ export class IsometricRenderer {
       this.drawGlacialAimTrajectory(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'earth') {
       this.drawTectonicAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'cryo') {
+      this.drawCryoAimTrajectory(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -169,6 +173,9 @@ export class IsometricRenderer {
 
     // Dibujar Rayos Eléctricos Instantáneos y Ramificados con Chispas
     this.drawLightningBolts(ctx, lightningBolts);
+
+    // 6.5 Dibujar Rayos Criogénicos (Hielo + Rayo) Penetrantes con Núcleo Gélido y Espirales Voltaicas
+    this.drawCryoBeams(ctx, wizard, cryoBeams);
 
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
@@ -864,6 +871,69 @@ export class IsometricRenderer {
           ctx.beginPath();
           ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
           ctx.fill();
+        }
+      }
+
+      // Escarcha boreal y chispas de plasma violeta/cobalto para Rayo Criogénico (Hielo + Rayo)
+      const isCryo = wizard.chargeType === 'cryo';
+      if (isCryo) {
+        ctx.shadowBlur = 0;
+        const cryoCount = isReady ? 8 : Math.max(3, Math.floor(ratio * 6));
+        for (let cc = 0; cc < cryoCount; cc++) {
+          const ccAng = Date.now() * 0.007 + (cc * Math.PI * 2) / cryoCount;
+          const ccDist = 20 + ratio * 10;
+          const cx = Math.cos(ccAng) * ccDist;
+          const cy = 8 + Math.sin(ccAng) * (ccDist * 0.58);
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(ccAng);
+          // Alternar entre fragmento de hielo cyan y chispa de plasma violeta
+          if (cc % 2 === 0) {
+            ctx.fillStyle = isReady ? '#ffffff' : '#00f0ff';
+            ctx.beginPath();
+            ctx.moveTo(0, -6);
+            ctx.lineTo(3, 2);
+            ctx.lineTo(0, 4);
+            ctx.lineTo(-3, 2);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillStyle = isReady ? '#e0e7ff' : '#a855f7';
+            ctx.beginPath();
+            ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // Esfera binaria de plasma helado en el báculo al cargar
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 9 : 5 + ratio * 3) + Math.sin(Date.now() * 0.02) * 1.5;
+        const cryoGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.2);
+        cryoGrad.addColorStop(0, '#ffffff');
+        cryoGrad.addColorStop(0.3, '#00f0ff');
+        cryoGrad.addColorStop(0.65, isReady ? '#7c4dff' : '#0284c7');
+        cryoGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+        ctx.fillStyle = cryoGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Si está en sobrecarga completa (listo para +50% de daño), micro-chispas de plasma
+        if (isReady) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          for (let sp = 0; sp < 3; sp++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const spR1 = pulseR * 0.8;
+            const spR2 = pulseR * 1.6;
+            ctx.beginPath();
+            ctx.moveTo(staffX + Math.cos(spAng) * spR1, staffY + Math.sin(spAng) * spR1);
+            ctx.lineTo(staffX + Math.cos(spAng + 0.3) * spR2, staffY + Math.sin(spAng + 0.3) * spR2);
+            ctx.stroke();
+          }
         }
       }
 
@@ -2327,5 +2397,308 @@ export class IsometricRenderer {
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  // Previsualización de retícula / rayo de puntería para Rayo Criogénico al cargar
+  private static drawCryoAimTrajectory(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ang = wizard.facingAngle;
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const length = 400;
+    const squish = 0.72;
+
+    ctx.save();
+
+    const startX = wizard.x + Math.cos(ang) * 16;
+    const startY = wizard.y - 12 + Math.sin(ang) * 10;
+    const endX = startX + Math.cos(ang) * length;
+    const endY = startY + Math.sin(ang) * length * squish;
+
+    // Haz guía láser dual (cian gélido + violeta voltaico)
+    ctx.strokeStyle = isReady ? 'rgba(0, 240, 255, 0.85)' : 'rgba(124, 77, 255, 0.45)';
+    ctx.lineWidth = isReady ? 3.0 : 1.8;
+    ctx.setLineDash([12, 8]);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Línea interior brillante
+    ctx.strokeStyle = isReady ? '#ffffff' : 'rgba(0, 240, 255, 0.7)';
+    ctx.lineWidth = isReady ? 1.5 : 0.8;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Partículas de plasma a lo largo de la guía
+    const numDots = isReady ? 10 : 6;
+    for (let i = 1; i <= numDots; i++) {
+      const prog = (i / numDots + (Date.now() * 0.002) % 1) % 1;
+      const px = startX + (endX - startX) * prog;
+      const py = startY + (endY - startY) * prog;
+      ctx.fillStyle = i % 2 === 0 ? '#00f0ff' : '#a855f7';
+      ctx.beginPath();
+      ctx.arc(px, py, isReady ? 3 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Retícula de impacto en el extremo
+    ctx.save();
+    ctx.translate(endX, endY);
+    const pulse = 1 + Math.sin(Date.now() * 0.015) * 0.15;
+    const r = (isReady ? 28 : 20) * pulse;
+
+    ctx.strokeStyle = isReady ? '#00f0ff' : '#7c4dff';
+    ctx.lineWidth = isReady ? 2.2 : 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (isReady) {
+      // Indicador de sobrecarga +50%
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('+50% CRÍO', 0, -r * 0.7);
+    }
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // DIBUJO DE RAYO CRIOGÉNICO (HIELO + RAYO) CON NÚCLEO PENETRANTE Y ESPIRALES VOLTAICAS
+  private static drawCryoBeams(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number },
+    beams: CryoBeamEntity[]
+  ) {
+    if (!beams || beams.length === 0) return;
+
+    beams.forEach((beam) => {
+      if (beam.finished) return;
+
+      ctx.save();
+
+      // Origen: anclado al jugador / báculo en tiempo real para permitir movimiento mientras dispara
+      const originX = beam.originX ?? (wizard.x + Math.cos(beam.aimAngle) * 16);
+      const originY = beam.originY ?? (wizard.y - 12 + Math.sin(beam.aimAngle) * 10);
+      const angle = beam.aimAngle;
+      const range = beam.range || 400;
+      const squish = 0.72; // Factor isométrico de perspectiva para el suelo y el haz
+
+      const endX = originX + Math.cos(angle) * range;
+      const endY = originY + Math.sin(angle) * range * squish;
+
+      // Cálculo de desvanecimiento suave (fade out)
+      const remainingMs = beam.durationMs - beam.elapsedMs;
+      const alpha = remainingMs < 180 ? Math.max(0, remainingMs / 180) : (beam.elapsedMs < 80 ? beam.elapsedMs / 80 : 1.0);
+      const isOverloaded = beam.isCharged;
+      const baseWidth = (beam.width || (isOverloaded ? 20 : 14)) * (isOverloaded ? 1.25 : 1.0);
+
+      const dx = endX - originX;
+      const dy = endY - originY;
+      const len = Math.hypot(dx, dy);
+      const ux = dx / (len || 1);
+      const uy = dy / (len || 1);
+      // Vector perpendicular para el grosor y las hélices
+      const nx = -uy;
+      const ny = ux;
+
+      const now = Date.now();
+
+      // 1. Aura de permafrost y resplandor eléctrico en el suelo bajo el rayo
+      ctx.save();
+      ctx.globalAlpha = 0.35 * alpha;
+      const floorGrad = ctx.createLinearGradient(originX, originY, endX, endY);
+      floorGrad.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+      floorGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.3)');
+      floorGrad.addColorStop(1, 'rgba(0, 240, 255, 0.1)');
+      ctx.strokeStyle = floorGrad;
+      ctx.lineWidth = baseWidth * 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(originX, originY + 14);
+      ctx.lineTo(endX, endY + 14);
+      ctx.stroke();
+      ctx.restore();
+
+      // 2. Funda exterior de plasma gélido (Outer Sheath)
+      ctx.save();
+      ctx.globalAlpha = 0.85 * alpha;
+      const sheathGrad = ctx.createLinearGradient(originX, originY, endX, endY);
+      sheathGrad.addColorStop(0, isOverloaded ? '#00f0ff' : '#0284c7');
+      sheathGrad.addColorStop(0.4, isOverloaded ? '#7c4dff' : '#00e5ff');
+      sheathGrad.addColorStop(0.8, isOverloaded ? '#a855f7' : '#0284c7');
+      sheathGrad.addColorStop(1, '#00f0ff');
+      ctx.strokeStyle = sheathGrad;
+      ctx.lineWidth = baseWidth * 1.5;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = isOverloaded ? '#7c4dff' : '#00f0ff';
+      ctx.shadowBlur = isOverloaded ? 22 : 14;
+      ctx.beginPath();
+      ctx.moveTo(originX, originY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // 3. Flujo interior de Frío Cero Absoluto (Core Frost Stream con micro-ondulación)
+      ctx.strokeStyle = '#e0f7fa';
+      ctx.lineWidth = baseWidth * 0.75;
+      ctx.shadowBlur = isOverloaded ? 16 : 8;
+      ctx.shadowColor = '#00f0ff';
+      ctx.beginPath();
+      const waveSteps = 24;
+      ctx.moveTo(originX, originY);
+      for (let w = 1; w <= waveSteps; w++) {
+        const prog = w / waveSteps;
+        const wx = originX + dx * prog;
+        const wy = originY + dy * prog;
+        const waveAmp = (1 - prog * 0.5) * (isOverloaded ? 3.5 : 2.0);
+        const waveOffset = Math.sin(now * 0.025 + prog * 16) * waveAmp;
+        ctx.lineTo(wx + nx * waveOffset, wy + ny * waveOffset);
+      }
+      ctx.stroke();
+
+      // 4. Espina central blanca incandescente (White Incandescent Spine)
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = baseWidth * (isOverloaded ? 0.42 : 0.28);
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(originX, originY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 5. Espirales Voltaicas Orbitantes (Helical Plasma Currents)
+      ctx.save();
+      ctx.globalAlpha = 0.9 * alpha;
+      const helixSteps = 36;
+      const helixRadius = baseWidth * (isOverloaded ? 1.6 : 1.25);
+      const speed = now * 0.018;
+
+      // Hélice 1: Plasma Violeta (#a855f7 / #c084fc)
+      ctx.strokeStyle = isOverloaded ? '#c084fc' : '#a855f7';
+      ctx.lineWidth = isOverloaded ? 2.5 : 1.8;
+      ctx.beginPath();
+      for (let h = 0; h <= helixSteps; h++) {
+        const hp = h / helixSteps;
+        const hx = originX + dx * hp;
+        const hy = originY + dy * hp;
+        const phase = hp * 18 - speed;
+        const offset = Math.sin(phase) * helixRadius;
+        if (h === 0) ctx.moveTo(hx + nx * offset, hy + ny * offset);
+        else ctx.lineTo(hx + nx * offset, hy + ny * offset);
+      }
+      ctx.stroke();
+
+      // Hélice 2: Plasma Cobalto / Cian Eléctrico (#00f0ff) en contrafase
+      ctx.strokeStyle = isOverloaded ? '#ffffff' : '#00f0ff';
+      ctx.lineWidth = isOverloaded ? 2.2 : 1.6;
+      ctx.beginPath();
+      for (let h = 0; h <= helixSteps; h++) {
+        const hp = h / helixSteps;
+        const hx = originX + dx * hp;
+        const hy = originY + dy * hp;
+        const phase = hp * 18 - speed + Math.PI;
+        const offset = Math.sin(phase) * helixRadius;
+        if (h === 0) ctx.moveTo(hx + nx * offset, hy + ny * offset);
+        else ctx.lineTo(hx + nx * offset, hy + ny * offset);
+      }
+      ctx.stroke();
+
+      // Chispas y micro-descargas transversales entre hélices
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = 1.2;
+      const sparkCount = isOverloaded ? 6 : 4;
+      for (let s = 0; s < sparkCount; s++) {
+        const spProg = ((now * 0.003 + s * 0.23) % 0.9) + 0.05;
+        const spX = originX + dx * spProg;
+        const spY = originY + dy * spProg;
+        const spOffset = (Math.sin(spProg * 22 + speed) * helixRadius);
+        const jx = (Math.random() - 0.5) * 8;
+        const jy = (Math.random() - 0.5) * 8;
+        ctx.beginPath();
+        ctx.moveTo(spX, spY);
+        ctx.lineTo(spX + nx * spOffset + jx, spY + ny * spOffset + jy);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 6. Destello de boca en estrella de diamante en la punta del báculo (Muzzle Flare)
+      ctx.save();
+      ctx.translate(originX, originY);
+      ctx.globalAlpha = alpha;
+      const starR = (isOverloaded ? 22 : 15) + Math.sin(now * 0.03) * 3;
+
+      // Resplandor radial
+      const flareGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, starR * 1.5);
+      flareGrad.addColorStop(0, '#ffffff');
+      flareGrad.addColorStop(0.35, '#00f0ff');
+      flareGrad.addColorStop(0.7, '#7c4dff');
+      flareGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+      ctx.fillStyle = flareGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, starR * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Estrella diamante de 4 puntas
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(0, -starR);
+      ctx.lineTo(starR * 0.25, -starR * 0.25);
+      ctx.lineTo(starR, 0);
+      ctx.lineTo(starR * 0.25, starR * 0.25);
+      ctx.lineTo(0, starR);
+      ctx.lineTo(-starR * 0.25, starR * 0.25);
+      ctx.lineTo(-starR, 0);
+      ctx.lineTo(-starR * 0.25, -starR * 0.25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // 7. Salpicadura de impacto terminal y ondas de choque gélidas (Terminal Impact)
+      ctx.save();
+      ctx.translate(endX, endY);
+      ctx.globalAlpha = 0.85 * alpha;
+      const termPulse = (isOverloaded ? 28 : 20) + Math.sin(now * 0.02) * 4;
+
+      // Halo de impacto
+      const impactGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, termPulse);
+      impactGrad.addColorStop(0, '#ffffff');
+      impactGrad.addColorStop(0.4, '#00f0ff');
+      impactGrad.addColorStop(0.8, 'rgba(124, 77, 255, 0.4)');
+      impactGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+      ctx.fillStyle = impactGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, termPulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Anillo de escarcha expansivo
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, termPulse * 0.85, termPulse * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Fragmentos de hielo expulsados hacia afuera
+      const shardCount = isOverloaded ? 6 : 4;
+      for (let sc = 0; sc < shardCount; sc++) {
+        const scAng = angle + Math.PI + (sc - shardCount / 2) * 0.5 + Math.sin(now * 0.01 + sc) * 0.2;
+        const scDist = termPulse * (0.6 + (sc % 2) * 0.4);
+        ctx.fillStyle = sc % 2 === 0 ? '#e0f7fa' : '#a855f7';
+        ctx.beginPath();
+        ctx.arc(Math.cos(scAng) * scDist, Math.sin(scAng) * scDist * 0.6, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.restore();
+    });
   }
 }

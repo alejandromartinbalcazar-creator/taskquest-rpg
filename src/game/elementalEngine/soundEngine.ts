@@ -1233,6 +1233,130 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.2);
   }
+
+  // ==========================================
+  // RAYO CRIOGÉNICO (HIELO + RAYO)
+  // ==========================================
+
+  // 1. Disparo / Ignición del haz plasma-gélido
+  public playCryoBeamStart(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Chispa eléctrica inicial aguda
+    const oscZ = this.ctx.createOscillator();
+    const gainZ = this.ctx.createGain();
+    oscZ.type = 'sawtooth';
+    oscZ.frequency.setValueAtTime(isCharged ? 920 : 740, now);
+    oscZ.frequency.exponentialRampToValueAtTime(140, now + 0.16);
+
+    gainZ.gain.setValueAtTime(isCharged ? 0.32 : 0.22, now);
+    gainZ.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+    oscZ.connect(gainZ);
+    gainZ.connect(this.ctx.destination);
+    oscZ.start(now);
+    oscZ.stop(now + 0.16);
+
+    // Silbido gélido de viento polar
+    const oscW = this.ctx.createOscillator();
+    const gainW = this.ctx.createGain();
+    oscW.type = 'sine';
+    oscW.frequency.setValueAtTime(isCharged ? 1100 : 880, now);
+    oscW.frequency.linearRampToValueAtTime(440, now + 0.2);
+
+    gainW.gain.setValueAtTime(0.18, now);
+    gainW.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    oscW.connect(gainW);
+    gainW.connect(this.ctx.destination);
+    oscW.start(now);
+    oscW.stop(now + 0.2);
+  }
+
+  // 2. Pulso / Zumbido continuo durante la emisión (hielo + plasma voltaico)
+  public playCryoBeamHum(isCharged: boolean) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Zumbido eléctrico
+    const oscE = this.ctx.createOscillator();
+    const gainE = this.ctx.createGain();
+    oscE.type = 'sawtooth';
+    oscE.frequency.setValueAtTime(isCharged ? 480 : 360, now);
+    oscE.frequency.linearRampToValueAtTime(isCharged ? 520 : 400, now + 0.08);
+
+    gainE.gain.setValueAtTime(isCharged ? 0.16 : 0.11, now);
+    gainE.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    oscE.connect(gainE);
+    gainE.connect(this.ctx.destination);
+    oscE.start(now);
+    oscE.stop(now + 0.09);
+
+    // Resonancia de cristal gélido
+    const oscI = this.ctx.createOscillator();
+    const gainI = this.ctx.createGain();
+    oscI.type = 'triangle';
+    oscI.frequency.setValueAtTime(isCharged ? 880 : 720, now);
+    oscI.frequency.exponentialRampToValueAtTime(320, now + 0.08);
+
+    gainI.gain.setValueAtTime(0.12, now);
+    gainI.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    oscI.connect(gainI);
+    gainI.connect(this.ctx.destination);
+    oscI.start(now);
+    oscI.stop(now + 0.08);
+  }
+
+  // 3. Salto de arco eléctrico a enemigo adyacente
+  public playCryoBeamArcJump() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(680, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 0.07);
+
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  }
+
+  // 4. Detención y disipación del haz
+  public playCryoBeamEnd() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(340, now);
+    osc.frequency.exponentialRampToValueAtTime(60, now + 0.14);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

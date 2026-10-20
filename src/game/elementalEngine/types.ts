@@ -377,6 +377,26 @@ export interface TectonicFistEntity {
   rubbleCount: number;
 }
 
+export interface CryoBeamEntity {
+  id: string;
+  originX?: number;
+  originY?: number;
+  aimAngle: number;
+  range: number;
+  width: number;
+  damagePerTick: number;
+  isCharged: boolean;
+  durationMs: number;
+  elapsedMs: number;
+  lastTickMs: number;
+  tickIntervalMs: number;
+  finished: boolean;
+  enemyExposure: Record<string, number>;
+  lastEnemyTick: Record<string, number>;
+  dissipating: boolean;
+  dissipateTimer: number;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'
