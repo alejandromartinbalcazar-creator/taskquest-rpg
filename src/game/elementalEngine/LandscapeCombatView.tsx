@@ -316,6 +316,28 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
   const keysPressedRef = useRef<Record<string, boolean>>({});
+  const attackAimRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+    currX: number;
+    currY: number;
+    isAiming: boolean;
+  }>({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    currX: 0,
+    currY: 0,
+    isAiming: false,
+  });
+  const mousePosRef = useRef<{ x: number; y: number; active: boolean }>({
+    x: 0,
+    y: 0,
+    active: false,
+  });
 
   // Hechizo activo identificado
   const activeRecipe = identifyRecipe(elementQueue);
@@ -474,30 +496,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       wizard.channeledStream.damagePerTick = damagePerTick;
       wizard.channeledStream.sourceButton = sourceButton;
       wizard.staffOrbColor = isFire ? '#ef4444' : '#06b6d4';
+      wizard.channeledStream.lockedEnemyId = null;
 
-      let closestDist = range + 40;
-      let targetEnemy: GameEnemy | null = null;
-      for (const enemy of g.enemyManager.enemies) {
-        if (enemy.hp <= 0) continue;
-        const d = Math.hypot(enemy.x - wizard.x, enemy.y - wizard.y);
-        if (d < closestDist) {
-          const ang = Math.atan2(enemy.y - wizard.y, enemy.x - wizard.x);
-          let diff = ang - wizard.facingAngle;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          if (Math.abs(diff) < 0.65) {
-            closestDist = d;
-            targetEnemy = enemy;
-          }
+      // Apuntado manual inicial (hacia cursor del ratón en PC o hacia donde mira el mago)
+      if (mousePosRef.current.active) {
+        const dx = mousePosRef.current.x - wizard.x;
+        const dy = mousePosRef.current.y - wizard.y;
+        if (Math.hypot(dx, dy) > 10) {
+          wizard.channeledStream.aimAngle = Math.atan2(dy, dx);
+          wizard.facingAngle = wizard.channeledStream.aimAngle;
+        } else {
+          wizard.channeledStream.aimAngle = wizard.facingAngle;
         }
-      }
-
-      if (targetEnemy) {
-        wizard.channeledStream.lockedEnemyId = targetEnemy.id;
-        wizard.channeledStream.aimAngle = Math.atan2(targetEnemy.y - wizard.y, targetEnemy.x - wizard.x);
-        wizard.facingAngle = wizard.channeledStream.aimAngle;
       } else {
-        wizard.channeledStream.lockedEnemyId = null;
         wizard.channeledStream.aimAngle = wizard.facingAngle;
       }
 
@@ -1064,12 +1075,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           setTimeout(() => {
             stopChanneledAttack('fire');
           }, 350);
+          return;
         } else if (isIce) {
           // Chorro Criogénico Continuo: no genera proyectiles individuales
           startChanneledAttack('ice', 'attack');
           setTimeout(() => {
             stopChanneledAttack('ice');
           }, 350);
+          return;
         } else if (isEarth) {
           g.screenShake = isCharged ? 11 : 7;
           g.projectiles.push({
@@ -1156,8 +1169,88 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     handleAttack(wasCharged);
   }, [handleAttack, stopChanneledAttack]);
 
-  // Soporte de Teclado Completo para PC / Navegador Chrome (WASD, Flechas, 1-4, Espacio, J/Enter)
+  // Manejo de puntería manual y arrastre táctil en el botón de Ataque
+  const handleAttackPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      try {
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // Ignorar si no está soportado
+      }
+      attackAimRef.current = {
+        active: true,
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        currX: e.clientX,
+        currY: e.clientY,
+        isAiming: false,
+      };
+      startCharge();
+    },
+    [startCharge]
+  );
+
+  const handleAttackPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const aim = attackAimRef.current;
+    if (!aim.active || aim.pointerId !== e.pointerId) return;
+
+    aim.currX = e.clientX;
+    aim.currY = e.clientY;
+    const dx = e.clientX - aim.startX;
+    const dy = e.clientY - aim.startY;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 7) {
+      aim.isAiming = true;
+      const angle = Math.atan2(dy, dx);
+      const wizard = gameStateRef.current.wizard;
+      wizard.channeledStream.aimAngle = angle;
+      wizard.facingAngle = angle;
+    }
+  }, []);
+
+  const handleAttackPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      attackAimRef.current.active = false;
+      attackAimRef.current.pointerId = null;
+      attackAimRef.current.isAiming = false;
+      finishCharge();
+    },
+    [finishCharge]
+  );
+
+  // Soporte de Teclado y Ratón Completo para PC / Navegador Chrome (WASD, Flechas, 1-4, Espacio, J/Enter)
   useEffect(() => {
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const scaleX = 1000 / rect.width;
+        const scaleY = 620 / rect.height;
+        const canvasX = (e.clientX - rect.left) * scaleX;
+        const canvasY = (e.clientY - rect.top) * scaleY;
+        const g = gameStateRef.current;
+        const zoom = 1.32;
+        const cx = 1000 / 2;
+        const cy = 620 / 2;
+        const worldX = (canvasX - cx) / zoom + g.camera.x;
+        const worldY = (canvasY - cy) / zoom + g.camera.y;
+        mousePosRef.current = { x: worldX, y: worldY, active: true };
+
+        if (g.wizard.channeledStream.active) {
+          const dx = worldX - g.wizard.x;
+          const dy = worldY - g.wizard.y;
+          if (Math.hypot(dx, dy) > 10) {
+            const ang = Math.atan2(dy, dx);
+            g.wizard.channeledStream.aimAngle = ang;
+            g.wizard.facingAngle = ang;
+          }
+        }
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       keysPressedRef.current[e.code] = true;
 
@@ -1165,20 +1258,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         e.preventDefault();
         handleDash();
       } else if (e.code === 'Digit1' || e.code === 'Numpad1') {
-        const stream = gameStateRef.current.wizard.channeledStream;
-        if (!stream.active || stream.type !== 'fire') {
-          handleSelectElement('fire');
-          startChanneledAttack('fire', 'element');
-        }
+        stopChanneledAttack();
+        handleSelectElement('fire');
       } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
         stopChanneledAttack();
         handleSelectElement('lightning');
       } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
-        const stream = gameStateRef.current.wizard.channeledStream;
-        if (!stream.active || stream.type !== 'ice') {
-          handleSelectElement('ice');
-          startChanneledAttack('ice', 'element');
-        }
+        stopChanneledAttack();
+        handleSelectElement('ice');
       } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
         stopChanneledAttack();
         handleSelectElement('earth');
@@ -1200,11 +1287,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressedRef.current[e.code] = false;
-      if (e.code === 'Digit1' || e.code === 'Numpad1') {
-        stopChanneledAttack('fire');
-      } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
-        stopChanneledAttack('ice');
-      } else if (e.code === 'KeyJ' || e.code === 'Enter') {
+      if (e.code === 'KeyJ' || e.code === 'Enter') {
         if (gameStateRef.current.wizard.channeledStream.active) {
           stopChanneledAttack();
         } else {
@@ -1213,9 +1296,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       }
     };
 
+    window.addEventListener('pointermove', handleWindowPointerMove);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
@@ -1378,48 +1463,25 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (wizard.isDashing) {
           stopChanneledAttack();
         } else {
-          // A. Orientación y fijación de blanco suave (sin saltos erráticos)
-          if (stream.lockedEnemyId) {
-            const locked = enemies.find((e) => e.id === stream.lockedEnemyId && e.hp > 0);
-            if (locked) {
-              const d = Math.hypot(locked.x - wizard.x, locked.y - wizard.y);
-              if (d <= stream.range + 70) {
-                const targetAng = Math.atan2(locked.y - wizard.y, locked.x - wizard.x);
-                let diff = targetAng - stream.aimAngle;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                stream.aimAngle += diff * 0.22;
-                wizard.facingAngle = stream.aimAngle;
-              } else {
-                stream.lockedEnemyId = null;
-              }
-            } else {
-              stream.lockedEnemyId = null;
+          // A. Control Direccional y Apuntado Manual (Arrastre táctil en botón de ataque, Ratón en PC o dirección de movimiento)
+          if (attackAimRef.current.active && attackAimRef.current.isAiming) {
+            const dx = attackAimRef.current.currX - attackAimRef.current.startX;
+            const dy = attackAimRef.current.currY - attackAimRef.current.startY;
+            if (Math.hypot(dx, dy) > 7) {
+              const ang = Math.atan2(dy, dx);
+              stream.aimAngle = ang;
+              wizard.facingAngle = ang;
             }
-          }
-
-          if (!stream.lockedEnemyId) {
-            let closestDist = stream.range + 40;
-            let foundTarget: GameEnemy | null = null;
-            for (const e of enemies) {
-              if (e.hp <= 0) continue;
-              const dist = Math.hypot(e.x - wizard.x, e.y - wizard.y);
-              if (dist < closestDist) {
-                const ang = Math.atan2(e.y - wizard.y, e.x - wizard.x);
-                let diff = ang - wizard.facingAngle;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                if (Math.abs(diff) < 0.65) {
-                  closestDist = dist;
-                  foundTarget = e;
-                }
-              }
+          } else if (mousePosRef.current.active) {
+            const dx = mousePosRef.current.x - wizard.x;
+            const dy = mousePosRef.current.y - wizard.y;
+            if (Math.hypot(dx, dy) > 10) {
+              const ang = Math.atan2(dy, dx);
+              stream.aimAngle = ang;
+              wizard.facingAngle = ang;
             }
-            if (foundTarget) {
-              stream.lockedEnemyId = foundTarget.id;
-            } else {
-              stream.aimAngle = wizard.facingAngle;
-            }
+          } else {
+            stream.aimAngle = wizard.facingAngle;
           }
 
           // B. Detección de Colisión Cónica y Daño Periódico Multi-Objetivo
@@ -2204,19 +2266,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               onPointerDown={(e) => {
                 e.stopPropagation();
                 handleSelectElement('fire');
-                startChanneledAttack('fire', 'element');
-              }}
-              onPointerUp={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('fire');
-              }}
-              onPointerLeave={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('fire');
-              }}
-              onPointerCancel={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('fire');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-rose-600 to-red-800 active:scale-95 border-2 border-rose-400 shadow-[0_0_12px_rgba(239,68,68,0.4)] flex flex-col items-center justify-center text-white"
             >
@@ -2242,19 +2291,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               onPointerDown={(e) => {
                 e.stopPropagation();
                 handleSelectElement('ice');
-                startChanneledAttack('ice', 'element');
-              }}
-              onPointerUp={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('ice');
-              }}
-              onPointerLeave={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('ice');
-              }}
-              onPointerCancel={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack('ice');
               }}
               className="w-13 h-13 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 active:scale-95 border-2 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.4)] flex flex-col items-center justify-center text-white"
             >
@@ -2299,20 +2335,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             <span className="text-[8px] font-black tracking-wider relative z-10">ESQUIVAR</span>
           </button>
 
-          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA */}
+          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA Y APUNTADO TÁCTIL */}
           <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              startCharge();
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              finishCharge();
-            }}
-            onPointerCancel={(e) => {
-              e.stopPropagation();
-              finishCharge();
-            }}
+            onPointerDown={handleAttackPointerDown}
+            onPointerMove={handleAttackPointerMove}
+            onPointerUp={handleAttackPointerUp}
+            onPointerCancel={handleAttackPointerUp}
             className={`w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 active:scale-95 border-2 ${
               chargeVisualRatio >= 1.0
                 ? 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse'
