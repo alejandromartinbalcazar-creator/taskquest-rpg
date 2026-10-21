@@ -2223,6 +2223,145 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.08);
   }
+
+  // =========================================================================
+  // SONIDOS DE TORMENTA CELESTIAL (RAYO + RAYO + RAYO - ⚡⚡⚡)
+  // =========================================================================
+
+  // 1. Invocación de la tempestad e ionización atmosférica
+  public playCelestialStormCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bass electromagnético
+    const sub = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(55, now);
+    sub.frequency.exponentialRampToValueAtTime(75, now + 0.22);
+    subGain.gain.setValueAtTime(isCharged ? 0.35 : 0.24, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    sub.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.22);
+
+    // Ionización ascendente de alta tensión
+    const surge = this.ctx.createOscillator();
+    const surgeGain = this.ctx.createGain();
+    surge.type = 'sawtooth';
+    surge.frequency.setValueAtTime(isCharged ? 220 : 280, now);
+    surge.frequency.exponentialRampToValueAtTime(isCharged ? 980 : 850, now + 0.24);
+    surgeGain.gain.setValueAtTime(isCharged ? 0.25 : 0.18, now);
+    surgeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    surge.connect(surgeGain);
+    surgeGain.connect(this.ctx.destination);
+    surge.start(now);
+    surge.stop(now + 0.24);
+  }
+
+  // 2. Impacto fulminante de relámpago vertical y trueno seco
+  public playCelestialLightningStrike(isColossal: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Chasquido de alta tensión (Snap)
+    const snap = this.ctx.createOscillator();
+    const snapGain = this.ctx.createGain();
+    snap.type = 'sawtooth';
+    snap.frequency.setValueAtTime(isColossal ? 2600 : 2200, now);
+    snap.frequency.exponentialRampToValueAtTime(80, now + (isColossal ? 0.05 : 0.035));
+    snapGain.gain.setValueAtTime(isColossal ? 0.45 : 0.3, now);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.05 : 0.035));
+    snap.connect(snapGain);
+    snapGain.connect(this.ctx.destination);
+    snap.start(now);
+    snap.stop(now + (isColossal ? 0.05 : 0.035));
+
+    // Trueno seco (Crack)
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'triangle';
+    crack.frequency.setValueAtTime(isColossal ? 450 : 380, now);
+    crack.frequency.exponentialRampToValueAtTime(35, now + (isColossal ? 0.24 : 0.16));
+    crackGain.gain.setValueAtTime(isColossal ? 0.5 : 0.35, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.24 : 0.16));
+    crack.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crack.start(now);
+    crack.stop(now + (isColossal ? 0.24 : 0.16));
+
+    // Estruendo sub-grave sísmico
+    const rumble = this.ctx.createOscillator();
+    const rumbleGain = this.ctx.createGain();
+    rumble.type = 'sine';
+    rumble.frequency.setValueAtTime(isColossal ? 130 : 100, now);
+    rumble.frequency.exponentialRampToValueAtTime(25, now + (isColossal ? 0.38 : 0.22));
+    rumbleGain.gain.setValueAtTime(isColossal ? 0.6 : 0.4, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.38 : 0.22));
+    rumble.connect(rumbleGain);
+    rumbleGain.connect(this.ctx.destination);
+    rumble.start(now);
+    rumble.stop(now + (isColossal ? 0.38 : 0.22));
+  }
+
+  // 3. Chisporroteo y zumbido residual de estática en charcos ionizados
+  public playIonizedPuddleBuzz() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420 + Math.random() * 120, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.065);
+    gain.gain.setValueAtTime(0.065, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.065);
+  }
+
+  // 4. Detonación electromagnética terminal de sobrecarga
+  public playCelestialTerminalDetonation() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Onda sónica electromagnética
+    const blast = this.ctx.createOscillator();
+    const blastGain = this.ctx.createGain();
+    blast.type = 'sawtooth';
+    blast.frequency.setValueAtTime(620, now);
+    blast.frequency.exponentialRampToValueAtTime(32, now + 0.35);
+    blastGain.gain.setValueAtTime(0.5, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    blast.connect(blastGain);
+    blastGain.connect(this.ctx.destination);
+    blast.start(now);
+    blast.stop(now + 0.35);
+
+    // Resonancia subgrave
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'sine';
+    boom.frequency.setValueAtTime(140, now);
+    boom.frequency.exponentialRampToValueAtTime(20, now + 0.45);
+    boomGain.gain.setValueAtTime(0.65, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(now);
+    boom.stop(now + 0.45);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

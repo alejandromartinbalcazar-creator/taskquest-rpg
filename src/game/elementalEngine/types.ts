@@ -49,6 +49,7 @@ export type SpellCastType =
   | 'explosive_overload'// Fuego + Rayo
   // Combinaciones Triples Puras y Avanzadas
   | 'hell_rain'         // Fuego + Fuego + Fuego (🔥🔥🔥) - Lluvia del Infierno
+  | 'celestial_storm'   // Rayo + Rayo + Rayo (⚡⚡⚡) - Tormenta Celestial
   | 'obsidian_volcano'  // Fuego + Hielo + Tierra
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
@@ -624,6 +625,49 @@ export interface HellRainEntity {
   meteors: HellMeteorInstance[];
   craters: HellCraterInstance[];
   elapsedMs: number;
+  finished: boolean;
+}
+
+// TORMENTA CELESTIAL (RAYO + RAYO + RAYO: TEMPESTAD IONIZADA, RELÁMPAGOS VERTICALES EN CASCADA Y CHARCOS DE ESTÁTICA)
+export interface CelestialLightningStrikeInstance {
+  id: string;
+  targetX: number;
+  targetY: number;
+  delayMs: number;             // Retardo escalonado (~120ms entre rayos)
+  warningDurationMs: number;   // Marca/runa en el suelo previa al rayo (~140ms)
+  strikeDurationMs: number;    // Duración activa visible del destello del rayo (~80ms)
+  strikeProgress: number;      // 0.0 a 1.0 (mientras el destello está activo)
+  isColossal: boolean;         // Relámpago final colosal en versión cargada (+80% radio y daño)
+  impactRadius: number;        // ~38px estándar, ~74px colosal
+  impactDamage: number;        // Daño de impacto directo
+  hasStruck: boolean;          // Si ya impactó y generó daño / charco
+  boltSegments: Array<{ x1: number; y1: number; x2: number; y2: number; branch?: boolean }>; // Trazado procedural persistente
+}
+
+export interface IonizedPuddleInstance {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;              // ~32px estándar, ~58px colosal
+  lifeTimerMs: number;         // ~1800ms
+  maxLifeMs: number;           // ~1800ms
+  tickIntervalMs: number;      // 200ms
+  lastTickPerEnemy: Record<string, number>;
+  dpsPerTick: number;          // Daño continuo por estática
+  isColossal: boolean;
+  detonated: boolean;          // Cuando el rayo colosal final sobrecarga y hace explotar los charcos
+}
+
+export interface CelestialStormEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  areaRadius: number;          // ~155px tap, ~195px charged
+  isCharged: boolean;
+  strikes: CelestialLightningStrikeInstance[];
+  puddles: IonizedPuddleInstance[];
+  elapsedMs: number;
+  terminalDetonated: boolean;
   finished: boolean;
 }
 

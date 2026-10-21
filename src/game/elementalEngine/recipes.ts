@@ -203,6 +203,19 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     cooldownMs: 700,
     selfDamageRisk: 0,
   },
+  celestial_storm: {
+    id: 'celestial_storm',
+    name: 'Tormenta Celestial',
+    elements: ['lightning', 'lightning', 'lightning'],
+    description: 'Tempestad fulminante de alto voltaje: ioniza el cuadrante marcando el suelo y descarga relámpagos verticales en cascada que electrocutan a los objetivos y dejan charcos de estática. Carga breve para invocar 6 relámpagos con un rayo colosal final y +50% de daño.',
+    icon: '⚡🌩️',
+    color: '#00f0ff',
+    secondaryColor: '#7c4dff',
+    damage: 90,
+    knockback: 5.5,
+    cooldownMs: 650,
+    selfDamageRisk: 0,
+  },
   obsidian_volcano: {
     id: 'obsidian_volcano',
     name: 'Volcán de Obsidiana',
@@ -280,6 +293,9 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   // 1.5 Combinaciones Triples Puras (3 o más elementos idénticos)
   if (count('fire') >= 3) {
     return RECIPES.hell_rain;
+  }
+  if (count('lightning') >= 3) {
+    return RECIPES.celestial_storm;
   }
 
   // 2. Combinaciones de 3 Elementos Distintos

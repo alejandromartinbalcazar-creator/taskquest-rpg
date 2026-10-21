@@ -26,6 +26,9 @@ import {
   HellRainEntity,
   HellMeteorInstance,
   HellCraterInstance,
+  CelestialStormEntity,
+  CelestialLightningStrikeInstance,
+  IonizedPuddleInstance,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -80,6 +83,7 @@ export class IsometricRenderer {
     permafrostPrisons: PermafrostPrisonEntity[] = [],
     plasmaTornadoes: PlasmaTornadoEntity[] = [],
     hellRains: HellRainEntity[] = [],
+    celestialStorms: CelestialStormEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -142,6 +146,9 @@ export class IsometricRenderer {
     // 3.80 Dibujar Suelo, Advertencias y Cráteres de Magma de la Lluvia del Infierno (Fuego + Fuego + Fuego)
     this.drawHellRainGround(ctx, hellRains);
 
+    // 3.81 Dibujar Suelo, Advertencias y Charcos Ionizados de Tormenta Celestial (Rayo + Rayo + Rayo)
+    this.drawCelestialStormGround(ctx, celestialStorms);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -161,6 +168,8 @@ export class IsometricRenderer {
       this.drawPlasmaTornadoAimTrajectory(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'hell_rain') {
       this.drawHellRainAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'celestial') {
+      this.drawCelestialAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -339,6 +348,9 @@ export class IsometricRenderer {
 
     // Dibujar Rayos Eléctricos Instantáneos y Ramificados con Chispas
     this.drawLightningBolts(ctx, lightningBolts);
+
+    // 6.2 Dibujar Relámpagos Verticales y Destellos de Tormenta Celestial (Rayo + Rayo + Rayo)
+    this.drawCelestialStormStrikes(ctx, celestialStorms);
 
     // 6.5 Dibujar Rayos Criogénicos (Hielo + Rayo) Penetrantes con Núcleo Gélido y Espirales Voltaicas
     this.drawCryoBeams(ctx, wizard, cryoBeams);
@@ -1477,6 +1489,54 @@ export class IsometricRenderer {
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.4, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Descargas celestiales y chispas de alta tensión para Tormenta Celestial (Rayo + Rayo + Rayo)
+      const isCelestial = wizard.chargeType === 'celestial';
+      if (isCelestial) {
+        ctx.shadowBlur = 0;
+        const sparkCount = isReady ? 12 : Math.max(5, Math.floor(ratio * 10));
+        for (let sc = 0; sc < sparkCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.015 : -0.015) + (sc * Math.PI * 2) / sparkCount;
+          const scDist = 18 + ratio * 14;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 6 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? '#ffffff' : (sc % 3 === 0 ? '#7c4dff' : '#00f0ff');
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 2.8 : 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Foco de plasma electromagnético en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 11 : 6.0 + ratio * 4.0) + Math.sin(Date.now() * 0.025) * 1.5;
+        const celGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.5);
+        celGrad.addColorStop(0, '#ffffff');
+        celGrad.addColorStop(0.35, '#00f0ff');
+        celGrad.addColorStop(0.7, '#7c4dff');
+        celGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+        ctx.fillStyle = celGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mini arcos voltaicos parpadeantes alrededor del mago
+        if (Math.random() < 0.6) {
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          const arcAng = Math.random() * Math.PI * 2;
+          const r1 = 10 + Math.random() * 8;
+          const r2 = 20 + Math.random() * 8;
+          ctx.moveTo(staffX + Math.cos(arcAng) * r1, staffY + Math.sin(arcAng) * r1 * 0.58);
+          ctx.lineTo(staffX + Math.cos(arcAng + 0.35) * r2, staffY + Math.sin(arcAng + 0.35) * r2 * 0.58);
+          ctx.stroke();
+        }
       }
 
       ctx.restore();
@@ -5868,6 +5928,342 @@ export class IsometricRenderer {
       isReady
         ? '¡FURIA CÓSMICA (+50% DAÑO · 6 METEORITOS + COLOSAL)! ☄️🔥'
         : 'LLUVIA DEL INFIERNO (4 METEORITOS EN SALVA) ☄️',
+      destX,
+      destY - areaRadius * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // RENDERIZADO DE TORMENTA CELESTIAL (RAYO + RAYO + RAYO - ⚡⚡⚡)
+  // =========================================================================
+
+  // 1. Suelo, auras de ionización, charcos de estática y sellos rúnicos de advertencia
+  private static drawCelestialStormGround(ctx: CanvasRenderingContext2D, celestialStorms: CelestialStormEntity[]) {
+    const squish = 0.58;
+    const nowTime = Date.now() * 0.003;
+
+    celestialStorms.forEach((storm) => {
+      // 1.1 Indicador de perímetro y atmósfera ionizada de la tempestad
+      ctx.save();
+      const zoneR = storm.areaRadius;
+      ctx.fillStyle = storm.isCharged ? 'rgba(0, 240, 255, 0.12)' : 'rgba(0, 240, 255, 0.07)';
+      ctx.beginPath();
+      ctx.ellipse(storm.centerX, storm.centerY, zoneR, zoneR * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Perímetro eléctrico punteado
+      ctx.strokeStyle = storm.isCharged ? 'rgba(0, 240, 255, 0.45)' : 'rgba(0, 240, 255, 0.28)';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.ellipse(storm.centerX, storm.centerY, zoneR, zoneR * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Nodos de chispas en órbita sobre el perímetro
+      const nodeCount = storm.isCharged ? 6 : 4;
+      for (let n = 0; n < nodeCount; n++) {
+        const nAng = nowTime * (n % 2 === 0 ? 0.7 : -0.7) + (n * Math.PI * 2) / nodeCount;
+        const nx = storm.centerX + Math.cos(nAng) * zoneR;
+        const ny = storm.centerY + Math.sin(nAng) * zoneR * squish;
+        ctx.fillStyle = '#00f0ff';
+        ctx.beginPath();
+        ctx.arc(nx, ny, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // 1.2 Charcos de estática residual ionizada dejados tras cada rayo
+      storm.puddles.forEach((puddle) => {
+        const px = puddle.x;
+        const py = puddle.y;
+        const pr = puddle.radius;
+        const progress = 1.0 - Math.max(0, puddle.lifeTimerMs / puddle.maxLifeMs);
+        const alpha = Math.max(0, 1.0 - Math.pow(progress, 2.0));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        // Base brillante del charco de estática
+        const puddleGrad = ctx.createRadialGradient(px, py, 1, px, py, pr);
+        puddleGrad.addColorStop(0, '#ffffff');
+        puddleGrad.addColorStop(0.28, '#00f0ff');
+        puddleGrad.addColorStop(0.68, '#3b82f6');
+        puddleGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');
+
+        ctx.fillStyle = puddleGrad;
+        ctx.beginPath();
+        ctx.ellipse(px, py, pr, pr * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Líneas de crackling y estática en la superficie
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let l = 0; l < 4; l++) {
+          const lAng = (l * Math.PI) / 2 + nowTime * 2.5;
+          const lr1 = pr * 0.2;
+          const lr2 = pr * 0.85;
+          const lx1 = px + Math.cos(lAng) * lr1;
+          const ly1 = py + Math.sin(lAng) * lr1 * squish;
+          const lx2 = px + Math.cos(lAng + 0.3) * lr2;
+          const ly2 = py + Math.sin(lAng + 0.3) * lr2 * squish;
+          ctx.moveTo(lx1, ly1);
+          ctx.lineTo(lx2, ly2);
+        }
+        ctx.stroke();
+
+        // Chispas ascendentes desde el charco
+        if (Math.random() < 0.3) {
+          const sAng = Math.random() * Math.PI * 2;
+          const sDist = Math.random() * pr * 0.7;
+          const sx = px + Math.cos(sAng) * sDist;
+          const sy = py + Math.sin(sAng) * sDist * squish - ((nowTime * 35) % 18);
+          ctx.fillStyle = '#00f0ff';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+
+      // 1.3 Arcos secundarios conectando charcos adyacentes si están cerca (< 85px)
+      const puddles = storm.puddles;
+      for (let i = 0; i < puddles.length; i++) {
+        for (let j = i + 1; j < puddles.length; j++) {
+          const pA = puddles[i];
+          const pB = puddles[j];
+          const dist = Math.hypot(pA.x - pB.x, (pA.y - pB.y) / squish);
+          if (dist < 85 && Math.random() < 0.75) {
+            ctx.save();
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(pA.x, pA.y);
+            const midX = (pA.x + pB.x) / 2 + (Math.random() - 0.5) * 12;
+            const midY = (pA.y + pB.y) / 2 + (Math.random() - 0.5) * 8;
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(pB.x, pB.y);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(pA.x, pA.y);
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(pB.x, pB.y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+
+      // 1.4 Sellos rúnicos de advertencia e ionización previa al impacto
+      storm.strikes.forEach((strike) => {
+        if (strike.hasStruck) return;
+        const warnStart = strike.delayMs - strike.warningDurationMs;
+        if (storm.elapsedMs < warnStart || storm.elapsedMs >= strike.delayMs) return;
+
+        const tx = strike.targetX;
+        const ty = strike.targetY;
+        const r = strike.impactRadius;
+        const warnProgress = Math.min(1.0, (storm.elapsedMs - warnStart) / strike.warningDurationMs);
+
+        ctx.save();
+        ctx.globalAlpha = 0.4 + 0.6 * warnProgress;
+
+        // Círculo exterior de advertencia eléctrico
+        ctx.strokeStyle = strike.isColossal ? '#7c4dff' : '#00f0ff';
+        ctx.lineWidth = strike.isColossal ? 2.5 : 1.8;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Relleno suave de ionización
+        ctx.fillStyle = strike.isColossal ? 'rgba(124, 77, 255, 0.22)' : 'rgba(0, 240, 255, 0.16)';
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cruz rúnica central de 4 puntas
+        const runeR = r * 0.65;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(tx - runeR, ty);
+        ctx.lineTo(tx + runeR, ty);
+        ctx.moveTo(tx, ty - runeR * squish);
+        ctx.lineTo(tx, ty + runeR * squish);
+        ctx.stroke();
+
+        // Trazos de chispas que brotan del suelo verticalmente anunciando la descarga
+        const sparkLines = strike.isColossal ? 6 : 4;
+        for (let sp = 0; sp < sparkLines; sp++) {
+          const spAng = (sp * Math.PI * 2) / sparkLines + nowTime * 3;
+          const spDist = r * 0.45;
+          const sx = tx + Math.cos(spAng) * spDist;
+          const sy = ty + Math.sin(spAng) * spDist * squish;
+          const sHeight = 12 + warnProgress * 22;
+
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + (Math.random() - 0.5) * 4, sy - sHeight);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      });
+    });
+  }
+
+  // 2. Relámpagos verticales en cascada y destellos electromagnéticos
+  private static drawCelestialStormStrikes(ctx: CanvasRenderingContext2D, celestialStorms: CelestialStormEntity[]) {
+    const squish = 0.58;
+
+    celestialStorms.forEach((storm) => {
+      storm.strikes.forEach((strike) => {
+        if (strike.strikeProgress <= 0 || strike.strikeProgress > 1.0) return;
+        if (!strike.boltSegments || strike.boltSegments.length === 0) return;
+
+        const tx = strike.targetX;
+        const ty = strike.targetY;
+        const isColossal = strike.isColossal;
+        const alpha = Math.max(0, 1.0 - Math.pow(strike.strikeProgress, 1.6) * 0.9);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        // 2.1 Destello radial en el punto de contacto en el suelo
+        const flareR = strike.impactRadius * (isColossal ? 1.6 : 1.3);
+        const flareGrad = ctx.createRadialGradient(tx, ty, 2, tx, ty, flareR);
+        flareGrad.addColorStop(0, '#ffffff');
+        flareGrad.addColorStop(0.3, isColossal ? '#7c4dff' : '#00f0ff');
+        flareGrad.addColorStop(0.7, '#2563eb');
+        flareGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, flareR, flareR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2.2 Trazado del rayo vertical en 3 capas (Halo Violeta, Borde Cian y Núcleo Blanco)
+        // Capa 1: Halo de sobrecarga exterior
+        ctx.strokeStyle = isColossal ? 'rgba(124, 77, 255, 0.85)' : 'rgba(37, 99, 235, 0.75)';
+        ctx.lineWidth = isColossal ? 26 : 13;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        strike.boltSegments.forEach((seg) => {
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+        });
+        ctx.stroke();
+
+        // Capa 2: Borde cian eléctrico
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = isColossal ? 14 : 6.5;
+        ctx.beginPath();
+        strike.boltSegments.forEach((seg) => {
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+        });
+        ctx.stroke();
+
+        // Capa 3: Núcleo blanco incandescente
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = isColossal ? 5.5 : 2.4;
+        ctx.beginPath();
+        strike.boltSegments.forEach((seg) => {
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+        });
+        ctx.stroke();
+
+        // 2.3 Onda expansiva electromagnética del rayo colosal
+        if (isColossal) {
+          const waveR = strike.impactRadius * (0.6 + strike.strikeProgress * 1.8);
+          ctx.strokeStyle = '#7c4dff';
+          ctx.lineWidth = 3.2 * (1 - strike.strikeProgress * 0.7);
+          ctx.beginPath();
+          ctx.ellipse(tx, ty, waveR, waveR * squish, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      });
+    });
+  }
+
+  // 3. Previsualización de retícula táctica para Tormenta Celestial
+  private static drawCelestialAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const targetDist = 180;
+    const ang = wizard.facingAngle;
+    const destX = wizard.x + Math.cos(ang) * targetDist;
+    const destY = wizard.y + Math.sin(ang) * targetDist * squish;
+    const areaRadius = isReady ? 195 : 155;
+
+    ctx.save();
+
+    // Línea de orientación de relámpago
+    ctx.strokeStyle = isReady ? '#7c4dff' : '#00f0ff';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(destX, destY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Área general de la tormenta
+    ctx.strokeStyle = isReady ? '#7c4dff' : '#00f0ff';
+    ctx.lineWidth = isReady ? 2.8 : 2.0;
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Relleno de ionización
+    ctx.fillStyle = isReady ? 'rgba(124, 77, 255, 0.16)' : 'rgba(0, 240, 255, 0.1)';
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Marcador central (epicentro del rayo colosal)
+    const centerR = isReady ? 74 : 38;
+    ctx.strokeStyle = isReady ? '#ffffff' : '#00f0ff';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, centerR, centerR * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Glifo central
+    ctx.fillStyle = isReady ? '#7c4dff' : '#00f0ff';
+    ctx.beginPath();
+    ctx.arc(destX, destY, isReady ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#ffffff' : '#00f0ff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡FURIA DE LA TEMPESTAD (+50% DAÑO · 6 RAYOS + COLOSAL)! ⚡🌩️'
+        : 'TORMENTA CELESTIAL (4 RELÁMPAGOS EN RÁFAGA) ⚡',
       destX,
       destY - areaRadius * squish - 14
     );

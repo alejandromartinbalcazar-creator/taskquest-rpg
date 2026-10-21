@@ -29,6 +29,9 @@ import {
   HellRainEntity,
   HellMeteorInstance,
   HellCraterInstance,
+  CelestialStormEntity,
+  CelestialLightningStrikeInstance,
+  IonizedPuddleInstance,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -484,6 +487,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     permafrostPrisons: [] as PermafrostPrisonEntity[],
     plasmaTornadoes: [] as PlasmaTornadoEntity[],
     hellRains: [] as HellRainEntity[],
+    celestialStorms: [] as CelestialStormEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -787,6 +791,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.permafrostPrisons = [];
       g.plasmaTornadoes = [];
       g.hellRains = [];
+      g.celestialStorms = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -927,6 +932,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'hell_rain') {
         // Lluvia del Infierno gestiona sus propios sonidos de invocación cósmica, silbido y detonaciones
       }
+      else if (recipe.id === 'celestial_storm') {
+        // Tormenta Celestial gestiona sus propios sonidos de tempestad, relámpagos y truenos
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -986,9 +994,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = recipe.id === 'hell_rain' ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm') ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2263,6 +2271,110 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.6 TORMENTA CELESTIAL (RAYO + RAYO + RAYO: Tempestad fulminante, relámpagos verticales y charcos de estática)
+      else if (recipe.id === 'celestial_storm') {
+        const strikeCount = isCharged ? 6 : 4;
+        const areaRadius = isCharged ? 195 : 155;
+        const baseDmg = recipe.damage + statBonus;
+        const chargeMultiplierTotal = isCharged ? 1.5 : 1.0;
+        const directDmg = Math.round(baseDmg * 0.7 * chargeMultiplierTotal);
+        const colossalDmg = Math.round(baseDmg * 1.35 * chargeMultiplierTotal);
+
+        // Identificar enemigos prioritarios dentro de la zona de la tormenta para centrar los rayos
+        const enemiesInArea = g.enemyManager.enemies.filter((e) => {
+          if (e.hp <= 0) return false;
+          const edist = Math.hypot(e.x - targetX, (e.y - targetY) / 0.58);
+          return edist <= areaRadius * 1.05;
+        });
+
+        const strikes: CelestialLightningStrikeInstance[] = [];
+        for (let i = 0; i < strikeCount; i++) {
+          const isColossal = isCharged && i === strikeCount - 1;
+          let sTargetX = targetX;
+          let sTargetY = targetY;
+
+          if (isColossal) {
+            // El rayo colosal final impacta SIEMPRE en el epicentro exacto de la tormenta
+            sTargetX = targetX;
+            sTargetY = targetY;
+          } else if (i < enemiesInArea.length) {
+            // Asignar el relámpago directamente sobre un enemigo prioritario dentro del área
+            sTargetX = enemiesInArea[i].x;
+            sTargetY = enemiesInArea[i].y;
+          } else {
+            // Si hay menos enemigos que rayos, distribuir radialmente alrededor del centro
+            const sAng = i * 2.39996 + (Math.random() - 0.5) * 0.5;
+            const sDist = (0.2 + ((i % 4) / 4) * 0.7) * areaRadius;
+            sTargetX = targetX + Math.cos(sAng) * sDist;
+            sTargetY = targetY + Math.sin(sAng) * sDist * 0.58;
+          }
+
+          strikes.push({
+            id: `celestial_strike_${now}_${i}`,
+            targetX: sTargetX,
+            targetY: sTargetY,
+            delayMs: isColossal ? 540 : i * (isCharged ? 100 : 120),
+            warningDurationMs: 140,
+            strikeDurationMs: 80,
+            strikeProgress: 0,
+            isColossal,
+            impactRadius: isColossal ? 74 : 38,
+            impactDamage: isColossal ? colossalDmg : directDmg,
+            hasStruck: false,
+            boltSegments: [],
+          });
+        }
+
+        g.celestialStorms.push({
+          id: `celestial_storm_${now}`,
+          centerX: targetX,
+          centerY: targetY,
+          areaRadius,
+          isCharged,
+          strikes,
+          puddles: [],
+          elapsedMs: 0,
+          terminalDetonated: false,
+          finished: false,
+        });
+
+        elementalSound.playCelestialStormCast(isCharged);
+        g.screenShake = isCharged ? 8 : 4;
+
+        // Partículas iniciales de ionización ascendente
+        for (let p = 0; p < (isCharged ? 24 : 14); p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pSpd = 2.2 + Math.random() * 3.5;
+          g.particles.push({
+            id: `celestial_cast_${now}_${p}`,
+            x: wizard.x,
+            y: wizard.y - 10,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd * 0.58 - 1.8,
+            radius: 1.6 + Math.random() * 2.0,
+            color: p % 3 === 0 ? '#ffffff' : (p % 3 === 1 ? '#00f0ff' : '#7c4dff'),
+            alpha: 1,
+            life: 18,
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `celestial_charged_${now}`,
+            x: wizard.x,
+            y: wizard.y - 28,
+            text: '⚡🌩️ ¡FURIA DE LA TEMPESTAD +50%!',
+            color: '#00f0ff',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2427,27 +2539,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'hell_rain'
-      ? 'hell_rain'
-      : (activeRecipe.id === 'explosive_overload'
-        ? 'plasma'
-        : (activeRecipe.id === 'permafrost_prison'
-          ? 'permafrost'
-          : (activeRecipe.id === 'crystal_field'
-            ? 'conductive'
-            : (activeRecipe.id === 'thermal_shock'
-              ? 'thermal'
-              : (activeRecipe.id === 'magma_eruption'
-                ? 'volcanic'
-                : (activeRecipe.id === 'cryo_storm'
-                  ? 'cryo'
-                  : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-                    ? 'lightning'
-                    : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                      ? 'ice'
-                      : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                        ? 'earth'
-                        : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))))));
+    wizard.chargeType = activeRecipe.id === 'celestial_storm'
+      ? 'celestial'
+      : (activeRecipe.id === 'hell_rain'
+        ? 'hell_rain'
+        : (activeRecipe.id === 'explosive_overload'
+          ? 'plasma'
+          : (activeRecipe.id === 'permafrost_prison'
+            ? 'permafrost'
+            : (activeRecipe.id === 'crystal_field'
+              ? 'conductive'
+              : (activeRecipe.id === 'thermal_shock'
+                ? 'thermal'
+                : (activeRecipe.id === 'magma_eruption'
+                  ? 'volcanic'
+                  : (activeRecipe.id === 'cryo_storm'
+                    ? 'cryo'
+                    : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+                      ? 'lightning'
+                      : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                        ? 'ice'
+                        : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                          ? 'earth'
+                          : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2463,7 +2577,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+    const wasCharged = (activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2764,7 +2878,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isPermafrost = activeRecipe.id === 'permafrost_prison';
         const isPlasma = activeRecipe.id === 'explosive_overload';
         const isHellRain = activeRecipe.id === 'hell_rain';
-        const maxChargeTime = (isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isCelestial = activeRecipe.id === 'celestial_storm';
+        const maxChargeTime = (isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2977,6 +3092,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Chispas eléctricas de alta tensión y arcos convergentes para Tormenta Celestial
+        else if (isCelestial) {
+          if (Math.random() < 0.5 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `celestial-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.8 + wizard.chargeRatio * 2.6),
+              vy: -Math.sin(pAng) * (1.5 + wizard.chargeRatio * 1.5) - 0.5,
+              radius: 1.5 + Math.random() * 1.7,
+              color: Math.random() < 0.45 ? '#ffffff' : (Math.random() < 0.75 ? '#00f0ff' : '#7c4dff'),
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3135,6 +3270,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 16,
               color: '#ff3d00',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isCelestial) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.0;
+            g.particles.push({
+              id: `celestial-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 16,
+              color: '#00f0ff',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -6485,6 +6636,263 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.12 Actualizar Tormenta Celestial (Rayo + Rayo + Rayo: Tempestad Ionizada, Relámpagos Verticales en Cascada y Charcos de Estática)
+      for (let csIdx = g.celestialStorms.length - 1; csIdx >= 0; csIdx--) {
+        const storm = g.celestialStorms[csIdx];
+        storm.elapsedMs += 16.6;
+
+        let allStrikesFinished = true;
+
+        // A. Actualizar relámpagos individuales
+        for (const strike of storm.strikes) {
+          // Si aún no ha llegado el momento del rayo
+          if (!strike.hasStruck) {
+            if (storm.elapsedMs >= strike.delayMs) {
+              // ¡IMPACTO DEL RELÁMPAGO VERTICAL!
+              strike.hasStruck = true;
+              strike.strikeProgress = 0.01;
+
+              // Generar trazado procedural quebrado del rayo vertical
+              const startX = strike.targetX + (Math.random() - 0.5) * 26;
+              const startY = strike.targetY - 450;
+              const segments: Array<{ x1: number; y1: number; x2: number; y2: number; branch?: boolean }> = [];
+              const steps = 8;
+              let currX = startX;
+              let currY = startY;
+
+              for (let s = 1; s <= steps; s++) {
+                const nextT = s / steps;
+                const nextX = startX + (strike.targetX - startX) * nextT + (s < steps ? (Math.random() - 0.5) * (strike.isColossal ? 34 : 22) : 0);
+                const nextY = startY + (strike.targetY - startY) * nextT;
+                segments.push({ x1: currX, y1: currY, x2: nextX, y2: nextY });
+
+                // Ramificaciones laterales secundarias esporádicas
+                if (s > 2 && s < steps - 1 && Math.random() < 0.5) {
+                  const bAng = Math.PI * 0.5 + (Math.random() - 0.5) * 1.2;
+                  const bLen = 16 + Math.random() * (strike.isColossal ? 35 : 22);
+                  segments.push({
+                    x1: nextX,
+                    y1: nextY,
+                    x2: nextX + Math.cos(bAng) * bLen,
+                    y2: nextY + Math.sin(bAng) * bLen,
+                    branch: true,
+                  });
+                }
+
+                currX = nextX;
+                currY = nextY;
+              }
+              strike.boltSegments = segments;
+
+              // Sonido detonante y sacudida de pantalla
+              elementalSound.playCelestialLightningStrike(strike.isColossal);
+              g.screenShake = strike.isColossal ? 14 : 7;
+
+              // Anillo de impacto electromagnético
+              g.particles.push({
+                id: `celestial_ring_${frameNow}_${strike.id}`,
+                x: strike.targetX,
+                y: strike.targetY,
+                vx: 0,
+                vy: 0,
+                radius: strike.isColossal ? 24 : 14,
+                color: strike.isColossal ? '#7c4dff' : '#00f0ff',
+                alpha: 1,
+                life: 16,
+                maxLife: 16,
+                type: 'ring',
+              });
+
+              // Chispas radiales de alta tensión
+              const sparkCount = strike.isColossal ? 22 : 12;
+              for (let sp = 0; sp < sparkCount; sp++) {
+                const spAng = Math.random() * Math.PI * 2;
+                const spSpd = 3.0 + Math.random() * (strike.isColossal ? 5.5 : 3.8);
+                g.particles.push({
+                  id: `celestial_spark_${frameNow}_${sp}`,
+                  x: strike.targetX,
+                  y: strike.targetY,
+                  vx: Math.cos(spAng) * spSpd,
+                  vy: Math.sin(spAng) * spSpd * 0.58 - 1.2,
+                  radius: 1.6 + Math.random() * (strike.isColossal ? 2.5 : 1.6),
+                  color: sp % 3 === 0 ? '#ffffff' : (sp % 3 === 1 ? '#00f0ff' : '#7c4dff'),
+                  alpha: 1,
+                  life: 18,
+                });
+              }
+
+              // Daño directo, micro-aturdimiento (micro-stagger 200ms) e interrupción a enemigos
+              for (const enemy of enemies) {
+                const dist = Math.hypot(enemy.x - strike.targetX, (enemy.y - strike.targetY) / 0.58);
+                if (dist <= strike.impactRadius) {
+                  const finalStrikeDmg = Math.round(strike.impactDamage * (strike.isColossal ? 1.0 : (0.85 + Math.random() * 0.3)));
+                  enemy.hp -= finalStrikeDmg;
+                  enemy.hitFlash = 12;
+                  enemy.stunnedTimer = 14; // Micro-stagger de ~230ms
+                  enemy.attackCooldown = Math.max(enemy.attackCooldown || 0, 16); // Interrupción de ataques en curso
+                  g.enemyManager.applyStatus(enemy, 'shocked', strike.isColossal ? 160 : 100, 5);
+
+                  // Knockback radial
+                  const kbAng = Math.atan2(enemy.y - strike.targetY, enemy.x - strike.targetX);
+                  const kbForce = strike.isColossal ? 7.0 : 4.0;
+                  enemy.vx = (enemy.vx || 0) + Math.cos(kbAng) * kbForce;
+                  enemy.vy = (enemy.vy || 0) + Math.sin(kbAng) * kbForce * 0.58;
+
+                  // Texto flotante de daño
+                  g.floatingTexts.push({
+                    id: `celestial_hit_${frameNow}_${enemy.id}_${Math.random()}`,
+                    x: enemy.x + (Math.random() - 0.5) * 16,
+                    y: enemy.y - 18,
+                    text: strike.isColossal ? `⚡ ¡${finalStrikeDmg}! 🌩️` : `-${finalStrikeDmg} ⚡`,
+                    color: strike.isColossal ? '#7c4dff' : '#00f0ff',
+                    fontSize: strike.isColossal ? 16 : 13,
+                    opacity: 1,
+                    vy: -1.4,
+                    life: 34,
+                  });
+                }
+              }
+
+              // Crear charco de estática ionizada residual en el suelo
+              storm.puddles.push({
+                id: `puddle_${strike.id}`,
+                x: strike.targetX,
+                y: strike.targetY,
+                radius: strike.isColossal ? 58 : 34,
+                lifeTimerMs: strike.isColossal ? 2200 : 1800,
+                maxLifeMs: strike.isColossal ? 2200 : 1800,
+                tickIntervalMs: 200,
+                lastTickPerEnemy: {},
+                dpsPerTick: Math.round((strike.isColossal ? 22 : 14) + (player.stats.attack + player.stats.knowledge) * 0.1),
+                isColossal: strike.isColossal,
+                detonated: false,
+              });
+
+              // Si es el rayo colosal final, detonar todos los charcos ionizados restantes al mismo tiempo
+              if (strike.isColossal && !storm.terminalDetonated) {
+                storm.terminalDetonated = true;
+                elementalSound.playCelestialTerminalDetonation();
+                g.screenShake = 16;
+
+                storm.puddles.forEach((puddle) => {
+                  if (puddle.id !== `puddle_${strike.id}` && !puddle.detonated) {
+                    puddle.detonated = true;
+
+                    // Anillo de detonación sobre el charco
+                    g.particles.push({
+                      id: `detonation_ring_${frameNow}_${puddle.id}`,
+                      x: puddle.x,
+                      y: puddle.y,
+                      vx: 0,
+                      vy: 0,
+                      radius: puddle.radius * 1.2,
+                      color: '#00f0ff',
+                      alpha: 1,
+                      life: 16,
+                      maxLife: 16,
+                      type: 'ring',
+                    });
+
+                    // Daño explosivo de sobrecarga a los enemigos adyacentes al charco
+                    for (const enemy of enemies) {
+                      const pDist = Math.hypot(enemy.x - puddle.x, (enemy.y - puddle.y) / 0.58);
+                      if (pDist <= puddle.radius * 1.3) {
+                        const detDmg = Math.round(38 + (player.stats.attack + player.stats.knowledge) * 0.25);
+                        enemy.hp -= detDmg;
+                        enemy.hitFlash = 10;
+                        enemy.stunnedTimer = 16;
+                        g.floatingTexts.push({
+                          id: `puddle_det_${frameNow}_${enemy.id}_${Math.random()}`,
+                          x: enemy.x + (Math.random() - 0.5) * 14,
+                          y: enemy.y - 20,
+                          text: `💥 ¡${detDmg}! ⚡`,
+                          color: '#00f0ff',
+                          fontSize: 13,
+                          opacity: 1,
+                          vy: -1.3,
+                          life: 30,
+                        });
+                      }
+                    }
+                  }
+                });
+              }
+            } else {
+              allStrikesFinished = false;
+            }
+          } else if (strike.strikeProgress > 0 && strike.strikeProgress <= 1.0) {
+            // Avanzar progreso del destello visible
+            strike.strikeProgress += 16.6 / strike.strikeDurationMs;
+            if (strike.strikeProgress <= 1.0) {
+              allStrikesFinished = false;
+            }
+          }
+        }
+
+        // B. Actualizar charcos de estática (daño periódico cada 200ms a quienes pisen el charco)
+        for (let pIdx = storm.puddles.length - 1; pIdx >= 0; pIdx--) {
+          const puddle = storm.puddles[pIdx];
+          puddle.lifeTimerMs -= 16.6;
+
+          // Chispas de estática continuas
+          if (Math.random() < 0.22) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = Math.random() * puddle.radius * 0.7;
+            g.particles.push({
+              id: `puddle_spark_${frameNow}_${Math.random()}`,
+              x: puddle.x + Math.cos(pAng) * pDist,
+              y: puddle.y + Math.sin(pAng) * pDist * 0.58,
+              vx: (Math.random() - 0.5) * 0.8,
+              vy: -0.8 - Math.random() * 1.0,
+              radius: 1.2 + Math.random() * 1.4,
+              color: Math.random() < 0.6 ? '#00f0ff' : '#ffffff',
+              alpha: 0.9,
+              life: 14,
+            });
+          }
+
+          // Chequeo de daño de estática cada 200ms
+          for (const enemy of enemies) {
+            const dist = Math.hypot(enemy.x - puddle.x, (enemy.y - puddle.y) / 0.58);
+            if (dist <= puddle.radius) {
+              const lastTick = puddle.lastTickPerEnemy[enemy.id] || 0;
+              if (storm.elapsedMs - lastTick >= puddle.tickIntervalMs) {
+                puddle.lastTickPerEnemy[enemy.id] = storm.elapsedMs;
+
+                enemy.hp -= puddle.dpsPerTick;
+                enemy.hitFlash = 6;
+                g.enemyManager.applyStatus(enemy, 'shocked', 70, 4);
+
+                if (Math.random() < 0.35) {
+                  elementalSound.playIonizedPuddleBuzz();
+                }
+
+                g.floatingTexts.push({
+                  id: `puddle_shock_${frameNow}_${enemy.id}_${Math.random()}`,
+                  x: enemy.x + (Math.random() - 0.5) * 14,
+                  y: enemy.y - 14,
+                  text: `-${puddle.dpsPerTick} ⚡`,
+                  color: '#00f0ff',
+                  fontSize: 11,
+                  opacity: 0.9,
+                  vy: -1.0,
+                  life: 20,
+                });
+              }
+            }
+          }
+
+          if (puddle.lifeTimerMs <= 0) {
+            storm.puddles.splice(pIdx, 1);
+          }
+        }
+
+        // C. Limpieza cuando todos los relámpagos terminaron y los charcos se disiparon
+        if (allStrikesFinished && storm.puddles.length === 0) {
+          g.celestialStorms.splice(csIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -6558,6 +6966,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.permafrostPrisons,
             g.plasmaTornadoes,
             g.hellRains,
+            g.celestialStorms,
             g.forestLevel ?? undefined
           );
         }
@@ -6825,6 +7234,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
                     : activeRecipe.id === 'hell_rain'
                     ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
+                    : activeRecipe.id === 'celestial_storm'
+                    ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -6846,6 +7257,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
                     : activeRecipe.id === 'hell_rain'
                     ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
+                    : activeRecipe.id === 'celestial_storm'
+                    ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -6877,6 +7290,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
                 : activeRecipe.id === 'hell_rain'
                 ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
+                : activeRecipe.id === 'celestial_storm'
+                ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -6905,6 +7320,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-orange-500 via-amber-400 to-cyan-400 shadow-[0_0_8px_#00e5ff]'
                       : activeRecipe.id === 'hell_rain'
                       ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff3d00]'
+                      : activeRecipe.id === 'celestial_storm'
+                      ? 'bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-500 shadow-[0_0_8px_#00f0ff]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
