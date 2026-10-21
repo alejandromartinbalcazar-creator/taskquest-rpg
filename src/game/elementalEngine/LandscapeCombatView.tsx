@@ -37,6 +37,8 @@ import {
   RadialIceSpike,
   TelluricBarrierEntity,
   TelluricRockInstance,
+  ObsidianVolcanoEntity,
+  ObsidianBladeInstance,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -495,6 +497,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     celestialStorms: [] as CelestialStormEntity[],
     devastatingGlaciers: [] as DevastatingGlacierEntity[],
     telluricBarriers: [] as TelluricBarrierEntity[],
+    obsidianVolcanoes: [] as ObsidianVolcanoEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -801,6 +804,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.celestialStorms = [];
       g.devastatingGlaciers = [];
       g.telluricBarriers = [];
+      g.obsidianVolcanoes = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -950,6 +954,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'telluric_barrier') {
         // Barrera Telúrica gestiona sus propios sonidos de invocación, absorción y detonación
       }
+      else if (recipe.id === 'obsidian_volcano') {
+        // Volcán de Obsidiana gestiona sus propios sonidos sintetizados (cast, erupción, vitrificación, corte y shatter)
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -1009,9 +1016,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier') ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2604,6 +2611,115 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.9 VOLCÁN DE OBSIDIANA (FUEGO + HIELO + TIERRA: Erupción Piroclástica, Vitrificación y Cuchillas Cortantes)
+      else if (recipe.id === 'obsidian_volcano') {
+        const baseDmg = recipe.damage + statBonus;
+        const eruptionDamage = isCharged ? Math.floor(baseDmg * 1.5) : baseDmg;
+        const sliceDamagePerTick = isCharged ? Math.floor((baseDmg * 0.22) * 1.5) : Math.floor(baseDmg * 0.22);
+        const areaRadius = isCharged ? 168 : 122;
+        const bladeCount = isCharged ? 10 : 7;
+
+        // Distribución angular y radial de las cuchillas monumentales de obsidiana
+        const blades: ObsidianBladeInstance[] = [];
+        for (let b = 0; b < bladeCount; b++) {
+          const bAngle = (b * Math.PI * 2) / bladeCount + (Math.random() - 0.5) * 0.5;
+          const bDist = (0.2 + (b / bladeCount) * 0.65) * areaRadius;
+          const relX = Math.cos(bAngle) * bDist;
+          const relY = Math.sin(bAngle) * (bDist * 0.58);
+          const bladeHeight = (isCharged ? 54 : 38) + Math.random() * (isCharged ? 22 : 16);
+          const bladeWidth = (isCharged ? 22 : 16) + Math.random() * (isCharged ? 8 : 6);
+          const tiltAngle = (Math.random() - 0.5) * 0.42;
+
+          blades.push({
+            id: `obs_blade_${now}_${b}`,
+            relX,
+            relY,
+            x: targetX + relX,
+            y: targetY + relY,
+            height: bladeHeight,
+            width: bladeWidth,
+            tiltAngle,
+            growthProgress: 0,
+            shatterProgress: 0,
+            shinePhase: Math.random() * Math.PI * 2,
+            facetSeed: Math.random() * 100 + b * 23.7,
+          });
+        }
+
+        // Fisuras sísmicas radiantes de magma en el suelo
+        const fissures: Array<{ angle: number; length: number; width: number; glowAlpha: number }> = [];
+        const fissureCount = isCharged ? 6 : 5;
+        for (let f = 0; f < fissureCount; f++) {
+          const fAngle = (f * Math.PI * 2) / fissureCount + (Math.random() - 0.5) * 0.4;
+          fissures.push({
+            angle: fAngle,
+            length: areaRadius * (0.65 + Math.random() * 0.28),
+            width: isCharged ? 3.6 : 2.6,
+            glowAlpha: 0.85,
+          });
+        }
+
+        g.obsidianVolcanoes.push({
+          id: `obsidian_volcano_${now}`,
+          centerX: targetX,
+          centerY: targetY,
+          areaRadius,
+          isCharged,
+          phase: 'fracture',
+          phaseTimer: 0,
+          elapsedMs: 0,
+          totalDurationMs: 4800,
+          eruptionDamage,
+          eruptionDealt: false,
+          eruptionProgress: 0,
+          sliceDamagePerTick,
+          tickIntervalMs: 250,
+          tickTimer: 0,
+          slowFactor: 0.4,
+          blades,
+          fissures,
+          shatterPlayed: false,
+          finished: false,
+        });
+
+        elementalSound.playObsidianCast(isCharged);
+        g.screenShake = isCharged ? 5.0 : 3.5;
+
+        // Vapor y chispas iniciales en la fractura del terreno
+        for (let i = 0; i < (isCharged ? 20 : 14); i++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pDist = Math.random() * areaRadius * 0.5;
+          g.particles.push({
+            id: `obs_fissure_steam_${now}_${i}`,
+            x: targetX + Math.cos(pAng) * pDist,
+            y: targetY + Math.sin(pAng) * pDist * 0.58,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: -2.0 - Math.random() * 2.2,
+            radius: 1.8 + Math.random() * 2.2,
+            color: i % 2 === 0 ? '#ffedd5' : '#e0f2fe',
+            alpha: 0.85,
+            life: 20,
+            type: 'smoke',
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `txt_obs_charge_${now}`,
+            x: wizard.x,
+            y: wizard.y - 32,
+            text: '🌋🖤 ¡FUSIÓN VÍTREA +50%!',
+            color: '#f43f5e',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2768,33 +2884,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'telluric_barrier'
-      ? 'telluric'
-      : (activeRecipe.id === 'devastating_glacier'
-        ? 'glacier'
-        : (activeRecipe.id === 'celestial_storm'
-        ? 'celestial'
-        : (activeRecipe.id === 'hell_rain'
-          ? 'hell_rain'
-          : (activeRecipe.id === 'explosive_overload'
-            ? 'plasma'
-            : (activeRecipe.id === 'permafrost_prison'
-              ? 'permafrost'
-              : (activeRecipe.id === 'crystal_field'
-                ? 'conductive'
-                : (activeRecipe.id === 'thermal_shock'
-                  ? 'thermal'
-                  : (activeRecipe.id === 'magma_eruption'
-                    ? 'volcanic'
-                    : (activeRecipe.id === 'cryo_storm'
-                      ? 'cryo'
-                      : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-                        ? 'lightning'
-                        : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                          ? 'ice'
-                          : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                            ? 'earth'
-                            : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))))))));
+    let cType = 'arcane';
+    if (activeRecipe.id === 'obsidian_volcano') cType = 'obsidian';
+    else if (activeRecipe.id === 'telluric_barrier') cType = 'telluric';
+    else if (activeRecipe.id === 'devastating_glacier') cType = 'glacier';
+    else if (activeRecipe.id === 'celestial_storm') cType = 'celestial';
+    else if (activeRecipe.id === 'hell_rain') cType = 'hell_rain';
+    else if (activeRecipe.id === 'explosive_overload') cType = 'plasma';
+    else if (activeRecipe.id === 'permafrost_prison') cType = 'permafrost';
+    else if (activeRecipe.id === 'crystal_field') cType = 'conductive';
+    else if (activeRecipe.id === 'thermal_shock') cType = 'thermal';
+    else if (activeRecipe.id === 'magma_eruption') cType = 'volcanic';
+    else if (activeRecipe.id === 'cryo_storm') cType = 'cryo';
+    else if (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')) cType = 'lightning';
+    else if (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')) cType = 'ice';
+    else if (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')) cType = 'earth';
+    else if (activeRecipe.elements.includes('fire')) cType = 'fire';
+    wizard.chargeType = cType;
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -3114,7 +3220,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isCelestial = activeRecipe.id === 'celestial_storm';
         const isGlacier = activeRecipe.id === 'devastating_glacier';
         const isTelluric = activeRecipe.id === 'telluric_barrier';
-        const maxChargeTime = (isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isObsidian = activeRecipe.id === 'obsidian_volcano';
+        const maxChargeTime = (isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3388,6 +3495,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Chispas de magma, escarcha gélida y polvo de obsidiana convergentes para Volcán de Obsidiana
+        else if (isObsidian) {
+          if (Math.random() < 0.55 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 26;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            const isFire = Math.random() < 0.45;
+            const isIce = !isFire && Math.random() < 0.65;
+            g.particles.push({
+              id: `obs-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.8 + wizard.chargeRatio * 2.5),
+              vy: -Math.sin(pAng) * (1.5 + wizard.chargeRatio * 1.5) - 0.4,
+              radius: 1.5 + Math.random() * 1.8,
+              color: isFire ? '#ea580c' : (isIce ? '#38bdf8' : '#09090b'),
+              alpha: 1,
+              life: 14,
+              type: isIce ? 'ice' : (isFire ? 'ember' : 'stone_chip'),
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3594,6 +3724,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 16,
               color: '#f59e0b',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isObsidian) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.5;
+            g.particles.push({
+              id: `obsidian-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 17,
+              color: '#c026d3',
+              secondaryColor: '#ea580c',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -7632,6 +7779,279 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.15 Actualizar Volcán de Obsidiana (Fuego + Hielo + Tierra: Erupción Piroclástica, Vitrificación y Campo de Cuchillas)
+      for (let ovIdx = g.obsidianVolcanoes.length - 1; ovIdx >= 0; ovIdx--) {
+        const volcano = g.obsidianVolcanoes[ovIdx];
+        volcano.elapsedMs += dt;
+        volcano.phaseTimer += dt;
+
+        // FASE A: Fractura térmica subterránea (0 - 180ms)
+        if (volcano.phase === 'fracture') {
+          // Partículas de vapor blanco a alta presión brotando de las fisuras
+          if (Math.random() < 0.45) {
+            const f = volcano.fissures[Math.floor(Math.random() * volcano.fissures.length)];
+            const dist = f.length * (0.3 + Math.random() * 0.7);
+            const fx = volcano.centerX + Math.cos(f.angle) * dist;
+            const fy = volcano.centerY + Math.sin(f.angle) * (dist * 0.58);
+            g.particles.push({
+              id: `steam_puff_${frameNow}_${Math.random()}`,
+              x: fx,
+              y: fy,
+              vx: (Math.random() - 0.5) * 1.4,
+              vy: -2.6 - Math.random() * 2.4,
+              radius: 2 + Math.random() * 3,
+              color: '#f0fdfa',
+              alpha: 0.75,
+              life: 18,
+              type: 'smoke',
+            });
+          }
+
+          if (volcano.phaseTimer >= 180) {
+            volcano.phase = 'eruption';
+            volcano.phaseTimer = 0;
+            volcano.eruptionProgress = 0;
+          }
+        }
+        // FASE B: Erupción piroclástica explosiva (180 - 430ms, 250ms de duración)
+        else if (volcano.phase === 'eruption') {
+          volcano.eruptionProgress = Math.min(1.0, volcano.phaseTimer / 250);
+          g.screenShake = Math.max(g.screenShake, volcano.isCharged ? 9.5 : 6.5);
+
+          // Impacto explosivo inicial al detonar la columna
+          if (!volcano.eruptionDealt) {
+            volcano.eruptionDealt = true;
+            elementalSound.playObsidianEruptionBurst(volcano.isCharged);
+
+            // Daño y derribo a todos los enemigos en el área del volcán
+            enemies.forEach((enemy) => {
+              const dx = enemy.x - volcano.centerX;
+              const dy = (enemy.y - volcano.centerY) / 0.58;
+              const dist = Math.hypot(dx, dy);
+
+              if (dist <= volcano.areaRadius) {
+                const finalEruptDmg = volcano.eruptionDamage;
+                enemy.hp -= finalEruptDmg;
+
+                // Levantamiento vertical y empuje radial
+                const pushAngle = Math.atan2(enemy.y - volcano.centerY, enemy.x - volcano.centerX);
+                const pushForce = volcano.isCharged ? 11.5 : 8.5;
+                enemy.x += Math.cos(pushAngle) * pushForce;
+                enemy.y += Math.sin(pushAngle) * pushForce * 0.58;
+
+                // Texto flotante de impacto piroclástico
+                g.floatingTexts.push({
+                  id: `txt_obs_erupt_${frameNow}_${enemy.id}`,
+                  x: enemy.x + (Math.random() - 0.5) * 16,
+                  y: enemy.y - 32,
+                  text: volcano.isCharged ? `🌋 ¡ERUPCIÓN VÍTREA! -${finalEruptDmg}` : `🌋 -${finalEruptDmg}`,
+                  color: volcano.isCharged ? '#f43f5e' : '#ea580c',
+                  fontSize: volcano.isCharged ? 17 : 14,
+                  opacity: 1,
+                  vy: -1.6,
+                  life: 38,
+                });
+
+                // Chispas de magma e impacto
+                for (let k = 0; k < 8; k++) {
+                  const sAng = Math.random() * Math.PI * 2;
+                  g.particles.push({
+                    id: `erupt_burst_${frameNow}_${k}`,
+                    x: enemy.x,
+                    y: enemy.y - 12,
+                    vx: Math.cos(sAng) * (2.8 + Math.random() * 2.5),
+                    vy: Math.sin(sAng) * (1.8 + Math.random() * 1.8) - 1.5,
+                    radius: 1.6 + Math.random() * 1.8,
+                    color: k % 2 === 0 ? '#ffedd5' : '#ea580c',
+                    alpha: 1,
+                    life: 20,
+                    type: 'ember',
+                  });
+                }
+              }
+            });
+
+            // Partículas masivas de la columna eruptiva
+            for (let p = 0; p < (volcano.isCharged ? 35 : 24); p++) {
+              const pAng = Math.random() * Math.PI * 2;
+              const pDist = Math.random() * volcano.areaRadius * 0.6;
+              g.particles.push({
+                id: `erupt_col_${frameNow}_${p}`,
+                x: volcano.centerX + Math.cos(pAng) * pDist,
+                y: volcano.centerY + Math.sin(pAng) * pDist * 0.58,
+                vx: (Math.random() - 0.5) * 3.5,
+                vy: -3.8 - Math.random() * 4.5,
+                radius: 2.0 + Math.random() * 3.0,
+                color: p % 3 === 0 ? '#ffffff' : (p % 3 === 1 ? '#ea580c' : '#1e293b'),
+                alpha: 1,
+                life: 24,
+                type: 'smoke',
+              });
+            }
+          }
+
+          if (volcano.phaseTimer >= 250) {
+            volcano.phase = 'vitrification';
+            volcano.phaseTimer = 0;
+            elementalSound.playObsidianVitrifyHiss();
+            g.screenShake = Math.max(g.screenShake, 3.5);
+
+            // Explosión de vapor frío al solidificarse las cuchillas
+            for (let v = 0; v < volcano.blades.length; v++) {
+              const blade = volcano.blades[v];
+              for (let s = 0; s < 4; s++) {
+                g.particles.push({
+                  id: `vitrify_steam_${frameNow}_${v}_${s}`,
+                  x: blade.x,
+                  y: blade.y,
+                  vx: (Math.random() - 0.5) * 2.0,
+                  vy: -1.2 - Math.random() * 2.2,
+                  radius: 2.2 + Math.random() * 2.5,
+                  color: '#e0f2fe',
+                  alpha: 0.8,
+                  life: 20,
+                  type: 'smoke',
+                });
+              }
+            }
+          }
+        }
+        // FASE C: Vitrificación y crecimiento de las cuchillas (430 - 580ms, 150ms)
+        else if (volcano.phase === 'vitrification') {
+          const prog = Math.min(1.0, volcano.phaseTimer / 150);
+          volcano.blades.forEach((b) => {
+            b.growthProgress = prog;
+          });
+
+          if (volcano.phaseTimer >= 150) {
+            volcano.phase = 'active_field';
+            volcano.phaseTimer = 0;
+            volcano.blades.forEach((b) => {
+              b.growthProgress = 1.0;
+            });
+          }
+        }
+        // FASE D: Campo de cuchillas activo (4000ms de persistencia territorial)
+        else if (volcano.phase === 'active_field') {
+          // Pulso periódico de daño cortante cada 250ms
+          volcano.tickTimer += dt;
+          if (volcano.tickTimer >= volcano.tickIntervalMs) {
+            volcano.tickTimer = 0;
+            let soundTriggered = false;
+
+            enemies.forEach((enemy) => {
+              const dx = enemy.x - volcano.centerX;
+              const dy = (enemy.y - volcano.centerY) / 0.58;
+              const dist = Math.hypot(dx, dy);
+
+              if (dist <= volcano.areaRadius) {
+                // Daño cortante de filo de obsidiana
+                const sliceDmg = volcano.sliceDamagePerTick;
+                enemy.hp -= sliceDmg;
+
+                // Ralentización severa del 40%
+                g.enemyManager.applyStatus(enemy, 'slowed', 35);
+
+                // Sonido de corte vítreo
+                if (!soundTriggered) {
+                  soundTriggered = true;
+                  elementalSound.playObsidianSliceTick();
+                }
+
+                // Texto flotante de laceración
+                g.floatingTexts.push({
+                  id: `txt_slice_${frameNow}_${enemy.id}_${Math.random()}`,
+                  x: enemy.x + (Math.random() - 0.5) * 14,
+                  y: enemy.y - 24,
+                  text: `🩸 -${sliceDmg}`,
+                  color: volcano.isCharged ? '#f43f5e' : '#f87171',
+                  fontSize: 12,
+                  opacity: 1,
+                  vy: -1.2,
+                  life: 26,
+                });
+
+                // Fragmentos de cristal cortante
+                for (let c = 0; c < 3; c++) {
+                  g.particles.push({
+                    id: `slice_chip_${frameNow}_${Math.random()}`,
+                    x: enemy.x,
+                    y: enemy.y - 8,
+                    vx: (Math.random() - 0.5) * 1.8,
+                    vy: -1.0 - Math.random() * 1.5,
+                    radius: 1.2 + Math.random() * 1.4,
+                    color: Math.random() < 0.5 ? '#09090b' : '#334155',
+                    alpha: 0.9,
+                    life: 14,
+                  });
+                }
+              }
+            });
+          }
+
+          // Partículas ambientales de vapor saliendo del suelo vítreo
+          if (Math.random() < 0.25) {
+            const b = volcano.blades[Math.floor(Math.random() * volcano.blades.length)];
+            g.particles.push({
+              id: `field_steam_${frameNow}_${Math.random()}`,
+              x: b.x + (Math.random() - 0.5) * 8,
+              y: b.y - 6,
+              vx: (Math.random() - 0.5) * 0.8,
+              vy: -1.2 - Math.random() * 1.0,
+              radius: 1.8 + Math.random() * 2.0,
+              color: '#f8fafc',
+              alpha: 0.45,
+              life: 18,
+              type: 'smoke',
+            });
+          }
+
+          if (volcano.phaseTimer >= 4000) {
+            volcano.phase = 'shattering';
+            volcano.phaseTimer = 0;
+          }
+        }
+        // FASE E: Ruptura vítrea y colapso de las cuchillas (250ms)
+        else if (volcano.phase === 'shattering') {
+          const prog = Math.min(1.0, volcano.phaseTimer / 250);
+          volcano.blades.forEach((b) => {
+            b.shatterProgress = prog;
+          });
+
+          if (!volcano.shatterPlayed) {
+            volcano.shatterPlayed = true;
+            elementalSound.playObsidianShatter();
+            g.screenShake = Math.max(g.screenShake, 3.0);
+
+            // Expulsión de esquirlas de obsidiana
+            volcano.blades.forEach((b) => {
+              for (let s = 0; s < 5; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `shatter_shard_${frameNow}_${b.id}_${s}`,
+                  x: b.x,
+                  y: b.y - b.height * 0.4,
+                  vx: Math.cos(sAng) * (2.2 + Math.random() * 2.2),
+                  vy: Math.sin(sAng) * (1.5 + Math.random() * 1.5) - 1.0,
+                  radius: 1.4 + Math.random() * 1.8,
+                  color: s % 2 === 0 ? '#09090b' : (volcano.isCharged ? '#c026d3' : '#64748b'),
+                  alpha: 1,
+                  life: 20,
+                  type: 'stone_chip',
+                });
+              }
+            });
+          }
+
+          if (volcano.phaseTimer >= 250) {
+            volcano.phase = 'finished';
+            volcano.finished = true;
+            g.obsidianVolcanoes.splice(ovIdx, 1);
+            continue;
+          }
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -7708,6 +8128,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.celestialStorms,
             g.devastatingGlaciers,
             g.telluricBarriers,
+            g.obsidianVolcanoes,
             g.forestLevel ?? undefined
           );
         }
@@ -7981,6 +8402,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
                     : activeRecipe.id === 'telluric_barrier'
                     ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
+                    : activeRecipe.id === 'obsidian_volcano'
+                    ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -8008,6 +8431,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
                     : activeRecipe.id === 'telluric_barrier'
                     ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
+                    : activeRecipe.id === 'obsidian_volcano'
+                    ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -8045,6 +8470,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
                 : activeRecipe.id === 'telluric_barrier'
                 ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
+                : activeRecipe.id === 'obsidian_volcano'
+                ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -8079,6 +8506,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-cyan-400 via-sky-200 to-blue-500 shadow-[0_0_8px_#00e5ff]'
                       : activeRecipe.id === 'telluric_barrier'
                       ? 'bg-gradient-to-r from-amber-600 via-yellow-400 to-stone-600 shadow-[0_0_8px_#f59e0b]'
+                      : activeRecipe.id === 'obsidian_volcano'
+                      ? 'bg-gradient-to-r from-orange-600 via-fuchsia-500 to-cyan-300 shadow-[0_0_8px_#c026d3]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

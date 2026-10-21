@@ -2679,6 +2679,228 @@ class ElementalSoundEngine {
     noise.start(now);
     noise.stop(now + noiseLen);
   }
+
+  // =========================================================================
+  // VOLCÁN DE OBSIDIANA (FUEGO + HIELO + TIERRA: ERUPCIÓN Y CUCHILLAS VÍTREAS)
+  // =========================================================================
+
+  // 1. Invocación y fractura térmica subterránea (presión de vapor y magma ascendente)
+  public playObsidianCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Resonancia telúrica profunda
+    const rumble = this.ctx.createOscillator();
+    const rumbleGain = this.ctx.createGain();
+    rumble.type = 'sawtooth';
+    rumble.frequency.setValueAtTime(isCharged ? 70 : 85, now);
+    rumble.frequency.exponentialRampToValueAtTime(isCharged ? 180 : 210, now + 0.35);
+
+    const rumbleFilter = this.ctx.createBiquadFilter();
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.setValueAtTime(140, now);
+    rumbleFilter.frequency.linearRampToValueAtTime(450, now + 0.35);
+
+    rumbleGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+
+    rumble.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(this.ctx.destination);
+    rumble.start(now);
+    rumble.stop(now + 0.38);
+
+    // Escape de vapor a alta presión
+    const noiseLen = 0.28;
+    const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1200, now);
+    filter.frequency.exponentialRampToValueAtTime(2600, now + noiseLen);
+    filter.Q.setValueAtTime(3.0, now);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.2, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + noiseLen);
+  }
+
+  // 2. Detonación piroclástica explosiva (choque de magma y descompresión)
+  public playObsidianEruptionBurst(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-golpe sísmico explosivo
+    const blast = this.ctx.createOscillator();
+    const blastGain = this.ctx.createGain();
+    blast.type = 'triangle';
+    blast.frequency.setValueAtTime(isCharged ? 160 : 180, now);
+    blast.frequency.exponentialRampToValueAtTime(38, now + 0.4);
+
+    blastGain.gain.setValueAtTime(isCharged ? 0.6 : 0.48, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+    blast.connect(blastGain);
+    blastGain.connect(this.ctx.destination);
+    blast.start(now);
+    blast.stop(now + 0.42);
+
+    // Crack cerámico volcánico
+    const crackLen = 0.25;
+    const crackBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * crackLen), this.ctx.sampleRate);
+    const cd = crackBuff.getChannelData(0);
+    for (let i = 0; i < cd.length; i++) {
+      cd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.05));
+    }
+    const crackSource = this.ctx.createBufferSource();
+    crackSource.buffer = crackBuff;
+    const crackFilter = this.ctx.createBiquadFilter();
+    crackFilter.type = 'highpass';
+    crackFilter.frequency.setValueAtTime(600, now);
+
+    const crackGain = this.ctx.createGain();
+    crackGain.gain.setValueAtTime(0.35, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.01, now + crackLen);
+
+    crackSource.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crackSource.start(now);
+    crackSource.stop(now + crackLen);
+  }
+
+  // 3. Vitrificación térmica instantánea (siseo extremo del choque térmico + cristalización)
+  public playObsidianVitrifyHiss() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Siseo de choque térmico (quench)
+    const hissLen = 0.32;
+    const hissBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * hissLen), this.ctx.sampleRate);
+    const hd = hissBuff.getChannelData(0);
+    for (let i = 0; i < hd.length; i++) {
+      hd[i] = Math.random() * 2 - 1;
+    }
+    const hissSource = this.ctx.createBufferSource();
+    hissSource.buffer = hissBuff;
+    const hissFilter = this.ctx.createBiquadFilter();
+    hissFilter.type = 'bandpass';
+    hissFilter.frequency.setValueAtTime(3200, now);
+    hissFilter.frequency.exponentialRampToValueAtTime(800, now + hissLen);
+    hissFilter.Q.setValueAtTime(4.0, now);
+
+    const hissGain = this.ctx.createGain();
+    hissGain.gain.setValueAtTime(0.32, now);
+    hissGain.gain.exponentialRampToValueAtTime(0.001, now + hissLen);
+
+    hissSource.connect(hissFilter);
+    hissFilter.connect(hissGain);
+    hissGain.connect(this.ctx.destination);
+    hissSource.start(now);
+    hissSource.stop(now + hissLen);
+
+    // Tono vítreo metálico agudo
+    const ping = this.ctx.createOscillator();
+    const pingGain = this.ctx.createGain();
+    ping.type = 'sine';
+    ping.frequency.setValueAtTime(1850, now);
+    ping.frequency.exponentialRampToValueAtTime(950, now + 0.22);
+    pingGain.gain.setValueAtTime(0.2, now);
+    pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    ping.connect(pingGain);
+    pingGain.connect(this.ctx.destination);
+    ping.start(now);
+    ping.stop(now + 0.22);
+  }
+
+  // 4. Tick cortante al pisar las cuchillas de obsidiana
+  public playObsidianSliceTick() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const slice = this.ctx.createOscillator();
+    const sliceGain = this.ctx.createGain();
+    slice.type = 'triangle';
+    slice.frequency.setValueAtTime(2200, now);
+    slice.frequency.exponentialRampToValueAtTime(650, now + 0.05);
+
+    sliceGain.gain.setValueAtTime(0.22, now);
+    sliceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    slice.connect(sliceGain);
+    sliceGain.connect(this.ctx.destination);
+    slice.start(now);
+    slice.stop(now + 0.05);
+  }
+
+  // 5. Ruptura vítrea y desintegración del campo de obsidiana
+  public playObsidianShatter() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Acordes de cristal resquebrajándose
+    const frequencies = [1350, 1850, 2400, 3200];
+    frequencies.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.025);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.45, now + idx * 0.025 + 0.22);
+
+      gain.gain.setValueAtTime(0.12, now + idx * 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.025 + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+      osc.start(now + idx * 0.025);
+      osc.stop(now + idx * 0.025 + 0.22);
+    });
+
+    // Crujido de grava vítrea
+    const shatterLen = 0.24;
+    const buff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * shatterLen), this.ctx.sampleRate);
+    const data = buff.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.06));
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buff;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2000, now);
+    const sgain = this.ctx.createGain();
+    sgain.gain.setValueAtTime(0.25, now);
+    sgain.gain.exponentialRampToValueAtTime(0.001, now + shatterLen);
+
+    source.connect(filter);
+    filter.connect(sgain);
+    sgain.connect(this.ctx.destination);
+    source.start(now);
+    source.stop(now + shatterLen);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

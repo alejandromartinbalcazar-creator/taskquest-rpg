@@ -756,6 +756,52 @@ export interface TelluricBarrierEntity {
   realignSpeed: number;        // Velocidad de reajuste simétrico entre rocas supervivientes
 }
 
+// VOLCÁN DE OBSIDIANA (FUEGO + HIELO + TIERRA: ERUPCIÓN PIROCLÁSTICA, VITRIFICACIÓN INSTANTÁNEA Y CAMPO DE CUCHILLAS CORTANTES)
+export type ObsidianVolcanoPhase = 'fracture' | 'eruption' | 'vitrification' | 'active_field' | 'shattering' | 'finished';
+
+export interface ObsidianBladeInstance {
+  id: string;
+  relX: number;                // Desplazamiento X relativo al epicentro
+  relY: number;                // Desplazamiento Y relativo al epicentro (en plano isométrico)
+  x: number;                   // Coordenada absoluta X
+  y: number;                   // Coordenada absoluta Y
+  height: number;              // Altura visual de la cuchilla (~40-75px según carga)
+  width: number;               // Anchura en la base (~16-28px)
+  tiltAngle: number;           // Inclinación angular (-0.28 a 0.28 rad)
+  growthProgress: number;      // 0.0 a 1.0 (crecimiento durante vitrificación)
+  shatterProgress: number;     // 0.0 a 1.0 (vibración y colapso al terminar)
+  shinePhase: number;          // Fase de oscilación para el brillo especular vítreo
+  facetSeed: number;           // Semilla geométrica para caras facetadas
+}
+
+export interface ObsidianVolcanoEntity {
+  id: string;
+  centerX: number;             // Coordenada X del epicentro
+  centerY: number;             // Coordenada Y del epicentro
+  areaRadius: number;          // Radio isométrico (~122px tap, ~168px cargado)
+  isCharged: boolean;          // Carga Fusión Vítrea (+50% daño, mayor radio y densidad)
+  phase: ObsidianVolcanoPhase;
+  phaseTimer: number;          // Tiempo acumulado en la fase actual (ms)
+  elapsedMs: number;           // Tiempo total transcurrido (ms)
+  totalDurationMs: number;     // ~4800ms
+  eruptionDamage: number;      // Daño de impacto explosivo inicial
+  eruptionDealt: boolean;      // Si ya aplicó el daño y levantamiento piroclástico
+  eruptionProgress: number;    // 0.0 a 1.0 (columna de fuego y vapor)
+  sliceDamagePerTick: number;  // Daño cortante periódico al pisar las cuchillas
+  tickIntervalMs: number;      // 250ms
+  tickTimer: number;           // Acumulador de tiempo entre pulsos de corte
+  slowFactor: number;          // 0.40 (40% de ralentización continua)
+  blades: ObsidianBladeInstance[];
+  fissures: Array<{
+    angle: number;
+    length: number;
+    width: number;
+    glowAlpha: number;
+  }>;
+  shatterPlayed: boolean;
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

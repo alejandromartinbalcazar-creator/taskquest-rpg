@@ -34,6 +34,8 @@ import {
   RadialIceSpike,
   TelluricBarrierEntity,
   TelluricRockInstance,
+  ObsidianVolcanoEntity,
+  ObsidianBladeInstance,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -91,6 +93,7 @@ export class IsometricRenderer {
     celestialStorms: CelestialStormEntity[] = [],
     devastatingGlaciers: DevastatingGlacierEntity[] = [],
     telluricBarriers: TelluricBarrierEntity[] = [],
+    obsidianVolcanoes: ObsidianVolcanoEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -162,6 +165,9 @@ export class IsometricRenderer {
     // 3.83 Dibujar Halo Gravitatorio y Sombras en el Suelo de la Barrera Telúrica (Tierra + Tierra + Tierra)
     this.drawTelluricGround(ctx, telluricBarriers);
 
+    // 3.84 Dibujar Suelo, Fisuras de Magma, Vapor y Columna Eruptiva de Volcán de Obsidiana (Fuego + Hielo + Tierra)
+    this.drawObsidianVolcanoGround(ctx, obsidianVolcanoes);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -187,6 +193,8 @@ export class IsometricRenderer {
       this.drawGlacierAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'telluric') {
       this.drawTelluricAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'obsidian') {
+      this.drawObsidianAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -366,6 +374,18 @@ export class IsometricRenderer {
               draw: () => this.drawTelluricRockBody(ctx, rock, barrier),
             });
           }
+        });
+      }
+    });
+
+    // Cuchillas monumentales de vidrio volcánico de Volcán de Obsidiana (Fuego + Hielo + Tierra) integradas en Depth Sorting
+    obsidianVolcanoes.forEach((volcano) => {
+      if (!volcano.finished && (volcano.phase === 'vitrification' || volcano.phase === 'active_field' || volcano.phase === 'shattering')) {
+        volcano.blades.forEach((blade) => {
+          renderList.push({
+            y: blade.y,
+            draw: () => this.drawObsidianBladeBody(ctx, blade, volcano),
+          });
         });
       }
     });
@@ -1666,6 +1686,65 @@ export class IsometricRenderer {
         ctx.fillStyle = telluricGrad;
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Choque térmico y vórtice de vidrio volcánico para Volcán de Obsidiana (Fuego + Hielo + Tierra)
+      const isObsidian = wizard.chargeType === 'obsidian';
+      if (isObsidian) {
+        ctx.shadowBlur = 0;
+        const shardCount = isReady ? 14 : Math.max(6, Math.floor(ratio * 12));
+        for (let sc = 0; sc < shardCount; sc++) {
+          const isFire = sc % 3 === 0;
+          const isIce = sc % 3 === 1;
+          const shardAng = Date.now() * (sc % 2 === 0 ? 0.014 : -0.014) + (sc * Math.PI * 2) / shardCount;
+          const shardDist = 20 + ratio * 16;
+          const sx = Math.cos(shardAng) * shardDist;
+          const sy = 6 + Math.sin(shardAng) * (shardDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(shardAng);
+
+          if (isFire) {
+            ctx.fillStyle = isReady ? '#ffedd5' : '#ea580c';
+            ctx.shadowColor = '#f97316';
+            ctx.shadowBlur = 4;
+          } else if (isIce) {
+            ctx.fillStyle = isReady ? '#e0f2fe' : '#38bdf8';
+            ctx.shadowColor = '#0284c7';
+            ctx.shadowBlur = 4;
+          } else {
+            // Fragmento de obsidiana negra
+            ctx.fillStyle = '#09090b';
+            ctx.strokeStyle = isReady ? '#c026d3' : '#71717a';
+            ctx.lineWidth = 0.9;
+          }
+
+          ctx.beginPath();
+          ctx.moveTo(0, -3.5);
+          ctx.lineTo(2.5, 0);
+          ctx.lineTo(0, 3.5);
+          ctx.lineTo(-2.5, 0);
+          ctx.closePath();
+          ctx.fill();
+          if (!isFire && !isIce) ctx.stroke();
+          ctx.restore();
+        }
+
+        // Foco térmico en la punta del báculo (magma + permafrost vitrificando)
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 12 : 7.0 + ratio * 4.0) + Math.sin(Date.now() * 0.025) * 1.6;
+        const obsGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.6);
+        obsGrad.addColorStop(0, '#ffffff');
+        obsGrad.addColorStop(0.3, isReady ? '#fbcfe8' : '#fed7aa');
+        obsGrad.addColorStop(0.6, isReady ? '#c026d3' : '#ea580c');
+        obsGrad.addColorStop(0.85, '#0f172a');
+        obsGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+        ctx.fillStyle = obsGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.6, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -6985,6 +7064,391 @@ export class IsometricRenderer {
         : 'BARRERA TELÚRICA (3 ROCAS DEFENSIVAS) 🛡️',
       wizard.x,
       wizard.y - orbitY - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // VOLCÁN DE OBSIDIANA (FUEGO + HIELO + TIERRA: ERUPCIÓN Y CUCHILLAS VÍTREAS)
+  // =========================================================================
+
+  // 1. Suelo, cuenca de basalto vitrificado, fisuras de magma, vapor y columna eruptiva
+  private static drawObsidianVolcanoGround(
+    ctx: CanvasRenderingContext2D,
+    volcanoes: ObsidianVolcanoEntity[]
+  ) {
+    if (!volcanoes || volcanoes.length === 0) return;
+    const squish = 0.58;
+    const now = Date.now();
+
+    volcanoes.forEach((volcano) => {
+      if (volcano.finished) return;
+
+      const rx = volcano.areaRadius;
+      const ry = volcano.areaRadius * squish;
+      const cx = volcano.centerX;
+      const cy = volcano.centerY;
+
+      ctx.save();
+
+      // A. Cuenca de Basalto Vitrificado (Suelo cristalizado por choque térmico)
+      const basinGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, rx);
+      if (volcano.phase === 'fracture' || volcano.phase === 'eruption') {
+        basinGrad.addColorStop(0, 'rgba(255, 87, 34, 0.45)');
+        basinGrad.addColorStop(0.35, 'rgba(234, 88, 12, 0.28)');
+        basinGrad.addColorStop(0.75, 'rgba(15, 23, 42, 0.35)');
+        basinGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      } else {
+        // En campo activo y fractura vítrea: suelo negro azabache espejado con borde ígneo
+        basinGrad.addColorStop(0, volcano.isCharged ? 'rgba(30, 27, 75, 0.55)' : 'rgba(15, 23, 42, 0.5)');
+        basinGrad.addColorStop(0.45, 'rgba(15, 23, 42, 0.42)');
+        basinGrad.addColorStop(0.85, volcano.isCharged ? 'rgba(192, 38, 211, 0.22)' : 'rgba(234, 88, 12, 0.18)');
+        basinGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
+      ctx.fillStyle = basinGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // B. Anillo perimetral de contención térmico con dientes de obsidiana
+      const rimAlpha = volcano.phase === 'shattering'
+        ? Math.max(0, 1 - (volcano.phaseTimer / 250)) * 0.4
+        : (0.35 + Math.sin(now * 0.005) * 0.12);
+
+      ctx.strokeStyle = volcano.isCharged
+        ? `rgba(244, 63, 94, ${rimAlpha})`
+        : `rgba(234, 88, 12, ${rimAlpha})`;
+      ctx.lineWidth = volcano.isCharged ? 2.4 : 1.6;
+      ctx.setLineDash([10, 6, 4, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // C. Fisuras Sísmicas Radiantes (grietas incandescentes que expulsan vapor)
+      volcano.fissures.forEach((fissure) => {
+        const radLen = fissure.length;
+        const fx = cx + Math.cos(fissure.angle) * radLen;
+        const fy = cy + Math.sin(fissure.angle) * (radLen * squish);
+        const midX = cx + Math.cos(fissure.angle + 0.15) * (radLen * 0.55);
+        const midY = cy + Math.sin(fissure.angle + 0.15) * (radLen * 0.55 * squish);
+
+        // Resplandor exterior de magma
+        ctx.strokeStyle = volcano.isCharged ? 'rgba(255, 110, 64, 0.85)' : 'rgba(249, 115, 22, 0.75)';
+        ctx.lineWidth = fissure.width * (volcano.phase === 'eruption' ? 1.6 : 1.0);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.quadraticCurveTo(midX, midY, fx, fy);
+        ctx.stroke();
+
+        // Núcleo blanco-incandescente
+        ctx.strokeStyle = '#fff7ed';
+        ctx.lineWidth = Math.max(1, fissure.width * 0.4);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.quadraticCurveTo(midX, midY, fx, fy);
+        ctx.stroke();
+
+        // Columnitas de vapor a presión en los extremos de las grietas
+        if (volcano.phase === 'fracture' || volcano.phase === 'eruption' || volcano.phase === 'active_field') {
+          const steamAnim = (now * 0.003 + fissure.angle) % 1;
+          const sx = fx;
+          const sy = fy - steamAnim * 28;
+          ctx.fillStyle = `rgba(224, 242, 254, ${(1 - steamAnim) * 0.45})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3 + steamAnim * 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // D. Columna Eruptiva Piroclástica Vertical (Fase 'eruption')
+      if (volcano.phase === 'eruption') {
+        const prog = volcano.eruptionProgress; // 0.0 -> 1.0
+        const eruptHeight = (190 + (volcano.isCharged ? 70 : 0)) * Math.sin(prog * Math.PI);
+        const eruptWidth = (rx * 0.65) * (0.55 + 0.45 * Math.sin(prog * Math.PI));
+
+        // 1. Pluma exterior de ceniza y vapor gélido turbulento
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.65)';
+        ctx.beginPath();
+        ctx.moveTo(cx - eruptWidth * 0.9, cy);
+        ctx.quadraticCurveTo(cx - eruptWidth * 1.3, cy - eruptHeight * 0.6, cx, cy - eruptHeight * 1.05);
+        ctx.quadraticCurveTo(cx + eruptWidth * 1.3, cy - eruptHeight * 0.6, cx + eruptWidth * 0.9, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        // 2. Columna piroclástica de fuego y magma ascendente
+        const magmaGrad = ctx.createLinearGradient(cx, cy, cx, cy - eruptHeight);
+        magmaGrad.addColorStop(0, '#ffffff');
+        magmaGrad.addColorStop(0.2, '#fed7aa');
+        magmaGrad.addColorStop(0.5, '#ea580c');
+        magmaGrad.addColorStop(0.85, '#dc2626');
+        magmaGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+
+        ctx.fillStyle = magmaGrad;
+        ctx.beginPath();
+        ctx.moveTo(cx - eruptWidth * 0.55, cy);
+        ctx.quadraticCurveTo(cx - eruptWidth * 0.7, cy - eruptHeight * 0.5, cx, cy - eruptHeight);
+        ctx.quadraticCurveTo(cx + eruptWidth * 0.7, cy - eruptHeight * 0.5, cx + eruptWidth * 0.55, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        // 3. Destello de choque térmico central (vapor blanco/cian gélido colisionando con el magma)
+        const flashGrad = ctx.createRadialGradient(cx, cy - eruptHeight * 0.35, 2, cx, cy - eruptHeight * 0.35, eruptWidth * 0.75);
+        flashGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        flashGrad.addColorStop(0.4, 'rgba(56, 189, 248, 0.75)');
+        flashGrad.addColorStop(0.85, 'rgba(249, 115, 22, 0.4)');
+        flashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = flashGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy - eruptHeight * 0.35, eruptWidth * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja el cuerpo tridimensional facetado de una cuchilla monumental de obsidiana
+  private static drawObsidianBladeBody(
+    ctx: CanvasRenderingContext2D,
+    blade: ObsidianBladeInstance,
+    volcano: ObsidianVolcanoEntity
+  ) {
+    if (blade.growthProgress <= 0.05) return;
+
+    const curH = blade.height * blade.growthProgress;
+    const curW = blade.width * blade.growthProgress;
+    const isCharged = volcano.isCharged;
+    const isShattering = volcano.phase === 'shattering';
+    const shatter = blade.shatterProgress;
+
+    ctx.save();
+
+    // Si está en fase de colapso, aplicamos vibración y dispersión
+    let posX = blade.x;
+    let posY = blade.y;
+    let alpha = 1.0;
+
+    if (isShattering && shatter > 0) {
+      const shakeAmt = (1 - shatter) * 4;
+      posX += (Math.random() - 0.5) * shakeAmt;
+      posY += (Math.random() - 0.5) * shakeAmt;
+      alpha = Math.max(0, 1 - shatter * 1.3);
+    }
+    ctx.globalAlpha = alpha;
+
+    // Sombra proyectada en el suelo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(posX, posY + 2, curW * 0.65, curW * 0.35, blade.tiltAngle, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Puntos geométricos de la cuchilla piramidal facetada
+    const tilt = blade.tiltAngle;
+    const topX = posX + Math.sin(tilt) * curH;
+    const topY = posY - Math.cos(tilt) * curH;
+
+    const baseLeftX = posX - Math.cos(tilt) * (curW * 0.5);
+    const baseLeftY = posY - Math.sin(tilt) * (curW * 0.5 * 0.58);
+    const baseRightX = posX + Math.cos(tilt) * (curW * 0.5);
+    const baseRightY = posY + Math.sin(tilt) * (curW * 0.5 * 0.58);
+
+    const midSpineX = posX + Math.sin(tilt) * (curH * 0.4) - Math.cos(tilt) * (curW * 0.1);
+    const midSpineY = posY - Math.cos(tilt) * (curH * 0.4);
+
+    // Cara 1: Lado Izquierdo (Sombra profunda azabache)
+    const leftGrad = ctx.createLinearGradient(baseLeftX, baseLeftY, topX, topY);
+    leftGrad.addColorStop(0, '#09090b');
+    leftGrad.addColorStop(0.5, '#18181b');
+    leftGrad.addColorStop(1, '#27272a');
+
+    ctx.fillStyle = leftGrad;
+    ctx.beginPath();
+    ctx.moveTo(baseLeftX, baseLeftY);
+    ctx.lineTo(midSpineX, midSpineY);
+    ctx.lineTo(topX, topY);
+    ctx.lineTo(posX, posY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cara 2: Lado Derecho (Reflejo vítreo especular de alta reflectividad)
+    const rightGrad = ctx.createLinearGradient(posX, posY, topX, topY);
+    rightGrad.addColorStop(0, isCharged ? '#1e1b4b' : '#111827');
+    rightGrad.addColorStop(0.4, isCharged ? '#2e1065' : '#1f2937');
+    rightGrad.addColorStop(0.8, '#334155');
+    rightGrad.addColorStop(1, '#94a3b8');
+
+    ctx.fillStyle = rightGrad;
+    ctx.beginPath();
+    ctx.moveTo(posX, posY);
+    ctx.lineTo(midSpineX, midSpineY);
+    ctx.lineTo(topX, topY);
+    ctx.lineTo(baseRightX, baseRightY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bisel / Vena interior (en versión cargada: núcleo magmático ardiente visible bajo el vidrio negro)
+    if (isCharged) {
+      ctx.strokeStyle = 'rgba(249, 115, 22, 0.75)';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = '#f97316';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(posX, posY);
+      ctx.lineTo(midSpineX, midSpineY);
+      ctx.lineTo(topX, topY);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Arista afilada central (Reflejo de luz blanca/azul hielo)
+    ctx.strokeStyle = isCharged ? '#fecdd3' : '#e2e8f0';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(baseLeftX, baseLeftY);
+    ctx.lineTo(midSpineX, midSpineY);
+    ctx.lineTo(topX, topY);
+    ctx.lineTo(baseRightX, baseRightY);
+    ctx.stroke();
+
+    // Brillo especular dinámico que corre por el filo
+    const shineTime = (Date.now() * 0.002 + blade.shinePhase) % Math.PI;
+    const shineAlpha = Math.max(0, Math.sin(shineTime)) * 0.85;
+    if (shineAlpha > 0.05 && !isShattering) {
+      const glintX = midSpineX + (topX - midSpineX) * (shineAlpha * 0.9);
+      const glintY = midSpineY + (topY - midSpineY) * (shineAlpha * 0.9);
+
+      ctx.fillStyle = `rgba(255, 255, 255, ${shineAlpha})`;
+      ctx.beginPath();
+      ctx.arc(glintX, glintY, isCharged ? 3.5 : 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Destello estrellado en la punta
+      ctx.strokeStyle = `rgba(255, 255, 255, ${shineAlpha * 0.9})`;
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(topX - 4, topY);
+      ctx.lineTo(topX + 4, topY);
+      ctx.moveTo(topX, topY - 4);
+      ctx.lineTo(topX, topY + 4);
+      ctx.stroke();
+    }
+
+    // Efecto de fractura al colapsar: trozos dispersos volando
+    if (isShattering && shatter > 0.15) {
+      for (let sh = 0; sh < 4; sh++) {
+        const shAng = (sh * Math.PI) / 2 + shatter * 2;
+        const shDist = shatter * (16 + sh * 8);
+        const sx = posX + Math.cos(shAng) * shDist;
+        const sy = posY - curH * 0.4 + Math.sin(shAng) * shDist;
+        const sSize = (1 - shatter) * (4 + (sh % 2) * 3);
+
+        ctx.fillStyle = sh % 2 === 0 ? '#09090b' : (isCharged ? '#c026d3' : '#334155');
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - sSize);
+        ctx.lineTo(sx + sSize, sy);
+        ctx.lineTo(sx, sy + sSize);
+        ctx.lineTo(sx - sSize, sy);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Volcán de Obsidiana
+  private static drawObsidianAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+
+    // Radio de la zona objetivo: tap ~122px, cargado ~168px (+35%)
+    const baseRadius = 122;
+    const targetRadius = isReady ? Math.floor(baseRadius * 1.35) : Math.floor(baseRadius * (1 + ratio * 0.35));
+    const rx = targetRadius;
+    const ry = targetRadius * squish;
+
+    // Ubicación objetivo a distancia media frontal (~165px)
+    const aimDist = 165;
+    const tx = wizard.x + Math.cos(wizard.facingAngle) * aimDist;
+    const ty = wizard.y + Math.sin(wizard.facingAngle) * aimDist;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Línea guía desde el jugador hasta el centro del volcán
+    ctx.strokeStyle = isReady ? 'rgba(244, 63, 94, 0.45)' : 'rgba(234, 88, 12, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Relleno de advertencia en el suelo
+    const aimGrad = ctx.createRadialGradient(tx, ty, 5, tx, ty, rx);
+    aimGrad.addColorStop(0, isReady ? 'rgba(244, 63, 94, 0.28)' : 'rgba(234, 88, 12, 0.2)');
+    aimGrad.addColorStop(0.65, isReady ? 'rgba(30, 27, 75, 0.22)' : 'rgba(15, 23, 42, 0.15)');
+    aimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = aimGrad;
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillo exterior con rotación de runas de obsidiana
+    ctx.strokeStyle = isReady ? '#f43f5e' : '#ea580c';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([12, 6, 4, 6]);
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Mini-cuchillas holográficas indicando los puntos donde emergerá la obsidiana
+    const bladeCount = isReady ? 10 : 7;
+    for (let b = 0; b < bladeCount; b++) {
+      const bAng = (b * Math.PI * 2) / bladeCount + now * 0.001;
+      const bDist = rx * (0.35 + (b % 3) * 0.22);
+      const bx = tx + Math.cos(bAng) * bDist;
+      const by = ty + Math.sin(bAng) * (bDist * squish);
+
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.strokeStyle = isReady ? '#fbcfe8' : '#fed7aa';
+      ctx.fillStyle = isReady ? 'rgba(192, 38, 211, 0.45)' : 'rgba(234, 88, 12, 0.35)';
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(4, 0);
+      ctx.lineTo(0, 4);
+      ctx.lineTo(-4, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#fbcfe8' : '#fed7aa';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡FUSIÓN VÍTREA (+50% DAÑO · MAYOR RADIO · 10 CUCHILLAS DENSAS)! 🌋🖤❄️'
+        : 'VOLCÁN DE OBSIDIANA (ERUPCIÓN & CUCHILLAS VÍTREAS) 🌋',
+      tx,
+      ty - ry - 14
     );
 
     ctx.restore();
