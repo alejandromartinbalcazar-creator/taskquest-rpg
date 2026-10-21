@@ -2504,6 +2504,181 @@ class ElementalSoundEngine {
     ping.start(now);
     ping.stop(now + 0.08);
   }
+
+  // =========================================================================
+  // BARRERA TELÚRICA (TIERRA + TIERRA + TIERRA)
+  // =========================================================================
+
+  // 1. Invocación de la Barrera Telúrica (Ruptura del suelo y emergencia de los 3 monolitos)
+  public playTelluricCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-golpe y resonancia sísmica de elevación
+    const rumble = this.ctx.createOscillator();
+    const rumbleGain = this.ctx.createGain();
+    rumble.type = 'triangle';
+    rumble.frequency.setValueAtTime(isCharged ? 130 : 160, now);
+    rumble.frequency.exponentialRampToValueAtTime(32, now + (isCharged ? 0.38 : 0.28));
+    rumbleGain.gain.setValueAtTime(isCharged ? 0.55 : 0.42, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.38 : 0.28));
+    rumble.connect(rumbleGain);
+    rumbleGain.connect(this.ctx.destination);
+    rumble.start(now);
+    rumble.stop(now + (isCharged ? 0.38 : 0.28));
+
+    // Crujido de roca sedimentaria desgajándose del suelo
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(isCharged ? 420 : 350, now);
+    crack.frequency.exponentialRampToValueAtTime(75, now + 0.22);
+    crackGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    crack.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crack.start(now);
+    crack.stop(now + 0.22);
+
+    // Vórtice gravitatorio de polvo y atracción orbital
+    const noiseLen = isCharged ? 0.32 : 0.24;
+    const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(260, now);
+    filter.frequency.exponentialRampToValueAtTime(800, now + noiseLen);
+    filter.Q.setValueAtTime(2.2, now);
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(isCharged ? 0.32 : 0.22, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + noiseLen);
+  }
+
+  // 2. Intercepción y desvío de proyectil hostil por una roca orbital
+  public playTelluricDeflect() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Golpe seco contundente de piedra densa
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(260, now);
+    thud.frequency.exponentialRampToValueAtTime(70, now + 0.12);
+    thudGain.gain.setValueAtTime(0.4, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.12);
+
+    // Chasquido de chispas y rechazo cinético
+    const snap = this.ctx.createOscillator();
+    const snapGain = this.ctx.createGain();
+    snap.type = 'sawtooth';
+    snap.frequency.setValueAtTime(950, now);
+    snap.frequency.exponentialRampToValueAtTime(140, now + 0.08);
+    snapGain.gain.setValueAtTime(0.25, now);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    snap.connect(snapGain);
+    snapGain.connect(this.ctx.destination);
+    snap.start(now);
+    snap.stop(now + 0.08);
+  }
+
+  // 3. Detonación contundente masiva de roca al impactar y pulverizarse contra enemigo
+  public playTelluricRockDetonation(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bass sísmico de aplastamiento
+    const sub = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(isCharged ? 175 : 150, now);
+    sub.frequency.exponentialRampToValueAtTime(24, now + (isCharged ? 0.36 : 0.26));
+    subGain.gain.setValueAtTime(isCharged ? 0.65 : 0.48, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.36 : 0.26));
+    sub.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    sub.start(now);
+    sub.stop(now + (isCharged ? 0.36 : 0.26));
+
+    // Trituración violenta de fragmentos de roca
+    const crush = this.ctx.createOscillator();
+    const crushGain = this.ctx.createGain();
+    crush.type = 'sawtooth';
+    crush.frequency.setValueAtTime(isCharged ? 680 : 540, now);
+    crush.frequency.exponentialRampToValueAtTime(45, now + 0.22);
+    crushGain.gain.setValueAtTime(isCharged ? 0.45 : 0.34, now);
+    crushGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    crush.connect(crushGain);
+    crushGain.connect(this.ctx.destination);
+    crush.start(now);
+    crush.stop(now + 0.22);
+
+    // Resonancia de runa telúrica dorada estallando
+    if (isCharged) {
+      const runeChime = this.ctx.createOscillator();
+      const runeGain = this.ctx.createGain();
+      runeChime.type = 'triangle';
+      runeChime.frequency.setValueAtTime(880, now + 0.02);
+      runeChime.frequency.exponentialRampToValueAtTime(220, now + 0.24);
+      runeGain.gain.setValueAtTime(0.24, now + 0.02);
+      runeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      runeChime.connect(runeGain);
+      runeGain.connect(this.ctx.destination);
+      runeChime.start(now + 0.02);
+      runeChime.stop(now + 0.24);
+    }
+  }
+
+  // 4. Desmoronamiento pacífico de rocas al expirar los 20 segundos o consumirse la durabilidad
+  public playTelluricCrumble() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const noiseLen = 0.22;
+    const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(450, now);
+    filter.frequency.exponentialRampToValueAtTime(120, now + noiseLen);
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.25, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(now);
+    noise.stop(now + noiseLen);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

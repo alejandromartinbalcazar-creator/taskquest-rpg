@@ -32,6 +32,8 @@ import {
   DevastatingGlacierEntity,
   IceMonolithInstance,
   RadialIceSpike,
+  TelluricBarrierEntity,
+  TelluricRockInstance,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -88,6 +90,7 @@ export class IsometricRenderer {
     hellRains: HellRainEntity[] = [],
     celestialStorms: CelestialStormEntity[] = [],
     devastatingGlaciers: DevastatingGlacierEntity[] = [],
+    telluricBarriers: TelluricBarrierEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -156,6 +159,9 @@ export class IsometricRenderer {
     // 3.82 Dibujar Suelo, Ventisca, Sombras de Monolitos y Niebla de Glaciar Devastador (Hielo + Hielo + Hielo)
     this.drawGlacierGround(ctx, devastatingGlaciers);
 
+    // 3.83 Dibujar Halo Gravitatorio y Sombras en el Suelo de la Barrera Telúrica (Tierra + Tierra + Tierra)
+    this.drawTelluricGround(ctx, telluricBarriers);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -179,6 +185,8 @@ export class IsometricRenderer {
       this.drawCelestialAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'glacier') {
       this.drawGlacierAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'telluric') {
+      this.drawTelluricAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -342,6 +350,20 @@ export class IsometricRenderer {
             renderList.push({
               y: sy,
               draw: () => this.drawRadialIceSpike(ctx, glacier.centerX, glacier.centerY, spike),
+            });
+          }
+        });
+      }
+    });
+
+    // Monolitos de roca orbitales de la Barrera Telúrica (Tierra + Tierra + Tierra) integrados en el Depth Sorting
+    telluricBarriers.forEach((barrier) => {
+      if (!barrier.finished) {
+        barrier.rocks.forEach((rock) => {
+          if (!rock.destroyed) {
+            renderList.push({
+              y: rock.y,
+              draw: () => this.drawTelluricRockBody(ctx, rock, barrier),
             });
           }
         });
@@ -1602,6 +1624,46 @@ export class IsometricRenderer {
         iceGrad.addColorStop(0.75, '#00e5ff');
         iceGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
         ctx.fillStyle = iceGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Torbellino geomántico de rocas y runas doradas para Barrera Telúrica (Tierra + Tierra + Tierra)
+      const isTelluric = wizard.chargeType === 'telluric';
+      if (isTelluric) {
+        ctx.shadowBlur = 0;
+        const pebbleCount = isReady ? 12 : Math.max(5, Math.floor(ratio * 10));
+        for (let pc = 0; pc < pebbleCount; pc++) {
+          const pcAng = Date.now() * (pc % 2 === 0 ? 0.013 : -0.013) + (pc * Math.PI * 2) / pebbleCount;
+          const pcDist = 18 + ratio * 14;
+          const px = Math.cos(pcAng) * pcDist;
+          const py = 6 + Math.sin(pcAng) * (pcDist * 0.58);
+
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(pcAng);
+          ctx.fillStyle = pc % 2 === 0 ? (isReady ? '#fef08a' : '#f59e0b') : (isReady ? '#d97706' : '#3e2723');
+          ctx.beginPath();
+          ctx.rect(-2, -2, isReady ? 4 : 2.8, isReady ? 4 : 2.8);
+          ctx.fill();
+          ctx.strokeStyle = isReady ? '#fffbeb' : '#78350f';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Foco de energía telúrica y oro arcano en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 11 : 6.0 + ratio * 3.8) + Math.sin(Date.now() * 0.02) * 1.5;
+        const telluricGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.5);
+        telluricGrad.addColorStop(0, '#ffffff');
+        telluricGrad.addColorStop(0.35, '#fde047');
+        telluricGrad.addColorStop(0.7, '#d97706');
+        telluricGrad.addColorStop(0.95, '#451a03');
+        telluricGrad.addColorStop(1, 'rgba(69, 26, 3, 0)');
+        ctx.fillStyle = telluricGrad;
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
         ctx.fill();
@@ -6630,6 +6692,305 @@ export class IsometricRenderer {
         : 'GLACIAR DEVASTADOR (VENTISCA Y MONOLITOS) ❄️',
       destX,
       destY - areaRadius * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // BARRERA TELÚRICA (TIERRA + TIERRA + TIERRA: 3 ROCAS ORBITALES CONSUMIBLES)
+  // =========================================================================
+
+  // 1. Suelo, sombras de las rocas y halo gravitatorio de la Barrera Telúrica
+  private static drawTelluricGround(
+    ctx: CanvasRenderingContext2D,
+    barriers: TelluricBarrierEntity[]
+  ) {
+    if (!barriers || barriers.length === 0) return;
+    const squish = 0.58;
+
+    barriers.forEach((barrier) => {
+      if (barrier.finished) return;
+
+      const activeRocks = barrier.rocks.filter((r) => !r.destroyed);
+      if (activeRocks.length === 0) return;
+
+      // Calcular centro gravitatorio promedio entre las rocas activas
+      let avgX = 0;
+      let avgY = 0;
+      activeRocks.forEach((r) => {
+        avgX += r.x;
+        avgY += r.y;
+      });
+      avgX /= activeRocks.length;
+      avgY /= activeRocks.length;
+
+      ctx.save();
+
+      // Halo gravitatorio orbital elíptico en el suelo
+      ctx.strokeStyle = barrier.isCharged ? 'rgba(245, 158, 11, 0.38)' : 'rgba(217, 119, 6, 0.22)';
+      ctx.lineWidth = barrier.isCharged ? 1.8 : 1.2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.ellipse(avgX, avgY, barrier.orbitRadiusX, barrier.orbitRadiusY, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Resplandor áureo tenue en el suelo si está reforzado
+      if (barrier.isCharged) {
+        const floorGrad = ctx.createRadialGradient(avgX, avgY, 10, avgX, avgY, barrier.orbitRadiusX * 1.1);
+        floorGrad.addColorStop(0, 'rgba(245, 158, 11, 0.12)');
+        floorGrad.addColorStop(0.7, 'rgba(217, 119, 6, 0.05)');
+        floorGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = floorGrad;
+        ctx.beginPath();
+        ctx.ellipse(avgX, avgY, barrier.orbitRadiusX * 1.1, barrier.orbitRadiusY * 1.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Sombras proyectadas de cada roca activa
+      activeRocks.forEach((rock) => {
+        const sRad = rock.radius * 1.35;
+        const sGrad = ctx.createRadialGradient(rock.x, rock.y, 2, rock.x, rock.y, sRad);
+        sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+        sGrad.addColorStop(0.65, 'rgba(30, 20, 10, 0.28)');
+        sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = sGrad;
+        ctx.beginPath();
+        ctx.ellipse(rock.x, rock.y, sRad, sRad * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pequeño glifo de anclaje gravitatorio debajo de la roca
+        ctx.strokeStyle = barrier.isCharged ? 'rgba(255, 213, 79, 0.35)' : 'rgba(245, 158, 11, 0.25)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.ellipse(rock.x, rock.y, rock.radius * 0.75, rock.radius * 0.75 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja el cuerpo tridimensional facetado de una roca orbital flotante
+  private static drawTelluricRockBody(
+    ctx: CanvasRenderingContext2D,
+    rock: TelluricRockInstance,
+    barrier: TelluricBarrierEntity
+  ) {
+    if (rock.destroyed) return;
+
+    const hover = Math.sin(Date.now() * 0.005 + rock.facetSeed) * 2.2;
+    const drawX = rock.x;
+    const drawY = rock.y - rock.height + hover;
+    const r = rock.radius;
+    const isCharged = barrier.isCharged;
+
+    ctx.save();
+    ctx.translate(drawX, drawY);
+
+    // Si tiene flash de impacto de proyectil, resplandor blanco-dorado
+    if (rock.hitFlash > 0) {
+      ctx.shadowColor = '#fff59d';
+      ctx.shadowBlur = 14;
+    } else if (isCharged) {
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 8;
+    }
+
+    // Generar vértices facetados pseudo-irregulares
+    const numVerts = 6;
+    const verts: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < numVerts; i++) {
+      const a = rock.rotationAngle + (i * Math.PI * 2) / numVerts;
+      const seedMod = Math.sin(rock.facetSeed * 3.3 + i * 2.1) * 0.22;
+      const rad = r * (1.0 + seedMod);
+      verts.push({
+        x: Math.cos(a) * rad,
+        y: Math.sin(a) * rad * 0.9,
+      });
+    }
+
+    // A. Base de roca poligonal (silueta principal)
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (let i = 1; i < numVerts; i++) {
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.closePath();
+
+    // Relleno de degradado de roca oscura (gris pizarra a marrón arcilla)
+    const rockGrad = ctx.createLinearGradient(-r, -r, r, r);
+    rockGrad.addColorStop(0, isCharged ? '#4e342e' : '#37474f');
+    rockGrad.addColorStop(0.5, isCharged ? '#3e2723' : '#263238');
+    rockGrad.addColorStop(1, '#1b120c');
+    ctx.fillStyle = rockGrad;
+    ctx.fill();
+
+    // B. Facetas angulares internas (relieve 3D)
+    const centerX = Math.cos(rock.rotationAngle) * (r * 0.25);
+    const centerY = Math.sin(rock.rotationAngle) * (r * 0.2);
+
+    for (let i = 0; i < numVerts; i++) {
+      const v1 = verts[i];
+      const v2 = verts[(i + 1) % numVerts];
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(v1.x, v1.y);
+      ctx.lineTo(v2.x, v2.y);
+      ctx.closePath();
+
+      // Iluminación según orientación del triángulo facetado
+      const midY = (v1.y + v2.y) / 2;
+      const midX = (v1.x + v2.x) / 2;
+      if (midY < centerY && midX < centerX) {
+        // Cara superior-izquierda iluminada
+        ctx.fillStyle = isCharged ? 'rgba(215, 204, 200, 0.28)' : 'rgba(120, 144, 156, 0.32)';
+      } else if (midY > centerY && midX > centerX) {
+        // Cara inferior-derecha en sombra
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+      } else {
+        ctx.fillStyle = 'rgba(62, 39, 35, 0.2)';
+      }
+      ctx.fill();
+
+      // Aristas facetadas
+      ctx.strokeStyle = isCharged ? 'rgba(255, 213, 79, 0.35)' : 'rgba(55, 71, 79, 0.6)';
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+    }
+
+    // C. Borde exterior rocoso
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (let i = 1; i < numVerts; i++) {
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = isCharged ? '#f59e0b' : '#37474f';
+    ctx.lineWidth = isCharged ? 1.8 : 1.3;
+    ctx.stroke();
+
+    // D. Vetas y Runas Doradas Incandescentes
+    const runePulse = 0.6 + Math.sin(rock.pulseTimer * 3.5 + rock.facetSeed) * 0.4;
+    ctx.strokeStyle = isCharged ? `rgba(255, 213, 79, ${0.75 + runePulse * 0.25})` : `rgba(245, 158, 11, ${0.5 + runePulse * 0.3})`;
+    ctx.lineWidth = isCharged ? 1.6 : 1.2;
+    ctx.beginPath();
+    // Glifo geomántico central (rombo / runa de tierra)
+    const runeSize = r * (isCharged ? 0.48 : 0.38);
+    ctx.moveTo(centerX, centerY - runeSize);
+    ctx.lineTo(centerX + runeSize * 0.75, centerY);
+    ctx.lineTo(centerX, centerY + runeSize);
+    ctx.lineTo(centerX - runeSize * 0.75, centerY);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Líneas secundarias de fisura áurea
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(verts[0].x * 0.75, verts[0].y * 0.75);
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(verts[3].x * 0.75, verts[3].y * 0.75);
+    ctx.stroke();
+
+    // E. Destello de blanco puro si acaba de impactar un proyectil
+    if (rock.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255, 255, 230, ${Math.min(0.85, rock.hitFlash / 7)})`;
+      ctx.beginPath();
+      ctx.moveTo(verts[0].x, verts[0].y);
+      for (let i = 1; i < numVerts; i++) {
+        ctx.lineTo(verts[i].x, verts[i].y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // F. Indicador de absorción reforzada (puntos de durabilidad contra proyectiles)
+    if (isCharged && rock.hitPoints > 1) {
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY - r * 0.95, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Barrera Telúrica (órbita y runas)
+  private static drawTelluricAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const orbitX = 63;
+    const orbitY = 38.5;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Anillo orbital elíptico
+    ctx.strokeStyle = isReady ? '#f59e0b' : '#d97706';
+    ctx.lineWidth = isReady ? 2.5 : 1.6;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(wizard.x, wizard.y, orbitX, orbitY, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Relleno áureo
+    ctx.fillStyle = isReady ? 'rgba(245, 158, 11, 0.16)' : 'rgba(217, 119, 6, 0.08)';
+    ctx.beginPath();
+    ctx.ellipse(wizard.x, wizard.y, orbitX, orbitY, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3 rocas holográficas girando en tiempo real en la previsualización
+    const spinAngle = now * 0.0025;
+    for (let i = 0; i < 3; i++) {
+      const rockAng = spinAngle + (i * Math.PI * 2) / 3;
+      const rx = wizard.x + Math.cos(rockAng) * orbitX;
+      const ry = wizard.y + Math.sin(rockAng) * orbitY;
+      const rRad = isReady ? 16 : 13;
+
+      ctx.save();
+      ctx.translate(rx, ry - 18);
+      ctx.strokeStyle = isReady ? '#fde047' : '#f59e0b';
+      ctx.lineWidth = 1.6;
+      ctx.fillStyle = isReady ? 'rgba(245, 158, 11, 0.45)' : 'rgba(120, 53, 15, 0.35)';
+
+      ctx.beginPath();
+      ctx.rect(-rRad * 0.7, -rRad * 0.7, rRad * 1.4, rRad * 1.4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Runa central en la roca holográfica
+      ctx.strokeStyle = '#fffbeb';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, -rRad * 0.4);
+      ctx.lineTo(rRad * 0.4, 0);
+      ctx.lineTo(0, rRad * 0.4);
+      ctx.lineTo(-rRad * 0.4, 0);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#fef08a' : '#f59e0b';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡DENSIDAD TELÚRICA (+50% DAÑO · ABSORCIÓN REFORZADA)! 🛡️🌍'
+        : 'BARRERA TELÚRICA (3 ROCAS DEFENSIVAS) 🛡️',
+      wizard.x,
+      wizard.y - orbitY - 14
     );
 
     ctx.restore();

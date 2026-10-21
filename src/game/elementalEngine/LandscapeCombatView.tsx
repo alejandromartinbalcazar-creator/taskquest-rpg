@@ -35,6 +35,8 @@ import {
   DevastatingGlacierEntity,
   IceMonolithInstance,
   RadialIceSpike,
+  TelluricBarrierEntity,
+  TelluricRockInstance,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -492,6 +494,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     hellRains: [] as HellRainEntity[],
     celestialStorms: [] as CelestialStormEntity[],
     devastatingGlaciers: [] as DevastatingGlacierEntity[],
+    telluricBarriers: [] as TelluricBarrierEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -797,6 +800,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.hellRains = [];
       g.celestialStorms = [];
       g.devastatingGlaciers = [];
+      g.telluricBarriers = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -943,6 +947,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'devastating_glacier') {
         // Glaciar Devastador gestiona sus propios sonidos de ventisca, monolitos y erupción radial
       }
+      else if (recipe.id === 'telluric_barrier') {
+        // Barrera Telúrica gestiona sus propios sonidos de invocación, absorción y detonación
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -981,8 +988,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
         targetX = wizard.x + Math.cos(aimAngle) * 260;
         targetY = wizard.y + Math.sin(aimAngle) * 260;
-      } else if (recipe.id === 'thermal_shock') {
-        // Vórtice de Choque Térmico: Centrado en el jugador por defecto (botón de pánico), o en el cursor/joystick si apunta
+      } else if (recipe.id === 'thermal_shock' || recipe.id === 'telluric_barrier') {
+        // Vórtice de Choque Térmico / Barrera Telúrica: Centrado en el jugador por defecto (botón de pánico/defensivo)
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2512,6 +2519,89 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.8 BARRERA TELÚRICA (TIERRA + TIERRA + TIERRA: 3 Rocas orbitales defensivas y destructivas)
+      else if (recipe.id === 'telluric_barrier') {
+        const baseDmg = recipe.damage + statBonus;
+        const damagePerRock = isCharged ? Math.floor(baseDmg * 1.5) : baseDmg;
+        const rockRadius = isCharged ? 16 : 13;
+        const hitPointsPerRock = isCharged ? 2 : 1;
+
+        const rocks: TelluricRockInstance[] = [0, 1, 2].map((idx) => {
+          const ang = (idx * Math.PI * 2) / 3;
+          return {
+            id: `telluric_rock_${now}_${idx}`,
+            baseAngleOffset: ang,
+            currentAngleOffset: ang,
+            currentAngle: ang,
+            x: wizard.x + Math.cos(ang) * 63,
+            y: wizard.y + Math.sin(ang) * 38.5,
+            height: 18,
+            radius: rockRadius,
+            hitPoints: hitPointsPerRock,
+            maxHitPoints: hitPointsPerRock,
+            destroyed: false,
+            facetSeed: Math.random() * 100 + idx * 37.1,
+            rotationAngle: Math.random() * Math.PI * 2,
+            pulseTimer: Math.random() * 10,
+            hitFlash: 0,
+          };
+        });
+
+        // Reemplaza o renueva cualquier barrera previa limpiamente
+        g.telluricBarriers = [{
+          id: `telluric_barrier_${now}`,
+          isCharged,
+          rocks,
+          orbitRadiusX: 63,
+          orbitRadiusY: 38.5,
+          orbitAngle: 0,
+          rotationSpeed: 2.3, // ~2.3 rad/s
+          damagePerRock,
+          knockback: recipe.knockback || 7.0,
+          durationMs: 20000, // 20.0s
+          elapsedMs: 0,
+          finished: false,
+          realignSpeed: 0.12,
+        }];
+
+        elementalSound.playTelluricCast(isCharged);
+        g.screenShake = isCharged ? 6 : 4;
+
+        // Partículas de erupción telúrica
+        for (let i = 0; i < (isCharged ? 24 : 16); i++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pDist = 15 + Math.random() * 35;
+          g.particles.push({
+            id: `telluric_burst_${now}_${i}`,
+            x: wizard.x + Math.cos(pAng) * pDist,
+            y: wizard.y + Math.sin(pAng) * pDist * 0.58,
+            vx: (Math.random() - 0.5) * 2.8,
+            vy: -1.8 - Math.random() * 2.5,
+            radius: 1.5 + Math.random() * 2.5,
+            color: i % 2 === 0 ? '#78350f' : (isCharged ? '#fde047' : '#f59e0b'),
+            alpha: 1,
+            life: 25,
+            type: 'stone_chip',
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `txt_telluric_charge_${now}`,
+            x: wizard.x,
+            y: wizard.y - 32,
+            text: '🛡️🌍 ¡DENSIDAD TELÚRICA +50%!',
+            color: '#f59e0b',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2676,9 +2766,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'devastating_glacier'
-      ? 'glacier'
-      : (activeRecipe.id === 'celestial_storm'
+    wizard.chargeType = activeRecipe.id === 'telluric_barrier'
+      ? 'telluric'
+      : (activeRecipe.id === 'devastating_glacier'
+        ? 'glacier'
+        : (activeRecipe.id === 'celestial_storm'
         ? 'celestial'
         : (activeRecipe.id === 'hell_rain'
           ? 'hell_rain'
@@ -2700,7 +2792,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                           ? 'ice'
                           : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
                             ? 'earth'
-                            : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))))))));
+                            : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2716,7 +2808,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+    const wasCharged = (activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -3019,7 +3111,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isHellRain = activeRecipe.id === 'hell_rain';
         const isCelestial = activeRecipe.id === 'celestial_storm';
         const isGlacier = activeRecipe.id === 'devastating_glacier';
-        const maxChargeTime = (isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isTelluric = activeRecipe.id === 'telluric_barrier';
+        const maxChargeTime = (isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3272,6 +3365,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Guijarros geománticos y polvo dorado convergentes para Barrera Telúrica
+        else if (isTelluric) {
+          if (Math.random() < 0.5 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `telluric-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.6 + wizard.chargeRatio * 2.4),
+              vy: -Math.sin(pAng) * (1.4 + wizard.chargeRatio * 1.4) - 0.4,
+              radius: 1.5 + Math.random() * 1.6,
+              color: Math.random() < 0.5 ? '#f59e0b' : '#fde047',
+              alpha: 1,
+              life: 14,
+              type: 'stone_chip',
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3462,6 +3576,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 16,
               color: '#00e5ff',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isTelluric) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.0;
+            g.particles.push({
+              id: `telluric-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 16,
+              color: '#f59e0b',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -7266,6 +7396,235 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.14 Actualizar Barrera Telúrica (Tierra + Tierra + Tierra: 3 Rocas Orbitales Consumibles)
+      for (let tbIdx = g.telluricBarriers.length - 1; tbIdx >= 0; tbIdx--) {
+        const barrier = g.telluricBarriers[tbIdx];
+        barrier.elapsedMs += dt * 1000;
+
+        // A. Avanzar ángulo de rotación orbital global (~2.3 rad/s)
+        barrier.orbitAngle += barrier.rotationSpeed * dt;
+
+        // B. Rebalancear simétricamente los ángulos de las rocas activas
+        const activeRocks = barrier.rocks.filter((r) => !r.destroyed);
+        const activeCount = activeRocks.length;
+
+        if (activeCount === 0 || barrier.elapsedMs >= barrier.durationMs) {
+          // Si expira por tiempo o se consumieron las 3 rocas: finalizar
+          if (activeCount > 0) {
+            // Si expiró por tiempo con rocas aún flotando: desmoronar pacíficamente
+            elementalSound.playTelluricCrumble();
+            activeRocks.forEach((r) => {
+              r.destroyed = true;
+              for (let p = 0; p < 8; p++) {
+                const pAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `telluric_crumble_${frameNow}_${Math.random()}`,
+                  x: r.x,
+                  y: r.y - r.height,
+                  vx: Math.cos(pAng) * (1.2 + Math.random() * 1.5),
+                  vy: Math.sin(pAng) * 0.8 + 0.5,
+                  radius: 1.2 + Math.random() * 1.8,
+                  color: '#78350f',
+                  alpha: 1,
+                  life: 20,
+                  type: 'stone_chip',
+                });
+              }
+            });
+            g.floatingTexts.push({
+              id: `telluric_disperse_${frameNow}`,
+              x: wizard.x,
+              y: wizard.y - 25,
+              text: '🛡️ BARRERA DISIPADA',
+              color: '#d97706',
+              fontSize: 11,
+              opacity: 1,
+              vy: -0.9,
+              life: 30,
+            });
+          }
+
+          barrier.finished = true;
+          // Activar cooldown una vez concluida la habilidad
+          g.lastAttackTime = performance.now();
+          g.telluricBarriers.splice(tbIdx, 1);
+          continue;
+        }
+
+        // C. Suavizado y redistribución angular simétrica de rocas supervivientes
+        activeRocks.forEach((rock, idx) => {
+          const targetOffset = (idx * Math.PI * 2) / activeCount;
+          let diff = targetOffset - rock.currentAngleOffset;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          rock.currentAngleOffset += diff * barrier.realignSpeed;
+
+          // Actualizar ángulo absoluto y coordenadas siguiendo fluidamente al jugador sin desfase
+          rock.currentAngle = barrier.orbitAngle + rock.currentAngleOffset;
+          rock.x = wizard.x + Math.cos(rock.currentAngle) * barrier.orbitRadiusX;
+          rock.y = wizard.y + Math.sin(rock.currentAngle) * barrier.orbitRadiusY;
+          rock.rotationAngle += 0.035;
+          rock.pulseTimer += dt;
+          if (rock.hitFlash > 0) rock.hitFlash--;
+        });
+
+        // D. Intercepción y destrucción de proyectiles hostiles
+        for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {
+          const p = g.projectiles[pIdx];
+          if (!p.isHostile || p.life <= 0) continue;
+
+          for (let rIdx = 0; rIdx < activeRocks.length; rIdx++) {
+            const rock = activeRocks[rIdx];
+            if (rock.destroyed) continue;
+
+            // Detección física en la órbita de la roca
+            if (checkCircleCollision(rock.x, rock.y, rock.radius + 6, p.x, p.y, p.radius)) {
+              // 1. Destruir proyectil hostil
+              g.projectiles.splice(pIdx, 1);
+              elementalSound.playTelluricDeflect();
+
+              // Chispas de impacto cinético y fragmentos de piedra
+              for (let s = 0; s < 6; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `rock_deflect_${frameNow}_${Math.random()}`,
+                  x: p.x,
+                  y: p.y,
+                  vx: Math.cos(sAng) * (2.2 + Math.random() * 2.0),
+                  vy: Math.sin(sAng) * (1.5 + Math.random() * 1.5),
+                  radius: 1.2 + Math.random() * 1.6,
+                  color: s % 2 === 0 ? '#f59e0b' : '#ffffff',
+                  alpha: 1,
+                  life: 14,
+                  type: 'spark',
+                });
+              }
+
+              // Flash visual en la roca
+              rock.hitFlash = 8;
+              rock.hitPoints--;
+
+              // Si se agota su durabilidad frente a proyectiles:
+              if (rock.hitPoints <= 0) {
+                rock.destroyed = true;
+                elementalSound.playTelluricCrumble();
+                for (let d = 0; d < 10; d++) {
+                  const dAng = Math.random() * Math.PI * 2;
+                  g.particles.push({
+                    id: `rock_shatter_${frameNow}_${Math.random()}`,
+                    x: rock.x,
+                    y: rock.y - rock.height,
+                    vx: Math.cos(dAng) * (2.0 + Math.random() * 2.5),
+                    vy: Math.sin(dAng) * 1.5,
+                    radius: 1.5 + Math.random() * 2.0,
+                    color: '#78350f',
+                    alpha: 1,
+                    life: 22,
+                    type: 'stone_chip',
+                  });
+                }
+                g.floatingTexts.push({
+                  id: `rock_broken_${frameNow}_${rock.id}`,
+                  x: rock.x,
+                  y: rock.y - rock.height - 12,
+                  text: '🛡️ ROCA FRACTURADA',
+                  color: '#f59e0b',
+                  fontSize: 10,
+                  opacity: 1,
+                  vy: -1.0,
+                  life: 25,
+                });
+              } else {
+                g.floatingTexts.push({
+                  id: `deflect_txt_${frameNow}_${pIdx}`,
+                  x: p.x,
+                  y: p.y - 12,
+                  text: '🛡️ RECHAZADO',
+                  color: '#f59e0b',
+                  fontSize: 11,
+                  opacity: 1,
+                  vy: -1.0,
+                  life: 20,
+                });
+              }
+
+              break; // Proyectil eliminado, saltar al siguiente proyectil
+            }
+          }
+        }
+
+        // E. Detección y Detonación al chocar contra enemigos (Consumo destructivo)
+        for (let rIdx = 0; rIdx < activeRocks.length; rIdx++) {
+          const rock = activeRocks[rIdx];
+          if (rock.destroyed) continue;
+
+          for (let eIdx = 0; eIdx < enemies.length; eIdx++) {
+            const enemy = enemies[eIdx];
+            if (enemy.hp <= 0) continue;
+
+            if (checkCircleCollision(rock.x, rock.y, rock.radius + 2, enemy.x, enemy.y, enemy.radius)) {
+              // 1. Impacto seco inmediato: destruir esta roca individual
+              rock.destroyed = true;
+
+              // 2. Daño contundente masivo + stats (+50% si fue cargada)
+              const finalRockDmg = barrier.damagePerRock;
+              enemy.hp -= finalRockDmg;
+              enemy.hitFlash = 12;
+
+              // 3. Micro-aturdimiento e interrupción de 300 ms (~18 frames)
+              enemy.isTelegraphing = false;
+              enemy.telegraphTimer = 0;
+              enemy.attackCooldown = Math.max(enemy.attackCooldown || 0, 18);
+              enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, 18);
+
+              // Empuje contundente
+              const kx = enemy.x - wizard.x;
+              const ky = enemy.y - wizard.y;
+              const kDist = Math.hypot(kx, ky) || 1;
+              enemy.vx = (kx / kDist) * barrier.knockback;
+              enemy.vy = (ky / kDist) * (barrier.knockback * 0.58);
+
+              // Efectos de sonido y cámara
+              elementalSound.playTelluricRockDetonation(barrier.isCharged);
+              g.screenShake = barrier.isCharged ? 8 : 5;
+
+              // Explosión de fragmentos de roca, polvo y esquirlas
+              for (let p = 0; p < (barrier.isCharged ? 22 : 14); p++) {
+                const pAng = Math.random() * Math.PI * 2;
+                const pSpeed = 2.5 + Math.random() * 3.5;
+                g.particles.push({
+                  id: `telluric_detonate_${frameNow}_${Math.random()}`,
+                  x: rock.x,
+                  y: rock.y - rock.height,
+                  vx: Math.cos(pAng) * pSpeed,
+                  vy: Math.sin(pAng) * (pSpeed * 0.6) - 1.2,
+                  radius: 1.8 + Math.random() * 2.8,
+                  color: p % 3 === 0 ? '#fde047' : (p % 2 === 0 ? '#78350f' : '#3e2723'),
+                  alpha: 1,
+                  life: 25,
+                  type: 'stone_chip',
+                });
+              }
+
+              // Texto flotante de daño
+              g.floatingTexts.push({
+                id: `txt_rock_dmg_${frameNow}_${enemy.id}_${Math.random()}`,
+                x: enemy.x + (Math.random() - 0.5) * 16,
+                y: enemy.y - 28,
+                text: barrier.isCharged ? `💥 ¡${finalRockDmg}! 🌍` : `💥 ${finalRockDmg}`,
+                color: '#f59e0b',
+                fontSize: barrier.isCharged ? 16 : 14,
+                opacity: 1,
+                vy: -1.4,
+                life: 36,
+              });
+
+              break; // Esta roca ya explotó, no puede colisionar con otro enemigo
+            }
+          }
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -7341,6 +7700,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.hellRains,
             g.celestialStorms,
             g.devastatingGlaciers,
+            g.telluricBarriers,
             g.forestLevel ?? undefined
           );
         }
@@ -7612,6 +7972,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
                     : activeRecipe.id === 'devastating_glacier'
                     ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'telluric_barrier'
+                    ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -7637,6 +7999,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
                     : activeRecipe.id === 'devastating_glacier'
                     ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
+                    : activeRecipe.id === 'telluric_barrier'
+                    ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -7672,6 +8036,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
                 : activeRecipe.id === 'devastating_glacier'
                 ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
+                : activeRecipe.id === 'telluric_barrier'
+                ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -7704,6 +8070,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-500 shadow-[0_0_8px_#00f0ff]'
                       : activeRecipe.id === 'devastating_glacier'
                       ? 'bg-gradient-to-r from-cyan-400 via-sky-200 to-blue-500 shadow-[0_0_8px_#00e5ff]'
+                      : activeRecipe.id === 'telluric_barrier'
+                      ? 'bg-gradient-to-r from-amber-600 via-yellow-400 to-stone-600 shadow-[0_0_8px_#f59e0b]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

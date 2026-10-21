@@ -51,6 +51,7 @@ export type SpellCastType =
   | 'hell_rain'           // Fuego + Fuego + Fuego (🔥🔥🔥) - Lluvia del Infierno
   | 'celestial_storm'     // Rayo + Rayo + Rayo (⚡⚡⚡) - Tormenta Celestial
   | 'devastating_glacier' // Hielo + Hielo + Hielo (❄️❄️❄️) - Glaciar Devastador
+  | 'telluric_barrier'    // Tierra + Tierra + Tierra (🌍🌍🌍) - Barrera Telúrica
   | 'obsidian_volcano'    // Fuego + Hielo + Tierra
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
@@ -716,6 +717,41 @@ export interface DevastatingGlacierEntity {
   eruptionHitEnemyIds: string[];
   spikes: RadialIceSpike[];    // Espículas y agujas de hielo de la erupción radial
   finished: boolean;
+}
+
+// BARRERA TELÚRICA (TIERRA + TIERRA + TIERRA: 3 ROCAS ORBITALES, INTERCEPCIÓN DE PROYECTILES Y DETONACIÓN)
+export interface TelluricRockInstance {
+  id: string;
+  baseAngleOffset: number;     // Ángulo base según número de rocas activas (ej. 0, 2π/3, 4π/3)
+  currentAngleOffset: number;  // Ángulo de fase dinámico interpolado suavemente
+  currentAngle: number;        // Ángulo absoluto actual en la elipse
+  x: number;                   // Posición mundial X
+  y: number;                   // Posición mundial Y
+  height: number;              // Elevación flotante a la altura del pecho (~16-20px)
+  radius: number;              // Radio del collider (~13px tap, ~16px cargado)
+  hitPoints: number;           // Absorción de proyectiles (1 en tap, 2 en cargado)
+  maxHitPoints: number;
+  destroyed: boolean;
+  facetSeed: number;           // Semilla pseudo-aleatoria para caras poligonales
+  rotationAngle: number;       // Rotación axial propia del monolito
+  pulseTimer: number;          // Temporizador de pulso de runas
+  hitFlash: number;            // Flash blanco-dorado al interceptar proyectil
+}
+
+export interface TelluricBarrierEntity {
+  id: string;
+  isCharged: boolean;
+  rocks: TelluricRockInstance[];
+  orbitRadiusX: number;        // ~63px (1.8 unidades)
+  orbitRadiusY: number;        // ~38.5px (1.1 unidades en perspectiva isométrica)
+  orbitAngle: number;          // Ángulo acumulado de rotación orbital
+  rotationSpeed: number;       // ~2.3 rad/s
+  damagePerRock: number;       // Daño masivo al impactar contra un enemigo
+  knockback: number;           // Empuje contundente
+  durationMs: number;          // 20000ms (20.0 segundos)
+  elapsedMs: number;
+  finished: boolean;
+  realignSpeed: number;        // Velocidad de reajuste simétrico entre rocas supervivientes
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas

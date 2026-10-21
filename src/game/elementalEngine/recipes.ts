@@ -229,6 +229,19 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     cooldownMs: 700,
     selfDamageRisk: 0,
   },
+  telluric_barrier: {
+    id: 'telluric_barrier',
+    name: 'Barrera Telúrica',
+    elements: ['earth', 'earth', 'earth'],
+    description: 'Escudo cinético móvil: invoca 3 monolitos de roca sedimentaria que orbitan durante 20s. Interceptan proyectiles hostiles y detonan contra enemigos infligiendo daño masivo e interrupción. Carga breve para mayor tamaño, +50% de daño de contacto y absorción reforzada.',
+    icon: '🛡️🌍',
+    color: '#78350f',
+    secondaryColor: '#f59e0b',
+    damage: 88,
+    knockback: 7.0,
+    cooldownMs: 800,
+    selfDamageRisk: 0,
+  },
   obsidian_volcano: {
     id: 'obsidian_volcano',
     name: 'Volcán de Obsidiana',
@@ -312,6 +325,9 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   }
   if (count('ice') >= 3) {
     return RECIPES.devastating_glacier;
+  }
+  if (count('earth') >= 3) {
+    return RECIPES.telluric_barrier;
   }
 
   // 2. Combinaciones de 3 Elementos Distintos
