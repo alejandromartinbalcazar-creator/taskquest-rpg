@@ -216,6 +216,19 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     cooldownMs: 650,
     selfDamageRisk: 0,
   },
+  devastating_glacier: {
+    id: 'devastating_glacier',
+    name: 'Glaciar Devastador',
+    elements: ['ice', 'ice', 'ice'],
+    description: 'Cataclismo ártico: desata una ventisca gélida que ralentiza severamente el área mientras caen pesados monolitos de hielo prismático, culminando en una erupción sísmica radial de agujas glaciales que congelan a los supervivientes. Carga breve para expandir el radio en un +35%, añadir 2 monolitos y +50% de daño.',
+    icon: '🏔️❄️',
+    color: '#00e5ff',
+    secondaryColor: '#e0f7fa',
+    damage: 92,
+    knockback: 6.0,
+    cooldownMs: 700,
+    selfDamageRisk: 0,
+  },
   obsidian_volcano: {
     id: 'obsidian_volcano',
     name: 'Volcán de Obsidiana',
@@ -296,6 +309,9 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   }
   if (count('lightning') >= 3) {
     return RECIPES.celestial_storm;
+  }
+  if (count('ice') >= 3) {
+    return RECIPES.devastating_glacier;
   }
 
   // 2. Combinaciones de 3 Elementos Distintos

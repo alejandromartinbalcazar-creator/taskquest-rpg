@@ -48,9 +48,10 @@ export type SpellCastType =
   | 'permafrost_prison' // Hielo + Tierra (Rediseño: estacas glaciales + fragmentación)
   | 'explosive_overload'// Fuego + Rayo
   // Combinaciones Triples Puras y Avanzadas
-  | 'hell_rain'         // Fuego + Fuego + Fuego (🔥🔥🔥) - Lluvia del Infierno
-  | 'celestial_storm'   // Rayo + Rayo + Rayo (⚡⚡⚡) - Tormenta Celestial
-  | 'obsidian_volcano'  // Fuego + Hielo + Tierra
+  | 'hell_rain'           // Fuego + Fuego + Fuego (🔥🔥🔥) - Lluvia del Infierno
+  | 'celestial_storm'     // Rayo + Rayo + Rayo (⚡⚡⚡) - Tormenta Celestial
+  | 'devastating_glacier' // Hielo + Hielo + Hielo (❄️❄️❄️) - Glaciar Devastador
+  | 'obsidian_volcano'    // Fuego + Hielo + Tierra
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
   // Combinación Suprema de 4 Elementos
@@ -668,6 +669,52 @@ export interface CelestialStormEntity {
   puddles: IonizedPuddleInstance[];
   elapsedMs: number;
   terminalDetonated: boolean;
+  finished: boolean;
+}
+
+// GLACIAR DEVASTADOR (HIELO + HIELO + HIELO: VENTISCA MASIVA, MONOLITOS PRISMÁTICOS Y ERUPCIÓN RADIAL CONGELANTE)
+export interface IceMonolithInstance {
+  id: string;
+  targetX: number;
+  targetY: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  delayMs: number;            // Momento en que comienza a descender
+  flightDurationMs: number;   // ~220ms
+  flightProgress: number;     // 0.0 a 1.0
+  impactRadius: number;       // ~40px
+  impactDamage: number;       // Daño de impacto contundente
+  hasImpacted: boolean;
+  shatterProgress: number;    // 0.0 a 1.0 (tras el impacto, fracturas visuales que se disuelven en 180ms)
+}
+
+export interface RadialIceSpike {
+  angle: number;
+  dist: number;               // Distancia desde el centro (expande concéntricamente)
+  height: number;             // Altura actual de la aguja glacial
+  maxHeight: number;
+  width: number;
+  eruptProgress: number;      // 0.0 a 1.0
+}
+
+export interface DevastatingGlacierEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  areaRadius: number;          // ~155px tap, ~210px charged (+35%)
+  isCharged: boolean;
+  monoliths: IceMonolithInstance[];
+  elapsedMs: number;
+  totalDurationMs: number;     // ~2600ms
+  eruptionTriggered: boolean;
+  eruptionProgress: number;    // 0.0 a 1.0
+  eruptionDurationMs: number;  // ~450ms
+  eruptionMaxRadius: number;
+  eruptionDamage: number;      // Daño muy alto de remate
+  eruptionHitEnemyIds: string[];
+  spikes: RadialIceSpike[];    // Espículas y agujas de hielo de la erupción radial
   finished: boolean;
 }
 

@@ -29,6 +29,9 @@ import {
   CelestialStormEntity,
   CelestialLightningStrikeInstance,
   IonizedPuddleInstance,
+  DevastatingGlacierEntity,
+  IceMonolithInstance,
+  RadialIceSpike,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -84,6 +87,7 @@ export class IsometricRenderer {
     plasmaTornadoes: PlasmaTornadoEntity[] = [],
     hellRains: HellRainEntity[] = [],
     celestialStorms: CelestialStormEntity[] = [],
+    devastatingGlaciers: DevastatingGlacierEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -149,6 +153,9 @@ export class IsometricRenderer {
     // 3.81 Dibujar Suelo, Advertencias y Charcos Ionizados de Tormenta Celestial (Rayo + Rayo + Rayo)
     this.drawCelestialStormGround(ctx, celestialStorms);
 
+    // 3.82 Dibujar Suelo, Ventisca, Sombras de Monolitos y Niebla de Glaciar Devastador (Hielo + Hielo + Hielo)
+    this.drawGlacierGround(ctx, devastatingGlaciers);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -170,6 +177,8 @@ export class IsometricRenderer {
       this.drawHellRainAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'celestial') {
       this.drawCelestialAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'glacier') {
+      this.drawGlacierAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -313,6 +322,30 @@ export class IsometricRenderer {
           });
         }
       });
+    });
+
+    // Monolitos de hielo prismático y agujas de la erupción de Glaciar Devastador (Hielo + Hielo + Hielo)
+    devastatingGlaciers.forEach((glacier) => {
+      glacier.monoliths.forEach((monolith) => {
+        if (monolith.flightProgress > 0 && !monolith.hasImpacted) {
+          renderList.push({
+            y: monolith.currentY,
+            draw: () => this.drawIceMonolithBody(ctx, monolith),
+          });
+        }
+      });
+
+      if (glacier.eruptionTriggered && glacier.spikes.length > 0) {
+        glacier.spikes.forEach((spike) => {
+          if (spike.height > 0) {
+            const sy = glacier.centerY + Math.sin(spike.angle) * spike.dist * 0.58;
+            renderList.push({
+              y: sy,
+              draw: () => this.drawRadialIceSpike(ctx, glacier.centerX, glacier.centerY, spike),
+            });
+          }
+        });
+      }
     });
 
     // Mago (Jugador)
@@ -1537,6 +1570,41 @@ export class IsometricRenderer {
           ctx.lineTo(staffX + Math.cos(arcAng + 0.35) * r2, staffY + Math.sin(arcAng + 0.35) * r2 * 0.58);
           ctx.stroke();
         }
+      }
+
+      // Vórtice de escarcha ártica y cristales para Glaciar Devastador (Hielo + Hielo + Hielo)
+      const isGlacier = wizard.chargeType === 'glacier';
+      if (isGlacier) {
+        ctx.shadowBlur = 0;
+        const flakeCount = isReady ? 12 : Math.max(5, Math.floor(ratio * 10));
+        for (let fc = 0; fc < flakeCount; fc++) {
+          const fcAng = Date.now() * (fc % 2 === 0 ? 0.014 : -0.014) + (fc * Math.PI * 2) / flakeCount;
+          const fcDist = 19 + ratio * 13;
+          const fx = Math.cos(fcAng) * fcDist;
+          const fy = 6 + Math.sin(fcAng) * (fcDist * 0.58);
+
+          ctx.save();
+          ctx.translate(fx, fy);
+          ctx.fillStyle = fc % 2 === 0 ? '#ffffff' : '#00e5ff';
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 2.6 : 1.7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Foco de hielo puro brillante en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 11 : 6.0 + ratio * 3.8) + Math.sin(Date.now() * 0.02) * 1.5;
+        const iceGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.5);
+        iceGrad.addColorStop(0, '#ffffff');
+        iceGrad.addColorStop(0.35, '#80d8ff');
+        iceGrad.addColorStop(0.75, '#00e5ff');
+        iceGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+        ctx.fillStyle = iceGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.restore();
@@ -6264,6 +6332,302 @@ export class IsometricRenderer {
       isReady
         ? '¡FURIA DE LA TEMPESTAD (+50% DAÑO · 6 RAYOS + COLOSAL)! ⚡🌩️'
         : 'TORMENTA CELESTIAL (4 RELÁMPAGOS EN RÁFAGA) ⚡',
+      destX,
+      destY - areaRadius * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // RENDERIZADO DE GLACIAR DEVASTADOR (HIELO + HIELO + HIELO - ❄️❄️❄️)
+  // =========================================================================
+
+  // 1. Suelo, ventisca gélida, escarcha y sombras de monolitos
+  private static drawGlacierGround(ctx: CanvasRenderingContext2D, glaciers: DevastatingGlacierEntity[]) {
+    const squish = 0.58;
+    const nowTime = Date.now() * 0.003;
+
+    glaciers.forEach((glacier) => {
+      const cx = glacier.centerX;
+      const cy = glacier.centerY;
+      const r = glacier.areaRadius;
+
+      ctx.save();
+
+      // 1.1 Campo de escarcha y niebla ártica en el suelo
+      const frostGrad = ctx.createRadialGradient(cx, cy, 2, cx, cy, r);
+      frostGrad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
+      frostGrad.addColorStop(0.35, glacier.isCharged ? 'rgba(0, 229, 255, 0.22)' : 'rgba(0, 229, 255, 0.16)');
+      frostGrad.addColorStop(0.75, 'rgba(2, 132, 199, 0.10)');
+      frostGrad.addColorStop(1, 'rgba(0, 145, 234, 0)');
+
+      ctx.fillStyle = frostGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Perímetro gélido punteado
+      ctx.strokeStyle = glacier.isCharged ? 'rgba(0, 229, 255, 0.55)' : 'rgba(0, 229, 255, 0.35)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Corrientes huracanadas de viento gélido en espiral
+      ctx.strokeStyle = 'rgba(224, 247, 250, 0.35)';
+      ctx.lineWidth = 1.4;
+      for (let w = 0; w < 3; w++) {
+        const wAng = nowTime * 2.2 + (w * Math.PI * 2) / 3;
+        const wR = r * (0.45 + w * 0.2);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, wR, wR * squish, wAng, 0, Math.PI * 0.85);
+        ctx.stroke();
+      }
+
+      // Cristales de escarcha en los bordes del suelo
+      for (let fc = 0; fc < 6; fc++) {
+        const fcAng = (fc * Math.PI) / 3 + nowTime * 0.3;
+        const fcDist = r * 0.88;
+        const fx = cx + Math.cos(fcAng) * fcDist;
+        const fy = cy + Math.sin(fcAng) * fcDist * squish;
+        ctx.fillStyle = '#e0f7fa';
+        ctx.beginPath();
+        ctx.arc(fx, fy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 1.2 Sombras y retículas de advertencia para monolitos cayendo
+      glacier.monoliths.forEach((monolith) => {
+        if (monolith.hasImpacted) {
+          // Fragmentos de hielo rotos que se disuelven tras el choque
+          if (monolith.shatterProgress < 1.0) {
+            const shAlpha = Math.max(0, 1.0 - monolith.shatterProgress);
+            ctx.save();
+            ctx.globalAlpha = shAlpha;
+            ctx.fillStyle = '#e0f7fa';
+            for (let f = 0; f < 5; f++) {
+              const fAng = (f * Math.PI * 2) / 5 + f * 0.4;
+              const fDist = monolith.impactRadius * (0.3 + monolith.shatterProgress * 0.9);
+              const fx = monolith.targetX + Math.cos(fAng) * fDist;
+              const fy = monolith.targetY + Math.sin(fAng) * fDist * squish;
+              ctx.beginPath();
+              ctx.arc(fx, fy, 2.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+          return;
+        }
+
+        const warnStart = monolith.delayMs - 160;
+        if (glacier.elapsedMs < warnStart) return;
+
+        const tx = monolith.targetX;
+        const ty = monolith.targetY;
+        const ir = monolith.impactRadius;
+        const t = Math.min(1.0, Math.max(0, monolith.flightProgress));
+
+        // Círculo de impacto cian en el suelo
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, ir, ir * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.16)';
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, ir, ir * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sombra proyectada que se contrae y oscurece al descender el monolito
+        const shadowR = ir * (0.4 + 0.6 * t);
+        const shadowAlpha = 0.2 + 0.65 * t;
+        ctx.fillStyle = `rgba(1, 87, 155, ${shadowAlpha})`;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, shadowR, shadowR * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Monolito de hielo prismático cayendo (Y-Sorting en 2.5D)
+  private static drawIceMonolithBody(ctx: CanvasRenderingContext2D, monolith: IceMonolithInstance) {
+    const mx = monolith.currentX;
+    const my = monolith.currentY;
+    const bw = 24;
+    const bh = 52;
+
+    ctx.save();
+    ctx.translate(mx, my);
+
+    // Estela de vapor helado y copos
+    ctx.fillStyle = 'rgba(224, 247, 250, 0.45)';
+    for (let p = 0; p < 3; p++) {
+      const px = (Math.random() - 0.5) * bw * 0.8;
+      const py = -bh * 0.7 - Math.random() * 20;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Faceta lateral izquierda (sombra zafiro)
+    ctx.fillStyle = '#0284c7';
+    ctx.beginPath();
+    ctx.moveTo(0, -bh);
+    ctx.lineTo(-bw * 0.5, -bh * 0.4);
+    ctx.lineTo(-bw * 0.5, 0);
+    ctx.lineTo(0, bh * 0.3);
+    ctx.closePath();
+    ctx.fill();
+
+    // Faceta frontal derecha (luz cian glaciar)
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.moveTo(0, -bh);
+    ctx.lineTo(0, bh * 0.3);
+    ctx.lineTo(bw * 0.5, 0);
+    ctx.lineTo(bw * 0.5, -bh * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Tapa superior reflectante (blanco puro)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(0, -bh);
+    ctx.lineTo(-bw * 0.5, -bh * 0.4);
+    ctx.lineTo(0, -bh * 0.3);
+    ctx.lineTo(bw * 0.5, -bh * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Borde brillante de cristal
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0, -bh);
+    ctx.lineTo(0, bh * 0.3);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 3. Agujas y cristales gigantes de la erupción radial terminal (Y-Sorting en 2.5D)
+  private static drawRadialIceSpike(ctx: CanvasRenderingContext2D, cx: number, cy: number, spike: RadialIceSpike) {
+    const squish = 0.58;
+    const bx = cx + Math.cos(spike.angle) * spike.dist;
+    const by = cy + Math.sin(spike.angle) * spike.dist * squish;
+    const h = spike.height;
+    const w = spike.width;
+
+    if (h <= 1) return;
+
+    ctx.save();
+
+    // Faceta izquierda
+    ctx.fillStyle = '#80d8ff';
+    ctx.beginPath();
+    ctx.moveTo(bx, by - h);
+    ctx.lineTo(bx - w * 0.5, by);
+    ctx.lineTo(bx, by + w * 0.25 * squish);
+    ctx.closePath();
+    ctx.fill();
+
+    // Faceta derecha (luz directa)
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.moveTo(bx, by - h);
+    ctx.lineTo(bx, by + w * 0.25 * squish);
+    ctx.lineTo(bx + w * 0.5, by);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cresta afilada
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(bx, by - h);
+    ctx.lineTo(bx, by + w * 0.25 * squish);
+    ctx.stroke();
+
+    // Destello en la punta
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(bx, by - h, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // 4. Previsualización de retícula táctica para Glaciar Devastador
+  private static drawGlacierAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const targetDist = 180;
+    const ang = wizard.facingAngle;
+    const destX = wizard.x + Math.cos(ang) * targetDist;
+    const destY = wizard.y + Math.sin(ang) * targetDist * squish;
+    const areaRadius = isReady ? 210 : 155;
+
+    ctx.save();
+
+    // Línea de orientación hacia el ojo de la ventisca
+    ctx.strokeStyle = isReady ? '#ffffff' : '#00e5ff';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(destX, destY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Área general de la ventisca
+    ctx.strokeStyle = isReady ? '#ffffff' : '#00e5ff';
+    ctx.lineWidth = isReady ? 2.8 : 2.0;
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Relleno gélido
+    ctx.fillStyle = isReady ? 'rgba(224, 247, 250, 0.22)' : 'rgba(0, 229, 255, 0.12)';
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Marcador central (epicentro de la erupción radial)
+    const centerR = isReady ? 68 : 42;
+    ctx.strokeStyle = isReady ? '#80d8ff' : '#00e5ff';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, centerR, centerR * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Glifo central
+    ctx.fillStyle = isReady ? '#ffffff' : '#00e5ff';
+    ctx.beginPath();
+    ctx.arc(destX, destY, isReady ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#ffffff' : '#00e5ff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡ERA DE HIELO (+50% DAÑO · 6 MONOLITOS + REMATE CONGELANTE)! 🏔️❄️'
+        : 'GLACIAR DEVASTADOR (VENTISCA Y MONOLITOS) ❄️',
       destX,
       destY - areaRadius * squish - 14
     );

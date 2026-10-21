@@ -2362,6 +2362,148 @@ class ElementalSoundEngine {
     boom.start(now);
     boom.stop(now + 0.45);
   }
+
+  // =========================================================================
+  // SONIDOS DE GLACIAR DEVASTADOR (HIELO + HIELO + HIELO - ❄️❄️❄️)
+  // =========================================================================
+
+  // 1. Invocación de ventisca y pulso de frío absoluto
+  public playGlacierCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Viento gélido envolvente
+    const wind = this.ctx.createOscillator();
+    const windGain = this.ctx.createGain();
+    wind.type = 'triangle';
+    wind.frequency.setValueAtTime(isCharged ? 380 : 440, now);
+    wind.frequency.exponentialRampToValueAtTime(120, now + 0.28);
+    windGain.gain.setValueAtTime(isCharged ? 0.35 : 0.24, now);
+    windGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    wind.connect(windGain);
+    windGain.connect(this.ctx.destination);
+    wind.start(now);
+    wind.stop(now + 0.28);
+
+    // Tintineo de escarcha ártica
+    const chime = this.ctx.createOscillator();
+    const chimeGain = this.ctx.createGain();
+    chime.type = 'sine';
+    chime.frequency.setValueAtTime(isCharged ? 1350 : 1150, now);
+    chime.frequency.exponentialRampToValueAtTime(550, now + 0.22);
+    chimeGain.gain.setValueAtTime(0.18, now);
+    chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    chime.connect(chimeGain);
+    chimeGain.connect(this.ctx.destination);
+    chime.start(now);
+    chime.stop(now + 0.22);
+  }
+
+  // 2. Impacto de monolito de hielo prismático en el suelo
+  public playIceMonolithImpact() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Golpe contundente y peso sísmico
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(170, now);
+    thud.frequency.exponentialRampToValueAtTime(32, now + 0.24);
+    thudGain.gain.setValueAtTime(0.45, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.24);
+
+    // Crujido de hielo fracturado y fragmentación vítrea
+    const shatter = this.ctx.createOscillator();
+    const shatterGain = this.ctx.createGain();
+    shatter.type = 'sawtooth';
+    shatter.frequency.setValueAtTime(840 + Math.random() * 120, now);
+    shatter.frequency.exponentialRampToValueAtTime(90, now + 0.18);
+    shatterGain.gain.setValueAtTime(0.32, now);
+    shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    shatter.connect(shatterGain);
+    shatterGain.connect(this.ctx.destination);
+    shatter.start(now);
+    shatter.stop(now + 0.18);
+  }
+
+  // 3. Erupción radial masiva de agujas glaciares (Remate)
+  public playGlacialEruptionBurst(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Retumbar telúrico del permafrost quebrado
+    const rumble = this.ctx.createOscillator();
+    const rumbleGain = this.ctx.createGain();
+    rumble.type = 'sine';
+    rumble.frequency.setValueAtTime(isCharged ? 95 : 120, now);
+    rumble.frequency.exponentialRampToValueAtTime(22, now + (isCharged ? 0.45 : 0.35));
+    rumbleGain.gain.setValueAtTime(isCharged ? 0.6 : 0.45, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.45 : 0.35));
+    rumble.connect(rumbleGain);
+    rumbleGain.connect(this.ctx.destination);
+    rumble.start(now);
+    rumble.stop(now + (isCharged ? 0.45 : 0.35));
+
+    // Desgarro violento de púas de hielo
+    const spike = this.ctx.createOscillator();
+    const spikeGain = this.ctx.createGain();
+    spike.type = 'sawtooth';
+    spike.frequency.setValueAtTime(isCharged ? 650 : 540, now);
+    spike.frequency.exponentialRampToValueAtTime(55, now + (isCharged ? 0.38 : 0.28));
+    spikeGain.gain.setValueAtTime(isCharged ? 0.5 : 0.38, now);
+    spikeGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.38 : 0.28));
+    spike.connect(spikeGain);
+    spikeGain.connect(this.ctx.destination);
+    spike.start(now);
+    spike.stop(now + (isCharged ? 0.38 : 0.28));
+
+    // Resonancia de congelación cristalina
+    const freezeChord = [880, 1108.7, 1318.5]; // Acorde brillante
+    freezeChord.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const fOsc = this.ctx.createOscillator();
+      const fGain = this.ctx.createGain();
+      fOsc.type = 'triangle';
+      fOsc.frequency.setValueAtTime(freq, now + 0.04 * idx);
+      fGain.gain.setValueAtTime(0.14, now + 0.04 * idx);
+      fGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      fOsc.connect(fGain);
+      fGain.connect(this.ctx.destination);
+      fOsc.start(now + 0.04 * idx);
+      fOsc.stop(now + 0.35);
+    });
+  }
+
+  // 4. Pulso suave de congelación y escarcha
+  public playFrostSlowPulse() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const ping = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    ping.type = 'sine';
+    ping.frequency.setValueAtTime(1250 + Math.random() * 200, now);
+    ping.frequency.exponentialRampToValueAtTime(650, now + 0.08);
+    gain.gain.setValueAtTime(0.07, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    ping.connect(gain);
+    gain.connect(this.ctx.destination);
+    ping.start(now);
+    ping.stop(now + 0.08);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

@@ -32,6 +32,9 @@ import {
   CelestialStormEntity,
   CelestialLightningStrikeInstance,
   IonizedPuddleInstance,
+  DevastatingGlacierEntity,
+  IceMonolithInstance,
+  RadialIceSpike,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -488,6 +491,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     plasmaTornadoes: [] as PlasmaTornadoEntity[],
     hellRains: [] as HellRainEntity[],
     celestialStorms: [] as CelestialStormEntity[],
+    devastatingGlaciers: [] as DevastatingGlacierEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -792,6 +796,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.plasmaTornadoes = [];
       g.hellRains = [];
       g.celestialStorms = [];
+      g.devastatingGlaciers = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -935,6 +940,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'celestial_storm') {
         // Tormenta Celestial gestiona sus propios sonidos de tempestad, relámpagos y truenos
       }
+      else if (recipe.id === 'devastating_glacier') {
+        // Glaciar Devastador gestiona sus propios sonidos de ventisca, monolitos y erupción radial
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -994,9 +1002,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm') ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier') ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2375,6 +2383,135 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.7 GLACIAR DEVASTADOR (HIELO + HIELO + HIELO: Ventisca masiva, lluvia de monolitos y erupción radial congelante)
+      else if (recipe.id === 'devastating_glacier') {
+        const monolithCount = isCharged ? 6 : 4;
+        const areaRadius = isCharged ? 210 : 155; // +35% de radio en modo cargado
+        const baseDmg = recipe.damage + statBonus;
+        const chargeMultiplierTotal = isCharged ? 1.5 : 1.0;
+        const monolithDmg = Math.round(baseDmg * 0.75 * chargeMultiplierTotal);
+        const eruptionDmg = Math.round(baseDmg * 1.45 * chargeMultiplierTotal);
+
+        // Identificar enemigos prioritarios dentro de la ventisca para fijar el impacto de los monolitos
+        const enemiesInArea = g.enemyManager.enemies.filter((e) => {
+          if (e.hp <= 0) return false;
+          const edist = Math.hypot(e.x - targetX, (e.y - targetY) / 0.58);
+          return edist <= areaRadius * 1.05;
+        });
+
+        const monoliths: IceMonolithInstance[] = [];
+        for (let i = 0; i < monolithCount; i++) {
+          let mTargetX = targetX;
+          let mTargetY = targetY;
+
+          if (i < enemiesInArea.length) {
+            // Posicionar sobre enemigos dentro del cuadrante
+            mTargetX = enemiesInArea[i].x;
+            mTargetY = enemiesInArea[i].y;
+          } else {
+            // Distribuir en espiral áurea radial alrededor del centro
+            const mAng = i * 2.39996 + (Math.random() - 0.5) * 0.5;
+            const mDist = (0.2 + ((i % 4) / 4) * 0.68) * areaRadius;
+            mTargetX = targetX + Math.cos(mAng) * mDist;
+            mTargetY = targetY + Math.sin(mAng) * mDist * 0.58;
+          }
+
+          // Inicio en el cielo superior izquierdo en proyección isométrica 2.5D
+          const startOffsetX = -110 - (Math.random() - 0.5) * 24;
+          const startOffsetY = -280 - (Math.random() - 0.5) * 35;
+
+          monoliths.push({
+            id: `glacier_monolith_${now}_${i}`,
+            targetX: mTargetX,
+            targetY: mTargetY,
+            startX: mTargetX + startOffsetX,
+            startY: mTargetY + startOffsetY,
+            currentX: mTargetX + startOffsetX,
+            currentY: mTargetY + startOffsetY,
+            delayMs: i * (isCharged ? 200 : 230),
+            flightDurationMs: 220,
+            flightProgress: 0,
+            impactRadius: 40,
+            impactDamage: monolithDmg,
+            hasImpacted: false,
+            shatterProgress: 0,
+          });
+        }
+
+        // Pre-generar agujas y cristales de la erupción radial (en 2 o 3 anillos concéntricos)
+        const spikes: RadialIceSpike[] = [];
+        const ringSteps = isCharged ? [0.35, 0.65, 0.95] : [0.45, 0.9];
+        ringSteps.forEach((ringRatio, rIdx) => {
+          const spikeCountOnRing = (rIdx + 1) * (isCharged ? 8 : 6);
+          for (let sp = 0; sp < spikeCountOnRing; sp++) {
+            const spAng = (sp * Math.PI * 2) / spikeCountOnRing + (rIdx * 0.35);
+            spikes.push({
+              angle: spAng,
+              dist: ringRatio * areaRadius,
+              height: 0,
+              maxHeight: (38 + Math.random() * 24) * (isCharged ? 1.3 : 1.0),
+              width: (18 + Math.random() * 8) * (isCharged ? 1.25 : 1.0),
+              eruptProgress: 0,
+            });
+          }
+        });
+
+        g.devastatingGlaciers.push({
+          id: `devastating_glacier_${now}`,
+          centerX: targetX,
+          centerY: targetY,
+          areaRadius,
+          isCharged,
+          monoliths,
+          elapsedMs: 0,
+          totalDurationMs: isCharged ? 2800 : 2500,
+          eruptionTriggered: false,
+          eruptionProgress: 0,
+          eruptionDurationMs: 450,
+          eruptionMaxRadius: areaRadius,
+          eruptionDamage: eruptionDmg,
+          eruptionHitEnemyIds: [],
+          spikes,
+          finished: false,
+        });
+
+        elementalSound.playGlacierCast(isCharged);
+        g.screenShake = isCharged ? 7 : 4;
+
+        // Partículas de ventisca ártica y copos de nieve
+        for (let p = 0; p < (isCharged ? 24 : 14); p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pSpd = 2.0 + Math.random() * 3.2;
+          g.particles.push({
+            id: `glacier_cast_${now}_${p}`,
+            x: wizard.x,
+            y: wizard.y - 10,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd * 0.58 - 1.2,
+            radius: 1.5 + Math.random() * 1.8,
+            color: p % 2 === 0 ? '#ffffff' : '#00e5ff',
+            alpha: 1,
+            life: 20,
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `glacier_charged_${now}`,
+            x: wizard.x,
+            y: wizard.y - 28,
+            text: '🏔️❄️ ¡ERA DE HIELO +50%!',
+            color: '#00e5ff',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2539,29 +2676,31 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'celestial_storm'
-      ? 'celestial'
-      : (activeRecipe.id === 'hell_rain'
-        ? 'hell_rain'
-        : (activeRecipe.id === 'explosive_overload'
-          ? 'plasma'
-          : (activeRecipe.id === 'permafrost_prison'
-            ? 'permafrost'
-            : (activeRecipe.id === 'crystal_field'
-              ? 'conductive'
-              : (activeRecipe.id === 'thermal_shock'
-                ? 'thermal'
-                : (activeRecipe.id === 'magma_eruption'
-                  ? 'volcanic'
-                  : (activeRecipe.id === 'cryo_storm'
-                    ? 'cryo'
-                    : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-                      ? 'lightning'
-                      : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                        ? 'ice'
-                        : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                          ? 'earth'
-                          : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))))));
+    wizard.chargeType = activeRecipe.id === 'devastating_glacier'
+      ? 'glacier'
+      : (activeRecipe.id === 'celestial_storm'
+        ? 'celestial'
+        : (activeRecipe.id === 'hell_rain'
+          ? 'hell_rain'
+          : (activeRecipe.id === 'explosive_overload'
+            ? 'plasma'
+            : (activeRecipe.id === 'permafrost_prison'
+              ? 'permafrost'
+              : (activeRecipe.id === 'crystal_field'
+                ? 'conductive'
+                : (activeRecipe.id === 'thermal_shock'
+                  ? 'thermal'
+                  : (activeRecipe.id === 'magma_eruption'
+                    ? 'volcanic'
+                    : (activeRecipe.id === 'cryo_storm'
+                      ? 'cryo'
+                      : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+                        ? 'lightning'
+                        : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                          ? 'ice'
+                          : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                            ? 'earth'
+                            : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2577,7 +2716,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+    const wasCharged = (activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -2879,7 +3018,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isPlasma = activeRecipe.id === 'explosive_overload';
         const isHellRain = activeRecipe.id === 'hell_rain';
         const isCelestial = activeRecipe.id === 'celestial_storm';
-        const maxChargeTime = (isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isGlacier = activeRecipe.id === 'devastating_glacier';
+        const maxChargeTime = (isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3112,6 +3252,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Copos de nieve y fragmentos de escarcha convergentes para Glaciar Devastador
+        else if (isGlacier) {
+          if (Math.random() < 0.5 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 24;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `glacier-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.6 + wizard.chargeRatio * 2.4),
+              vy: -Math.sin(pAng) * (1.4 + wizard.chargeRatio * 1.4) - 0.4,
+              radius: 1.5 + Math.random() * 1.6,
+              color: Math.random() < 0.5 ? '#ffffff' : '#00e5ff',
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3286,6 +3446,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               vy: 0,
               radius: 16,
               color: '#00f0ff',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isGlacier) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.0;
+            g.particles.push({
+              id: `glacier-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 16,
+              color: '#00e5ff',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -6893,6 +7069,203 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.13 Actualizar Glaciar Devastador (Hielo + Hielo + Hielo: Ventisca Continua, Ralentización -50%, Monolitos y Erupción Radial Congelante)
+      for (let dgIdx = g.devastatingGlaciers.length - 1; dgIdx >= 0; dgIdx--) {
+        const glacier = g.devastatingGlaciers[dgIdx];
+        glacier.elapsedMs += 16.6;
+
+        // A. Ventisca Continua y Ralentización Severa (-50% inmediata en toda la zona)
+        for (const enemy of enemies) {
+          if (enemy.hp <= 0) continue;
+          const dist = Math.hypot(enemy.x - glacier.centerX, (enemy.y - glacier.centerY) / 0.58);
+          if (dist <= glacier.areaRadius) {
+            // Ralentización severa continua (-50% velocidad)
+            g.enemyManager.applyStatus(enemy, 'slowed', 35);
+          }
+        }
+
+        // B. Caída Secuencial de Monolitos Prismáticos
+        let allMonolithsDone = true;
+        for (const monolith of glacier.monoliths) {
+          if (!monolith.hasImpacted) {
+            if (glacier.elapsedMs >= monolith.delayMs) {
+              monolith.flightProgress = Math.min(1.0, monolith.flightProgress + 16.6 / monolith.flightDurationMs);
+              const fp = monolith.flightProgress;
+              monolith.currentX = monolith.startX + (monolith.targetX - monolith.startX) * fp;
+              monolith.currentY = monolith.startY + (monolith.targetY - monolith.startY) * fp;
+
+              // Estela de cristales y vapor gélido
+              if (Math.random() < 0.6) {
+                g.particles.push({
+                  id: `ice_trail_${frameNow}_${Math.random()}`,
+                  x: monolith.currentX + (Math.random() - 0.5) * 12,
+                  y: monolith.currentY + (Math.random() - 0.5) * 12,
+                  vx: (monolith.startX - monolith.targetX) * 0.02 + (Math.random() - 0.5) * 1.2,
+                  vy: (monolith.startY - monolith.targetY) * 0.02 + (Math.random() - 0.5) * 1.2,
+                  radius: 1.8 + Math.random() * 2.2,
+                  color: Math.random() < 0.5 ? '#ffffff' : '#00e5ff',
+                  alpha: 0.85,
+                  life: 14,
+                });
+              }
+
+              // ¿Impacto del monolito contra el suelo?
+              if (fp >= 1.0) {
+                monolith.hasImpacted = true;
+                monolith.currentX = monolith.targetX;
+                monolith.currentY = monolith.targetY;
+
+                elementalSound.playIceMonolithImpact();
+                g.screenShake = 8;
+
+                // Anillo de choque de vapor blanco
+                g.particles.push({
+                  id: `ice_shock_${frameNow}_${monolith.id}`,
+                  x: monolith.targetX,
+                  y: monolith.targetY,
+                  vx: 0,
+                  vy: 0,
+                  radius: 16,
+                  color: '#e0f7fa',
+                  alpha: 1,
+                  life: 16,
+                  maxLife: 16,
+                  type: 'ring',
+                });
+
+                // Metralla de fragmentos de hielo fracturados
+                for (let d = 0; d < 14; d++) {
+                  const dAng = Math.random() * Math.PI * 2;
+                  const dSpd = 2.5 + Math.random() * 4.2;
+                  g.particles.push({
+                    id: `ice_debris_${frameNow}_${d}`,
+                    x: monolith.targetX,
+                    y: monolith.targetY,
+                    vx: Math.cos(dAng) * dSpd,
+                    vy: Math.sin(dAng) * dSpd * 0.58 - 1.2,
+                    radius: 1.6 + Math.random() * 2.2,
+                    color: d % 2 === 0 ? '#ffffff' : '#00e5ff',
+                    alpha: 1,
+                    life: 18,
+                  });
+                }
+
+                // Daño contundente y ralentización en el punto de contacto
+                for (const enemy of enemies) {
+                  const dist = Math.hypot(enemy.x - monolith.targetX, (enemy.y - monolith.targetY) / 0.58);
+                  if (dist <= monolith.impactRadius) {
+                    const finalMonolithDmg = Math.round(monolith.impactDamage * (0.85 + Math.random() * 0.3));
+                    enemy.hp -= finalMonolithDmg;
+                    enemy.hitFlash = 12;
+                    g.enemyManager.applyStatus(enemy, 'slowed', 120);
+
+                    // Knockback radial
+                    const kbAng = Math.atan2(enemy.y - monolith.targetY, enemy.x - monolith.targetX);
+                    enemy.vx = (enemy.vx || 0) + Math.cos(kbAng) * 4.5;
+                    enemy.vy = (enemy.vy || 0) + Math.sin(kbAng) * 4.5 * 0.58;
+
+                    g.floatingTexts.push({
+                      id: `ice_hit_${frameNow}_${enemy.id}_${Math.random()}`,
+                      x: enemy.x + (Math.random() - 0.5) * 16,
+                      y: enemy.y - 18,
+                      text: `-${finalMonolithDmg} ❄️`,
+                      color: '#00e5ff',
+                      fontSize: 13,
+                      opacity: 1,
+                      vy: -1.3,
+                      life: 30,
+                    });
+                  }
+                }
+              } else {
+                allMonolithsDone = false;
+              }
+            } else {
+              allMonolithsDone = false;
+            }
+          } else if (monolith.shatterProgress < 1.0) {
+            monolith.shatterProgress += 16.6 / 180;
+          }
+        }
+
+        // C. Erupción Radial Terminal (brota desde el centro hacia los bordes)
+        if (allMonolithsDone && !glacier.eruptionTriggered) {
+          glacier.eruptionTriggered = true;
+          glacier.eruptionProgress = 0.01;
+          elementalSound.playGlacialEruptionBurst(glacier.isCharged);
+          g.screenShake = glacier.isCharged ? 16 : 10;
+
+          // Anillo inicial expansivo de la erupción
+          g.particles.push({
+            id: `glacier_radial_wave_${frameNow}`,
+            x: glacier.centerX,
+            y: glacier.centerY,
+            vx: 0,
+            vy: 0,
+            radius: 20,
+            color: '#00e5ff',
+            alpha: 1,
+            life: 22,
+            maxLife: 22,
+            type: 'ring',
+          });
+        }
+
+        if (glacier.eruptionTriggered && glacier.eruptionProgress <= 1.0) {
+          glacier.eruptionProgress += 16.6 / glacier.eruptionDurationMs;
+          const currentEruptRadius = glacier.eruptionMaxRadius * Math.min(1.0, glacier.eruptionProgress * 1.15);
+
+          // Animar el crecimiento y despliegue de las agujas de hielo
+          glacier.spikes.forEach((spike) => {
+            if (spike.dist <= currentEruptRadius) {
+              if (spike.eruptProgress < 1.0) {
+                spike.eruptProgress = Math.min(1.0, spike.eruptProgress + 0.16);
+                spike.height = spike.maxHeight * Math.sin(spike.eruptProgress * Math.PI * 0.5);
+              }
+            }
+          });
+
+          // Daño masivo y CONGELACIÓN GARANTIZADA a enemigos alcanzados por la onda expansiva
+          for (const enemy of enemies) {
+            if (glacier.eruptionHitEnemyIds.includes(enemy.id)) continue;
+            const dist = Math.hypot(enemy.x - glacier.centerX, (enemy.y - glacier.centerY) / 0.58);
+            if (dist <= currentEruptRadius + 14) {
+              glacier.eruptionHitEnemyIds.push(enemy.id);
+
+              const finalEruptDmg = Math.round(glacier.eruptionDamage * (0.9 + Math.random() * 0.2));
+              enemy.hp -= finalEruptDmg;
+              enemy.hitFlash = 16;
+
+              // CONGELACIÓN TOTAL GARANTIZADA (110 frames ~ 1.83 segundos de inmovilización absoluta)
+              g.enemyManager.applyStatus(enemy, 'frozen', 110, 4);
+              enemy.stunnedTimer = 110;
+              enemy.attackCooldown = Math.max(enemy.attackCooldown || 0, 110);
+              elementalSound.playFrostSlowPulse();
+
+              // Efecto de empalamiento vertical leve
+              enemy.vy = (enemy.vy || 0) - 1.8;
+
+              g.floatingTexts.push({
+                id: `glacier_erupt_hit_${frameNow}_${enemy.id}_${Math.random()}`,
+                x: enemy.x + (Math.random() - 0.5) * 16,
+                y: enemy.y - 24,
+                text: `💥 ¡${finalEruptDmg}! ❄️ ¡CONGELADO!`,
+                color: '#80d8ff',
+                fontSize: 15,
+                opacity: 1,
+                vy: -1.4,
+                life: 38,
+              });
+            }
+          }
+        }
+
+        // D. Finalización y Limpieza de Entidad
+        if (glacier.elapsedMs >= glacier.totalDurationMs) {
+          g.devastatingGlaciers.splice(dgIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -6967,6 +7340,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.plasmaTornadoes,
             g.hellRains,
             g.celestialStorms,
+            g.devastatingGlaciers,
             g.forestLevel ?? undefined
           );
         }
@@ -7236,6 +7610,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
                     : activeRecipe.id === 'celestial_storm'
                     ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'devastating_glacier'
+                    ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -7259,6 +7635,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
                     : activeRecipe.id === 'celestial_storm'
                     ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
+                    : activeRecipe.id === 'devastating_glacier'
+                    ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -7292,6 +7670,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
                 : activeRecipe.id === 'celestial_storm'
                 ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
+                : activeRecipe.id === 'devastating_glacier'
+                ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -7322,6 +7702,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff3d00]'
                       : activeRecipe.id === 'celestial_storm'
                       ? 'bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-500 shadow-[0_0_8px_#00f0ff]'
+                      : activeRecipe.id === 'devastating_glacier'
+                      ? 'bg-gradient-to-r from-cyan-400 via-sky-200 to-blue-500 shadow-[0_0_8px_#00e5ff]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
