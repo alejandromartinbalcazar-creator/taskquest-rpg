@@ -2102,6 +2102,127 @@ class ElementalSoundEngine {
     osc.start(now);
     osc.stop(now + 0.1);
   }
+
+  // LLUVIA DEL INFIERNO (🔥🔥🔥)
+  // 1. Invocación cósmica y columna ígnea vertical
+  public playHellRainCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Resonancia sub-grave de apertura de portal cósmico
+    const drone = this.ctx.createOscillator();
+    const droneGain = this.ctx.createGain();
+    drone.type = 'sawtooth';
+    drone.frequency.setValueAtTime(isCharged ? 95 : 120, now);
+    drone.frequency.exponentialRampToValueAtTime(45, now + 0.45);
+
+    droneGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
+    droneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    drone.connect(droneGain);
+    droneGain.connect(this.ctx.destination);
+    drone.start(now);
+    drone.stop(now + 0.45);
+
+    // Rugido ascendente de fuego
+    const whoosh = this.ctx.createOscillator();
+    const whooshGain = this.ctx.createGain();
+    whoosh.type = 'triangle';
+    whoosh.frequency.setValueAtTime(180, now);
+    whoosh.frequency.exponentialRampToValueAtTime(isCharged ? 880 : 640, now + 0.35);
+
+    whooshGain.gain.setValueAtTime(0.3, now);
+    whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+    whoosh.connect(whooshGain);
+    whooshGain.connect(this.ctx.destination);
+    whoosh.start(now);
+    whoosh.stop(now + 0.38);
+  }
+
+  // 2. Silbido aéreo de reentrada del meteorito cayendo a gran velocidad
+  public playHellMeteorWhistle() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const whistle = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    whistle.type = 'sine';
+    whistle.frequency.setValueAtTime(1400, now);
+    whistle.frequency.exponentialRampToValueAtTime(320, now + 0.18);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    whistle.connect(gain);
+    gain.connect(this.ctx.destination);
+    whistle.start(now);
+    whistle.stop(now + 0.18);
+  }
+
+  // 3. Impacto detonante y fractura sísmica de roca volcánica
+  public playHellMeteorExplosion(isColossal: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bass sísmico
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(isColossal ? 140 : 180, now);
+    thud.frequency.exponentialRampToValueAtTime(28, now + (isColossal ? 0.38 : 0.25));
+
+    thudGain.gain.setValueAtTime(isColossal ? 0.55 : 0.4, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.38 : 0.25));
+
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + (isColossal ? 0.38 : 0.25));
+
+    // Estallido de roca volcánica y fuego
+    const blast = this.ctx.createOscillator();
+    const blastGain = this.ctx.createGain();
+    blast.type = 'sawtooth';
+    blast.frequency.setValueAtTime(isColossal ? 520 : 680, now);
+    blast.frequency.exponentialRampToValueAtTime(45, now + (isColossal ? 0.32 : 0.22));
+
+    blastGain.gain.setValueAtTime(isColossal ? 0.45 : 0.32, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.32 : 0.22));
+
+    blast.connect(blastGain);
+    blastGain.connect(this.ctx.destination);
+    blast.start(now);
+    blast.stop(now + (isColossal ? 0.32 : 0.22));
+  }
+
+  // 4. Chisporroteo y burbujeo del magma fundido en el cráter
+  public playMagmaCraterSizzle() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320 + Math.random() * 80, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.08);
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

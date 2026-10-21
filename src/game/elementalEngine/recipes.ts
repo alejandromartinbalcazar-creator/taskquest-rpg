@@ -190,6 +190,19 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
   },
 
   // COMBINACIONES AVANZADAS DE 3 ELEMENTOS
+  hell_rain: {
+    id: 'hell_rain',
+    name: 'Lluvia del Infierno',
+    elements: ['fire', 'fire', 'fire'],
+    description: 'Catástrofe aérea masiva: descarga una salva secuencial de meteoritos balísticos incandescentes que pulverizan el cuadrante y dejan cráteres de magma ardiente. Carga breve para invocar 6 meteoritos con un impacto final colosal y +50% de daño.',
+    icon: '☄️🔥',
+    color: '#ff3d00',
+    secondaryColor: '#ffd600',
+    damage: 95,
+    knockback: 6.5,
+    cooldownMs: 700,
+    selfDamageRisk: 0,
+  },
   obsidian_volcano: {
     id: 'obsidian_volcano',
     name: 'Volcán de Obsidiana',
@@ -264,7 +277,12 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
     return RECIPES.elemental_cataclysm;
   }
 
-  // 2. Combinaciones de 3 Elementos
+  // 1.5 Combinaciones Triples Puras (3 o más elementos idénticos)
+  if (count('fire') >= 3) {
+    return RECIPES.hell_rain;
+  }
+
+  // 2. Combinaciones de 3 Elementos Distintos
   if (hasFire && hasIce && hasEarth) {
     return RECIPES.obsidian_volcano;
   }

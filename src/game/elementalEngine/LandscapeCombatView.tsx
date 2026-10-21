@@ -26,6 +26,9 @@ import {
   PermafrostPrisonEntity,
   PermafrostMonolithNode,
   PlasmaTornadoEntity,
+  HellRainEntity,
+  HellMeteorInstance,
+  HellCraterInstance,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -480,6 +483,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     conductiveCages: [] as ConductiveCageEntity[],
     permafrostPrisons: [] as PermafrostPrisonEntity[],
     plasmaTornadoes: [] as PlasmaTornadoEntity[],
+    hellRains: [] as HellRainEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -782,6 +786,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.conductiveCages = [];
       g.permafrostPrisons = [];
       g.plasmaTornadoes = [];
+      g.hellRains = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -919,6 +924,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'explosive_overload') {
         // Tornado de Plasma gestiona sus propios sonidos de ignición de vórtice, desintegración y detonación
       }
+      else if (recipe.id === 'hell_rain') {
+        // Lluvia del Infierno gestiona sus propios sonidos de invocación cósmica, silbido y detonaciones
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -978,9 +986,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220);
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = recipe.id === 'hell_rain' ? 180 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2160,6 +2168,101 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.5 LLUVIA DEL INFIERNO (FUEGO + FUEGO + FUEGO: Salva secuencial de meteoritos balísticos y cráteres de magma)
+      else if (recipe.id === 'hell_rain') {
+        const meteorCount = isCharged ? 6 : 4;
+        const areaRadius = isCharged ? 190 : 150;
+        const baseDmg = recipe.damage + statBonus;
+        const chargeMultiplierTotal = isCharged ? 1.5 : 1.0;
+        const directDmg = Math.round(baseDmg * 0.65 * chargeMultiplierTotal);
+        const colossalDmg = Math.round(baseDmg * 1.25 * chargeMultiplierTotal);
+
+        const meteors: HellMeteorInstance[] = [];
+        for (let i = 0; i < meteorCount; i++) {
+          const isColossal = isCharged && i === meteorCount - 1;
+          let mTargetX = targetX;
+          let mTargetY = targetY;
+
+          if (!isColossal) {
+            // Distribución áurea radial alrededor del centro de impacto
+            const mAng = i * 2.39996 + (Math.random() - 0.5) * 0.6;
+            const mDist = (0.2 + (i / meteorCount) * 0.7) * areaRadius;
+            mTargetX = targetX + Math.cos(mAng) * mDist;
+            mTargetY = targetY + Math.sin(mAng) * mDist * 0.58;
+          }
+
+          // Posición de inicio en el cielo superior izquierdo (trayectoria isométrica diagonal)
+          const startOffsetX = -135 - (Math.random() - 0.5) * 30;
+          const startOffsetY = -300 - (Math.random() - 0.5) * 40;
+
+          meteors.push({
+            id: `hell_meteor_${now}_${i}`,
+            targetX: mTargetX,
+            targetY: mTargetY,
+            startX: mTargetX + startOffsetX,
+            startY: mTargetY + startOffsetY,
+            currentX: mTargetX + startOffsetX,
+            currentY: mTargetY + startOffsetY,
+            delayMs: isColossal ? 880 : i * (isCharged ? 160 : 180),
+            flightProgress: 0,
+            flightDurationMs: isColossal ? 240 : 210,
+            isColossal,
+            impactRadius: isColossal ? 76 : 42,
+            impactDamage: isColossal ? colossalDmg : directDmg,
+            hasImpacted: false,
+            hitEnemyIds: [],
+          });
+        }
+
+        g.hellRains.push({
+          id: `hell_rain_${now}`,
+          centerX: targetX,
+          centerY: targetY,
+          areaRadius,
+          isCharged,
+          meteors,
+          craters: [],
+          elapsedMs: 0,
+          finished: false,
+        });
+
+        elementalSound.playHellRainCast(isCharged);
+        g.screenShake = isCharged ? 9 : 5;
+
+        // Partículas ígneas iniciales de conjuración
+        for (let p = 0; p < (isCharged ? 22 : 14); p++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pSpd = 2.0 + Math.random() * 3.8;
+          g.particles.push({
+            id: `hell_cast_${now}_${p}`,
+            x: wizard.x,
+            y: wizard.y - 12,
+            vx: Math.cos(pAng) * pSpd,
+            vy: Math.sin(pAng) * pSpd * 0.58 - 1.5,
+            radius: 1.8 + Math.random() * 2.2,
+            color: p % 2 === 0 ? '#ff3d00' : '#ffd600',
+            alpha: 1,
+            life: 20,
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `hell_charged_${now}`,
+            x: wizard.x,
+            y: wizard.y - 28,
+            text: '☄️🔥 ¡FURIA CÓSMICA +50%!',
+            color: '#ffd600',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2324,25 +2427,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
-    wizard.chargeType = activeRecipe.id === 'explosive_overload'
-      ? 'plasma'
-      : (activeRecipe.id === 'permafrost_prison'
-        ? 'permafrost'
-        : (activeRecipe.id === 'crystal_field'
-          ? 'conductive'
-          : (activeRecipe.id === 'thermal_shock'
-            ? 'thermal'
-            : (activeRecipe.id === 'magma_eruption'
-              ? 'volcanic'
-              : (activeRecipe.id === 'cryo_storm'
-                ? 'cryo'
-                : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
-                  ? 'lightning'
-                  : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
-                    ? 'ice'
-                    : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
-                      ? 'earth'
-                      : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane')))))))));
+    wizard.chargeType = activeRecipe.id === 'hell_rain'
+      ? 'hell_rain'
+      : (activeRecipe.id === 'explosive_overload'
+        ? 'plasma'
+        : (activeRecipe.id === 'permafrost_prison'
+          ? 'permafrost'
+          : (activeRecipe.id === 'crystal_field'
+            ? 'conductive'
+            : (activeRecipe.id === 'thermal_shock'
+              ? 'thermal'
+              : (activeRecipe.id === 'magma_eruption'
+                ? 'volcanic'
+                : (activeRecipe.id === 'cryo_storm'
+                  ? 'cryo'
+                  : (activeRecipe.id === 'lightning_storm' || activeRecipe.elements.includes('lightning')
+                    ? 'lightning'
+                    : (activeRecipe.id === 'ice_lance' || activeRecipe.elements.includes('ice')
+                      ? 'ice'
+                      : (activeRecipe.id === 'earth_megalith' || activeRecipe.elements.includes('earth')
+                        ? 'earth'
+                        : (activeRecipe.elements.includes('fire') ? 'fire' : 'arcane'))))))))));
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
     if (activeRecipe.id !== 'lightning_storm') {
@@ -2358,8 +2463,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
-      ? (elapsed >= 450 || wizard.chargeRatio >= 0.95)
+    const wasCharged = (activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+      ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
     wizard.isCharging = false;
@@ -2658,7 +2763,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isConductive = activeRecipe.id === 'crystal_field';
         const isPermafrost = activeRecipe.id === 'permafrost_prison';
         const isPlasma = activeRecipe.id === 'explosive_overload';
-        const maxChargeTime = (isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 450 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isHellRain = activeRecipe.id === 'hell_rain';
+        const maxChargeTime = (isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -2851,6 +2957,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Torbellino de fuego cósmico y chispas ascendentes para Lluvia del Infierno
+        else if (isHellRain) {
+          if (Math.random() < 0.5 + wizard.chargeRatio * 0.4) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 20 + Math.random() * 26;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            g.particles.push({
+              id: `hell-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.6 + wizard.chargeRatio * 2.5),
+              vy: -Math.sin(pAng) * (1.4 + wizard.chargeRatio * 1.5) - 0.8,
+              radius: 1.6 + Math.random() * 1.8,
+              color: Math.random() < 0.5 ? '#ff3d00' : (Math.random() < 0.8 ? '#ffd600' : '#ffffff'),
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -2996,6 +3122,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               alpha: 1,
               life: 16,
               maxLife: 16,
+              type: 'ring',
+            });
+          } else if (isHellRain) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.0;
+            g.particles.push({
+              id: `hell-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 16,
+              color: '#ff3d00',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
               type: 'ring',
             });
           } else {
@@ -6144,6 +6286,205 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.11 Actualizar Lluvia del Infierno (Fuego + Fuego + Fuego: Salva de Meteoritos Balísticos, Detonación de Área y Cráteres de Magma)
+      for (let hrIdx = g.hellRains.length - 1; hrIdx >= 0; hrIdx--) {
+        const rain = g.hellRains[hrIdx];
+        rain.elapsedMs += 16.6;
+
+        let allMeteorsImpacted = true;
+
+        // A. Actualizar meteoritos individuales
+        for (const meteor of rain.meteors) {
+          if (meteor.hasImpacted) continue;
+
+          // Esperar retardo escalonado de invocación
+          if (rain.elapsedMs < meteor.delayMs) {
+            allMeteorsImpacted = false;
+            continue;
+          }
+
+          // Comenzar silbido atmosférico al iniciar descenso
+          if (meteor.flightProgress === 0) {
+            elementalSound.playHellMeteorWhistle();
+          }
+
+          meteor.flightProgress = Math.min(1.0, meteor.flightProgress + 16.6 / meteor.flightDurationMs);
+
+          // Interpolación de posición de vuelo (desde startX, startY hasta targetX, targetY)
+          const fp = meteor.flightProgress;
+          meteor.currentX = meteor.startX + (meteor.targetX - meteor.startX) * fp;
+          meteor.currentY = meteor.startY + (meteor.targetY - meteor.startY) * fp;
+
+          // Estela de fuego, humo y brasas durante la reentrada balística
+          if (Math.random() < 0.65) {
+            g.particles.push({
+              id: `hell_trail_${frameNow}_${Math.random()}`,
+              x: meteor.currentX + (Math.random() - 0.5) * 8,
+              y: meteor.currentY + (Math.random() - 0.5) * 8,
+              vx: (meteor.startX - meteor.targetX) * 0.02 + (Math.random() - 0.5) * 1.5,
+              vy: (meteor.startY - meteor.targetY) * 0.02 + (Math.random() - 0.5) * 1.5,
+              radius: (meteor.isColossal ? 3.4 : 2.2) * (1 - fp * 0.4),
+              color: Math.random() < 0.35 ? '#ffffff' : (Math.random() < 0.7 ? '#ffd600' : '#ff3d00'),
+              alpha: 0.9,
+              life: 14,
+            });
+          }
+
+          // ¿Llegó al punto de impacto en el suelo?
+          if (fp >= 1.0) {
+            meteor.hasImpacted = true;
+            meteor.currentX = meteor.targetX;
+            meteor.currentY = meteor.targetY;
+
+            // Sonido detonante sísmico y sacudida de pantalla
+            elementalSound.playHellMeteorExplosion(meteor.isColossal);
+            g.screenShake = meteor.isColossal ? 15 : 7.5;
+
+            // Anillo expansivo de onda de choque
+            g.particles.push({
+              id: `hell_shock_${frameNow}_${meteor.id}`,
+              x: meteor.targetX,
+              y: meteor.targetY,
+              vx: 0,
+              vy: 0,
+              radius: meteor.isColossal ? 26 : 14,
+              color: meteor.isColossal ? '#ffd600' : '#ff3d00',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+
+            // Metralla y fragmentos de roca volcánica ardiente
+            const debrisCount = meteor.isColossal ? 20 : 12;
+            for (let d = 0; d < debrisCount; d++) {
+              const dAng = Math.random() * Math.PI * 2;
+              const dSpd = 2.5 + Math.random() * (meteor.isColossal ? 5.5 : 3.8);
+              g.particles.push({
+                id: `hell_debris_${frameNow}_${d}`,
+                x: meteor.targetX,
+                y: meteor.targetY,
+                vx: Math.cos(dAng) * dSpd,
+                vy: Math.sin(dAng) * dSpd * 0.58 - 1.2,
+                radius: 1.8 + Math.random() * (meteor.isColossal ? 2.8 : 1.8),
+                color: d % 3 === 0 ? '#ffffff' : (d % 3 === 1 ? '#ffd600' : '#ff3d00'),
+                alpha: 1,
+                life: 20,
+              });
+            }
+
+            // Daño directo, retroceso e ignición a enemigos en el radio de impacto
+            for (const enemy of enemies) {
+              const dist = Math.hypot(enemy.x - meteor.targetX, (enemy.y - meteor.targetY) / 0.58);
+              if (dist <= meteor.impactRadius) {
+                const finalImpactDmg = Math.round(meteor.impactDamage * (meteor.isColossal ? 1.0 : (0.85 + Math.random() * 0.3)));
+                enemy.hp -= finalImpactDmg;
+                enemy.hitFlash = 14;
+                g.enemyManager.applyStatus(enemy, 'burning', meteor.isColossal ? 180 : 120, 6);
+
+                // Knockback radial
+                const kbAng = Math.atan2(enemy.y - meteor.targetY, enemy.x - meteor.targetX);
+                const kbForce = meteor.isColossal ? 7.5 : 4.5;
+                enemy.vx = (enemy.vx || 0) + Math.cos(kbAng) * kbForce;
+                enemy.vy = (enemy.vy || 0) + Math.sin(kbAng) * kbForce * 0.58;
+
+                // Texto flotante de impacto
+                g.floatingTexts.push({
+                  id: `hell_hit_${frameNow}_${enemy.id}_${Math.random()}`,
+                  x: enemy.x + (Math.random() - 0.5) * 16,
+                  y: enemy.y - 18,
+                  text: meteor.isColossal ? `💥 ¡${finalImpactDmg}! 🔥` : `-${finalImpactDmg} ☄️`,
+                  color: meteor.isColossal ? '#ffd600' : '#ff5722',
+                  fontSize: meteor.isColossal ? 16 : 13,
+                  opacity: 1,
+                  vy: -1.4,
+                  life: 34,
+                });
+              }
+            }
+
+            // Crear cráter de magma persistente en el suelo
+            rain.craters.push({
+              id: `crater_${meteor.id}`,
+              x: meteor.targetX,
+              y: meteor.targetY,
+              radius: meteor.isColossal ? 58 : 34,
+              lifeTimerMs: meteor.isColossal ? 2600 : 2200,
+              maxLifeMs: meteor.isColossal ? 2600 : 2200,
+              tickIntervalMs: 250,
+              lastTickPerEnemy: {},
+              dpsPerTick: Math.round((meteor.isColossal ? 24 : 16) + (player.stats.attack + player.stats.knowledge) * 0.1),
+              isColossal: meteor.isColossal,
+            });
+          } else {
+            allMeteorsImpacted = false;
+          }
+        }
+
+        // B. Actualizar cráteres de magma (daño continuo a enemigos que pisen el magma)
+        for (let cIdx = rain.craters.length - 1; cIdx >= 0; cIdx--) {
+          const crater = rain.craters[cIdx];
+          crater.lifeTimerMs -= 16.6;
+
+          // Chispas y burbujas de lava esporádicas
+          if (Math.random() < 0.22) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = Math.random() * crater.radius * 0.75;
+            g.particles.push({
+              id: `magma_bubble_${frameNow}_${Math.random()}`,
+              x: crater.x + Math.cos(pAng) * pDist,
+              y: crater.y + Math.sin(pAng) * pDist * 0.58,
+              vx: (Math.random() - 0.5) * 0.5,
+              vy: -0.6 - Math.random() * 0.8,
+              radius: 1.2 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#ffd600' : '#ff3d00',
+              alpha: 0.9,
+              life: 14,
+            });
+          }
+
+          // Chequeo de daño de magma cada 250ms
+          for (const enemy of enemies) {
+            const dist = Math.hypot(enemy.x - crater.x, (enemy.y - crater.y) / 0.58);
+            if (dist <= crater.radius) {
+              const lastTick = crater.lastTickPerEnemy[enemy.id] || 0;
+              if (rain.elapsedMs - lastTick >= crater.tickIntervalMs) {
+                crater.lastTickPerEnemy[enemy.id] = rain.elapsedMs;
+
+                enemy.hp -= crater.dpsPerTick;
+                enemy.hitFlash = 6;
+                g.enemyManager.applyStatus(enemy, 'burning', 75, 5);
+
+                if (Math.random() < 0.35) {
+                  elementalSound.playMagmaCraterSizzle();
+                }
+
+                g.floatingTexts.push({
+                  id: `crater_burn_${frameNow}_${enemy.id}_${Math.random()}`,
+                  x: enemy.x + (Math.random() - 0.5) * 14,
+                  y: enemy.y - 14,
+                  text: `-${crater.dpsPerTick} 🔥`,
+                  color: '#ff6d00',
+                  fontSize: 11,
+                  opacity: 0.9,
+                  vy: -1.0,
+                  life: 20,
+                });
+              }
+            }
+          }
+
+          if (crater.lifeTimerMs <= 0) {
+            rain.craters.splice(cIdx, 1);
+          }
+        }
+
+        // C. Limpieza cuando todos los meteoritos impactaron y los cráteres se extinguieron
+        if (allMeteorsImpacted && rain.craters.length === 0) {
+          g.hellRains.splice(hrIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -6216,6 +6557,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.conductiveCages,
             g.permafrostPrisons,
             g.plasmaTornadoes,
+            g.hellRains,
             g.forestLevel ?? undefined
           );
         }
@@ -6481,6 +6823,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
                     : activeRecipe.id === 'explosive_overload'
                     ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'hell_rain'
+                    ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -6500,6 +6844,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
                     : activeRecipe.id === 'explosive_overload'
                     ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
+                    : activeRecipe.id === 'hell_rain'
+                    ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -6529,6 +6875,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
                 : activeRecipe.id === 'explosive_overload'
                 ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
+                : activeRecipe.id === 'hell_rain'
+                ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -6555,6 +6903,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-slate-400 shadow-[0_0_8px_#00e5ff]'
                       : activeRecipe.id === 'explosive_overload'
                       ? 'bg-gradient-to-r from-orange-500 via-amber-400 to-cyan-400 shadow-[0_0_8px_#00e5ff]'
+                      : activeRecipe.id === 'hell_rain'
+                      ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff3d00]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

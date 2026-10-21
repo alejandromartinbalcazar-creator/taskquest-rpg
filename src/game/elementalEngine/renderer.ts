@@ -23,6 +23,9 @@ import {
   PermafrostPrisonEntity,
   PermafrostMonolithNode,
   PlasmaTornadoEntity,
+  HellRainEntity,
+  HellMeteorInstance,
+  HellCraterInstance,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -76,6 +79,7 @@ export class IsometricRenderer {
     conductiveCages: ConductiveCageEntity[] = [],
     permafrostPrisons: PermafrostPrisonEntity[] = [],
     plasmaTornadoes: PlasmaTornadoEntity[] = [],
+    hellRains: HellRainEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -135,6 +139,9 @@ export class IsometricRenderer {
     // 3.79 Dibujar Sombras, Suelo y Remolino de Succión del Tornado de Plasma (Fuego + Rayo)
     this.drawPlasmaTornadoGround(ctx, plasmaTornadoes);
 
+    // 3.80 Dibujar Suelo, Advertencias y Cráteres de Magma de la Lluvia del Infierno (Fuego + Fuego + Fuego)
+    this.drawHellRainGround(ctx, hellRains);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -152,6 +159,8 @@ export class IsometricRenderer {
       this.drawPermafrostAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'plasma') {
       this.drawPlasmaTornadoAimTrajectory(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'hell_rain') {
+      this.drawHellRainAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -283,6 +292,18 @@ export class IsometricRenderer {
           draw: () => this.drawPlasmaTornadoBody(ctx, tornado),
         });
       }
+    });
+
+    // Bólidos incandescentes cayendo de la Lluvia del Infierno (Fuego + Fuego + Fuego)
+    hellRains.forEach((rain) => {
+      rain.meteors.forEach((meteor) => {
+        if (meteor.flightProgress > 0 && !meteor.hasImpacted) {
+          renderList.push({
+            y: meteor.currentY,
+            draw: () => this.drawHellMeteorBody(ctx, meteor),
+          });
+        }
+      });
     });
 
     // Mago (Jugador)
@@ -1421,6 +1442,41 @@ export class IsometricRenderer {
           ctx.lineTo(staffX + Math.cos(spAng + 0.35) * spR2, staffY + Math.sin(spAng + 0.35) * spR2);
           ctx.stroke();
         }
+      }
+
+      // Ascensión ígnea y chispas cósmicas para Lluvia del Infierno (Fuego + Fuego + Fuego)
+      const isHellRain = wizard.chargeType === 'hell_rain';
+      if (isHellRain) {
+        ctx.shadowBlur = 0;
+        const sparkCount = isReady ? 10 : Math.max(4, Math.floor(ratio * 9));
+        for (let sc = 0; sc < sparkCount; sc++) {
+          const scAng = Date.now() * (sc % 2 === 0 ? 0.012 : -0.012) + (sc * Math.PI * 2) / sparkCount;
+          const scDist = 20 + ratio * 12;
+          const sx = Math.cos(scAng) * scDist;
+          const sy = 8 + Math.sin(scAng) * (scDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.fillStyle = sc % 2 === 0 ? '#ffd600' : '#ff3d00';
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 3.0 : 2.0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Foco cósmico incandescente en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 10.5 : 6.0 + ratio * 3.5) + Math.sin(Date.now() * 0.02) * 1.5;
+        const hellGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.4);
+        hellGrad.addColorStop(0, '#ffffff');
+        hellGrad.addColorStop(0.35, '#ffd600');
+        hellGrad.addColorStop(0.75, '#ff3d00');
+        hellGrad.addColorStop(1, 'rgba(255, 61, 0, 0)');
+        ctx.fillStyle = hellGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.4, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.restore();
@@ -5530,6 +5586,290 @@ export class IsometricRenderer {
       isReady ? '¡TORNADO SOBRECARGADO (+50% DAÑO/ÁREA)! 🌪️⚡' : 'TORNADO DE PLASMA (AVANCE Y SUCCIÓN)',
       destX,
       destY - destR * squish - 14
+    );
+
+    ctx.restore();
+  }
+
+  // LLUVIA DEL INFIERNO (FUEGO + FUEGO + FUEGO)
+  // 1. Suelo, sombras balísticas, advertencias y cráteres de magma
+  private static drawHellRainGround(ctx: CanvasRenderingContext2D, hellRains: HellRainEntity[]) {
+    const squish = 0.58;
+    const nowTime = Date.now() * 0.003;
+
+    hellRains.forEach((rain) => {
+      // 1.1 Resplandor e indicador de zona general del bombardeo
+      ctx.save();
+      const zoneR = rain.areaRadius;
+      ctx.fillStyle = rain.isCharged ? 'rgba(255, 61, 0, 0.12)' : 'rgba(255, 109, 0, 0.08)';
+      ctx.beginPath();
+      ctx.ellipse(rain.centerX, rain.centerY, zoneR, zoneR * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = rain.isCharged ? 'rgba(255, 61, 0, 0.38)' : 'rgba(255, 109, 0, 0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.ellipse(rain.centerX, rain.centerY, zoneR, zoneR * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // 1.2 Cráteres de magma ardiente dejados por meteoritos tras impactar
+      rain.craters.forEach((crater) => {
+        const cx = crater.x;
+        const cy = crater.y;
+        const cr = crater.radius;
+        const progress = 1.0 - Math.max(0, crater.lifeTimerMs / crater.maxLifeMs); // 0 (recién creado) a 1 (disipado)
+        const alpha = Math.max(0, 1.0 - Math.pow(progress, 2.2));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        // Base de roca volcánica oscura calcinada
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, cr * 1.15, cr * 1.15 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Magma fundido interior (se enfría de amarillo brillante a basalto oscuro)
+        const magmaGrad = ctx.createRadialGradient(cx, cy, 2, cx, cy, cr);
+        if (progress < 0.65) {
+          magmaGrad.addColorStop(0, '#ffffff');
+          magmaGrad.addColorStop(0.25, '#fde047');
+          magmaGrad.addColorStop(0.65, '#ea580c');
+          magmaGrad.addColorStop(1, '#7f1d1d');
+        } else {
+          magmaGrad.addColorStop(0, '#f97316');
+          magmaGrad.addColorStop(0.5, '#7f1d1d');
+          magmaGrad.addColorStop(1, '#292524');
+        }
+
+        ctx.fillStyle = magmaGrad;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, cr, cr * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fisuras incandescentes en el borde del cráter
+        ctx.strokeStyle = progress < 0.6 ? '#fef08a' : '#ea580c';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3 + nowTime * 0.4;
+          const r1 = cr * 0.4;
+          const r2 = cr * 0.95;
+          ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1 * squish);
+          ctx.lineTo(cx + Math.cos(a + 0.2) * r2, cy + Math.sin(a + 0.2) * r2 * squish);
+        }
+        ctx.stroke();
+
+        // Pavesas y ascuas flotando verticalmente sobre el cráter
+        if (progress < 0.85 && Math.random() < 0.35) {
+          const sparkAngle = Math.random() * Math.PI * 2;
+          const sparkDist = Math.random() * cr * 0.7;
+          const sparkX = cx + Math.cos(sparkAngle) * sparkDist;
+          const sparkY = cy + Math.sin(sparkAngle) * sparkDist * squish - ((nowTime * 25) % 20);
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+
+      // 1.3 Sombras proyectadas y círculos de advertencia de meteoritos en vuelo
+      rain.meteors.forEach((meteor) => {
+        if (meteor.hasImpacted) return;
+        if (rain.elapsedMs < meteor.delayMs) return;
+
+        const tx = meteor.targetX;
+        const ty = meteor.targetY;
+        const r = meteor.impactRadius;
+        const t = Math.min(1.0, meteor.flightProgress); // 0.0 a 1.0
+
+        ctx.save();
+
+        // Círculo de advertencia rojo pulsante en el suelo
+        ctx.strokeStyle = meteor.isColossal ? '#ef4444' : '#f97316';
+        ctx.lineWidth = meteor.isColossal ? 2.6 : 1.8;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Relleno de advertencia
+        ctx.fillStyle = meteor.isColossal ? 'rgba(239, 68, 68, 0.25)' : 'rgba(249, 115, 22, 0.16)';
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, r, r * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sombra proyectada que se expande y oscurece a medida que el bólido se acerca al suelo
+        const shadowRadius = r * (0.35 + 0.65 * t);
+        const shadowAlpha = 0.25 + 0.65 * t;
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, shadowRadius, shadowRadius * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      });
+    });
+  }
+
+  // 2. Cuerpo del meteorito en vuelo (Y-Sorting con perspectiva 2.5D)
+  private static drawHellMeteorBody(ctx: CanvasRenderingContext2D, meteor: HellMeteorInstance) {
+    const mx = meteor.currentX;
+    const my = meteor.currentY;
+    const bodyR = meteor.isColossal ? 22 : 13;
+
+    // Vector de trayectoria en caída (desde arriba-izquierda hacia el destino en el suelo)
+    const fallAngle = Math.atan2(meteor.targetY - meteor.startY, meteor.targetX - meteor.startX);
+    const tailAngle = fallAngle + Math.PI;
+
+    ctx.save();
+    ctx.translate(mx, my);
+
+    // 2.1 Estela de fuego y humo trailing backwards
+    ctx.save();
+    ctx.rotate(tailAngle);
+
+    const tailLen = meteor.isColossal ? 105 : 68;
+    const tailW = bodyR * 1.35;
+
+    const tailGrad = ctx.createLinearGradient(0, 0, tailLen, 0);
+    tailGrad.addColorStop(0, '#ffffff');
+    tailGrad.addColorStop(0.2, '#fde047');
+    tailGrad.addColorStop(0.55, '#ff6d00');
+    tailGrad.addColorStop(0.85, '#dc2626');
+    tailGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+
+    ctx.fillStyle = tailGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, -tailW);
+    ctx.lineTo(tailLen, 0);
+    ctx.lineTo(0, tailW);
+    ctx.closePath();
+    ctx.fill();
+
+    // Núcleo de llama blanca interior
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0, -tailW * 0.45);
+    ctx.lineTo(tailLen * 0.48, 0);
+    ctx.lineTo(0, tailW * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+
+    // 2.2 Resplandor radial de alta temperatura
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const auraGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, bodyR * 2.8);
+    auraGrad.addColorStop(0, '#ffffff');
+    auraGrad.addColorStop(0.4, '#ff9100');
+    auraGrad.addColorStop(0.8, '#d50000');
+    auraGrad.addColorStop(1, 'rgba(213, 0, 0, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, bodyR * 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2.3 Núcleo rocoso incandescente irregular
+    ctx.fillStyle = '#263238';
+    ctx.beginPath();
+    const vertices = 8;
+    for (let i = 0; i < vertices; i++) {
+      const vAng = (i * Math.PI * 2) / vertices;
+      const vDist = bodyR * (0.8 + ((i % 3 === 0) ? 0.35 : -0.15));
+      const vx = Math.cos(vAng) * vDist;
+      const vy = Math.sin(vAng) * vDist;
+      if (i === 0) ctx.moveTo(vx, vy);
+      else ctx.lineTo(vx, vy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Fracturas ígneas doradas en la roca
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-bodyR * 0.4, -bodyR * 0.3);
+    ctx.lineTo(0, bodyR * 0.2);
+    ctx.lineTo(bodyR * 0.4, -bodyR * 0.2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Lluvia del Infierno
+  private static drawHellRainAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+    const targetDist = 180;
+    const ang = wizard.facingAngle;
+    const destX = wizard.x + Math.cos(ang) * targetDist;
+    const destY = wizard.y + Math.sin(ang) * targetDist * squish;
+    const areaRadius = isReady ? 190 : 150;
+
+    ctx.save();
+
+    // Línea de orientación hacia el epicentro del bombardeo
+    ctx.strokeStyle = isReady ? '#ff3d00' : '#f97316';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(destX, destY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Área general de impacto de la Lluvia
+    ctx.strokeStyle = isReady ? '#ff3d00' : '#ea580c';
+    ctx.lineWidth = isReady ? 2.8 : 2.0;
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Relleno de advertencia ígnea
+    ctx.fillStyle = isReady ? 'rgba(255, 61, 0, 0.16)' : 'rgba(234, 88, 12, 0.1)';
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, areaRadius, areaRadius * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Marcador central (donde caerá el megameteorito colosal si está cargado)
+    const centerR = isReady ? 76 : 42;
+    ctx.strokeStyle = isReady ? '#ffd600' : '#f59e0b';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, centerR, centerR * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Glifo central
+    ctx.fillStyle = isReady ? '#ffd600' : '#ff3d00';
+    ctx.beginPath();
+    ctx.arc(destX, destY, isReady ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Texto de HUD táctico flotante
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#ffd600' : '#ff9100';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡FURIA CÓSMICA (+50% DAÑO · 6 METEORITOS + COLOSAL)! ☄️🔥'
+        : 'LLUVIA DEL INFIERNO (4 METEORITOS EN SALVA) ☄️',
+      destX,
+      destY - areaRadius * squish - 14
     );
 
     ctx.restore();

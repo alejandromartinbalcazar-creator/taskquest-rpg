@@ -47,7 +47,8 @@ export type SpellCastType =
   | 'cryo_storm'        // Hielo + Rayo
   | 'permafrost_prison' // Hielo + Tierra (Rediseño: estacas glaciales + fragmentación)
   | 'explosive_overload'// Fuego + Rayo
-  // Combinaciones Avanzadas de 3 Elementos
+  // Combinaciones Triples Puras y Avanzadas
+  | 'hell_rain'         // Fuego + Fuego + Fuego (🔥🔥🔥) - Lluvia del Infierno
   | 'obsidian_volcano'  // Fuego + Hielo + Tierra
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
@@ -579,6 +580,50 @@ export interface PlasmaTornadoEntity {
   hasDetonated: boolean;
   hitDetonationEnemyIds: string[];
   swirlAngle: number;
+  finished: boolean;
+}
+
+// LLUVIA DEL INFIERNO (FUEGO + FUEGO + FUEGO: BOMBARDERO SECUENCIAL DE METEORITOS Y CRÁTERES DE MAGMA)
+export interface HellMeteorInstance {
+  id: string;
+  targetX: number;
+  targetY: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  delayMs: number;          // Tiempo de espera escalonado antes de iniciar el vuelo
+  flightProgress: number;   // 0.0 a 1.0
+  flightDurationMs: number; // ~200-240ms
+  isColossal: boolean;      // Sexto meteorito en versión cargada (+80% radio y +80% daño)
+  impactRadius: number;     // ~42px estándar, ~76px colosal
+  impactDamage: number;     // Daño de impacto directo
+  hasImpacted: boolean;
+  hitEnemyIds: string[];
+}
+
+export interface HellCraterInstance {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;           // ~36px estándar, ~64px colosal
+  lifeTimerMs: number;      // Tiempo restante (~2400ms)
+  maxLifeMs: number;        // ~2400ms
+  tickIntervalMs: number;   // 250ms
+  lastTickPerEnemy: Record<string, number>;
+  dpsPerTick: number;       // Daño periódico por quemadura de magma
+  isColossal: boolean;
+}
+
+export interface HellRainEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  areaRadius: number;       // ~150px tap, ~190px charged
+  isCharged: boolean;
+  meteors: HellMeteorInstance[];
+  craters: HellCraterInstance[];
+  elapsedMs: number;
   finished: boolean;
 }
 
