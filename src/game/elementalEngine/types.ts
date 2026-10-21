@@ -802,6 +802,48 @@ export interface ObsidianVolcanoEntity {
   finished: boolean;
 }
 
+// PRISIÓN CONDUCTORA (RAYO + HIELO + TIERRA: PILARES CRIOTÉCNICOS, MALLA DE ALTO VOLTAJE, RALENTIZACIÓN E IMPLOSIÓN REACTIVA)
+export type ConductivePrisonPhase = 'fracture' | 'erupting' | 'active' | 'imploding' | 'finished';
+
+export interface ConductivePrisonPillarNode {
+  id: string;
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number;        // ~65-80px
+  radius: number;           // ~15-18px collider físico
+  hp: number;
+  maxHp: number;            // ~140 tap, ~210 cargado
+  hitFlash: number;
+  destroyed: boolean;
+  facetSeed: number;
+}
+
+export interface ConductivePrisonEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number;           // ~88px tap (4 pilares), ~122px cargado (6 pilares)
+  isCharged: boolean;
+  phase: ConductivePrisonPhase;
+  phaseTimer: number;
+  totalDurationMs: number;  // ~4000ms
+  elapsedMs: number;
+  pillars: ConductivePrisonPillarNode[];
+  eruptDurationMs: number;  // ~220ms
+  activeDurationMs: number; // ~3500ms
+  implosionDurationMs: number; // ~260ms
+  contactDamagePerTick: number; // ~14 base, ~21 cargado (+50%)
+  implosionDamage: number;  // ~75 base, ~112 cargado (+50%)
+  implosionRadius: number;  // ~95px tap, ~190px cargado (duplica radio)
+  tickIntervalMs: number;   // 200ms
+  tickTimer: number;
+  slowFactor: number;       // 0.35 (-35% de velocidad en el recinto)
+  hasImploded: boolean;
+  hitImplosionEnemyIds: string[];
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

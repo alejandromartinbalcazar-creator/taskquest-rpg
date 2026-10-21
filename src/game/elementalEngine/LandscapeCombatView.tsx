@@ -39,6 +39,8 @@ import {
   TelluricRockInstance,
   ObsidianVolcanoEntity,
   ObsidianBladeInstance,
+  ConductivePrisonEntity,
+  ConductivePrisonPillarNode,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -498,6 +500,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     devastatingGlaciers: [] as DevastatingGlacierEntity[],
     telluricBarriers: [] as TelluricBarrierEntity[],
     obsidianVolcanoes: [] as ObsidianVolcanoEntity[],
+    conductivePrisons: [] as ConductivePrisonEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -805,6 +808,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.devastatingGlaciers = [];
       g.telluricBarriers = [];
       g.obsidianVolcanoes = [];
+      g.conductivePrisons = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -957,6 +961,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'obsidian_volcano') {
         // Volcán de Obsidiana gestiona sus propios sonidos sintetizados (cast, erupción, vitrificación, corte y shatter)
       }
+      else if (recipe.id === 'conductive_prison') {
+        // Prisión Conductora gestiona sus propios sonidos de invocación, choque perimetral, impacto e implosión
+      }
       else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
@@ -1016,9 +1023,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana / Prisión Conductora: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2720,6 +2727,101 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.10 PRISIÓN CONDUCTORA (RAYO + HIELO + TIERRA: Pilares Criotécnicos, Malla de Alto Voltaje e Implosión Reactiva)
+      else if (recipe.id === 'conductive_prison') {
+        const baseDmg = recipe.damage + statBonus;
+        const contactDamagePerTick = isCharged ? Math.floor((baseDmg * 0.2) * 1.5) : Math.floor(baseDmg * 0.2);
+        const implosionDamage = isCharged ? Math.floor(baseDmg * 1.5) : baseDmg;
+        const radius = isCharged ? 122 : 88;
+        const implosionRadius = isCharged ? 190 : 95; // Radio duplicado al cargar
+        const pillarCount = isCharged ? 6 : 4;
+        const pillarHp = isCharged ? 210 : 140;
+
+        // Distribución regular de los pilares criotécnicos
+        const pillars: ConductivePrisonPillarNode[] = [];
+        for (let i = 0; i < pillarCount; i++) {
+          const ang = (i * Math.PI * 2) / pillarCount + (isCharged ? 0 : Math.PI / 4);
+          const px = targetX + Math.cos(ang) * radius;
+          const py = targetY + Math.sin(ang) * radius * 0.58;
+
+          pillars.push({
+            id: `cp_pillar_${now}_${i}`,
+            x: px,
+            y: py,
+            height: 0,
+            maxHeight: isCharged ? 78 : 65,
+            radius: isCharged ? 18 : 15,
+            hp: pillarHp,
+            maxHp: pillarHp,
+            hitFlash: 0,
+            destroyed: false,
+            facetSeed: Math.random() * 100 + i * 29.4,
+          });
+        }
+
+        g.conductivePrisons.push({
+          id: `conductive_prison_${now}`,
+          centerX: targetX,
+          centerY: targetY,
+          radius,
+          isCharged,
+          phase: 'fracture',
+          phaseTimer: 0,
+          totalDurationMs: 4000,
+          elapsedMs: 0,
+          pillars,
+          eruptDurationMs: 220,
+          activeDurationMs: 3500,
+          implosionDurationMs: 260,
+          contactDamagePerTick,
+          implosionDamage,
+          implosionRadius,
+          tickIntervalMs: 200,
+          tickTimer: 0,
+          slowFactor: 0.35,
+          hasImploded: false,
+          hitImplosionEnemyIds: [],
+          finished: false,
+        });
+
+        elementalSound.playConductivePrisonCast(isCharged);
+        g.screenShake = isCharged ? 5.5 : 4.0;
+
+        // Partículas de escarcha y chispas eléctricas en el suelo
+        for (let i = 0; i < (isCharged ? 22 : 16); i++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const pDist = Math.random() * radius * 0.7;
+          g.particles.push({
+            id: `cp_spark_${now}_${i}`,
+            x: targetX + Math.cos(pAng) * pDist,
+            y: targetY + Math.sin(pAng) * pDist * 0.58,
+            vx: (Math.random() - 0.5) * 2.2,
+            vy: -1.5 - Math.random() * 2.5,
+            radius: 1.4 + Math.random() * 1.8,
+            color: i % 2 === 0 ? '#00e5ff' : '#b388ff',
+            alpha: 1,
+            life: 20,
+            type: i % 2 === 0 ? 'ice' : 'spark',
+          });
+        }
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `txt_cp_charge_${now}`,
+            x: wizard.x,
+            y: wizard.y - 32,
+            text: '⚡❄️🏛️ ¡SOBRECARGA CRIOCONDUCTORA +50%!',
+            color: '#b388ff',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2885,7 +2987,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
     let cType = 'arcane';
-    if (activeRecipe.id === 'obsidian_volcano') cType = 'obsidian';
+    if (activeRecipe.id === 'conductive_prison') cType = 'conductive_prison';
+    else if (activeRecipe.id === 'obsidian_volcano') cType = 'obsidian';
     else if (activeRecipe.id === 'telluric_barrier') cType = 'telluric';
     else if (activeRecipe.id === 'devastating_glacier') cType = 'glacier';
     else if (activeRecipe.id === 'celestial_storm') cType = 'celestial';
@@ -3221,7 +3324,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isGlacier = activeRecipe.id === 'devastating_glacier';
         const isTelluric = activeRecipe.id === 'telluric_barrier';
         const isObsidian = activeRecipe.id === 'obsidian_volcano';
-        const maxChargeTime = (isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isConductivePrison = activeRecipe.id === 'conductive_prison';
+        const maxChargeTime = (isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3518,6 +3622,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Chispas de alta tensión, fragmentos de escarcha y polvo de roca para Prisión Conductora
+        else if (isConductivePrison) {
+          if (Math.random() < 0.55 + wizard.chargeRatio * 0.45) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 26;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            const isLightning = Math.random() < 0.45;
+            const isIce = !isLightning && Math.random() < 0.65;
+            g.particles.push({
+              id: `cp-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.8 + wizard.chargeRatio * 2.5),
+              vy: -Math.sin(pAng) * (1.5 + wizard.chargeRatio * 1.5) - 0.4,
+              radius: 1.5 + Math.random() * 1.8,
+              color: isLightning ? '#b388ff' : (isIce ? '#00e5ff' : '#263238'),
+              alpha: 1,
+              life: 14,
+              type: isIce ? 'ice' : (isLightning ? 'spark' : 'stone_chip'),
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3741,6 +3868,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               radius: 17,
               color: '#c026d3',
               secondaryColor: '#ea580c',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isConductivePrison) {
+            elementalSound.playChargeReady();
+            g.screenShake = 7.5;
+            g.particles.push({
+              id: `cp-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 17,
+              color: '#b388ff',
+              secondaryColor: '#00e5ff',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -8052,6 +8196,271 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.16 Actualizar Prisión Conductora (Rayo + Hielo + Tierra: Pilares Criotécnicos, Valla de Relámpagos e Implosión)
+      for (let cpIdx = g.conductivePrisons.length - 1; cpIdx >= 0; cpIdx--) {
+        const prison = g.conductivePrisons[cpIdx];
+        prison.elapsedMs += dt;
+        prison.phaseTimer += dt;
+
+        // FASE A: Fractura electrificada y escarcha en el suelo (0 - 180ms)
+        if (prison.phase === 'fracture') {
+          if (Math.random() < 0.4) {
+            const p = prison.pillars[Math.floor(Math.random() * prison.pillars.length)];
+            g.particles.push({
+              id: `cp_frost_${frameNow}_${Math.random()}`,
+              x: p.x + (Math.random() - 0.5) * 10,
+              y: p.y + (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 1.2,
+              vy: -1.2 - Math.random() * 1.5,
+              radius: 1.4 + Math.random() * 1.6,
+              color: Math.random() < 0.5 ? '#00e5ff' : '#b388ff',
+              alpha: 0.9,
+              life: 16,
+              type: 'spark',
+            });
+          }
+
+          if (prison.phaseTimer >= prison.eruptDurationMs) {
+            prison.phase = 'erupting';
+            prison.phaseTimer = 0;
+          }
+        }
+        // FASE B: Emergencia criotécnica de los pilares (180 - 400ms, 220ms)
+        else if (prison.phase === 'erupting') {
+          const prog = Math.min(1.0, prison.phaseTimer / prison.eruptDurationMs);
+          prison.pillars.forEach((p) => {
+            p.height = p.maxHeight * prog;
+          });
+
+          if (prison.phaseTimer >= prison.eruptDurationMs) {
+            prison.phase = 'active';
+            prison.phaseTimer = 0;
+            prison.pillars.forEach((p) => {
+              p.height = p.maxHeight;
+            });
+          }
+        }
+        // FASE C: Malla voltaica activa, ralentización e intercepción (3500ms)
+        else if (prison.phase === 'active') {
+          const actPillars = prison.pillars.filter((p) => !p.destroyed);
+
+          // 1. Detección y bloqueo físico de pilares contra jugador y enemigos
+          actPillars.forEach((pillar) => {
+            if (pillar.hitFlash > 0) pillar.hitFlash--;
+
+            // Bloqueo de Mago (Jugador)
+            const pdx = wizard.x - pillar.x;
+            const pdy = wizard.y - pillar.y;
+            const pDist = Math.hypot(pdx, pdy);
+            const minP = pillar.radius + 14;
+            if (pDist < minP && pDist > 0.1) {
+              wizard.x = pillar.x + (pdx / pDist) * minP;
+              wizard.y = pillar.y + (pdy / pDist) * minP;
+            }
+
+            // Bloqueo de Enemigos
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const edx = enemy.x - pillar.x;
+              const edy = enemy.y - pillar.y;
+              const eDist = Math.hypot(edx, edy);
+              const minE = pillar.radius + enemy.radius;
+              if (eDist < minE && eDist > 0.1) {
+                enemy.x = pillar.x + (edx / eDist) * minE;
+                enemy.y = pillar.y + (edy / eDist) * minE;
+              }
+            });
+
+            // Intercepción de proyectiles hostiles por la masa sólida del pilar
+            for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {
+              const p = g.projectiles[pIdx];
+              if (!p.isHostile || p.life <= 0) continue;
+              if (checkCircleCollision(pillar.x, pillar.y, pillar.radius + 4, p.x, p.y, p.radius)) {
+                g.projectiles.splice(pIdx, 1);
+                pillar.hitFlash = 6;
+                pillar.hp -= 30;
+                elementalSound.playConductivePrisonPillarHit();
+
+                // Chispas de absorción
+                for (let s = 0; s < 5; s++) {
+                  const sAng = Math.random() * Math.PI * 2;
+                  g.particles.push({
+                    id: `cp_hit_${frameNow}_${Math.random()}`,
+                    x: p.x,
+                    y: p.y,
+                    vx: Math.cos(sAng) * 2.2,
+                    vy: Math.sin(sAng) * 1.5,
+                    radius: 1.4,
+                    color: s % 2 === 0 ? '#00e5ff' : '#b388ff',
+                    alpha: 1,
+                    life: 14,
+                    type: 'spark',
+                  });
+                }
+
+                // Si un pilar es destruido: colapso anticipado reactivo
+                if (pillar.hp <= 0) {
+                  pillar.destroyed = true;
+                  prison.phase = 'imploding';
+                  prison.phaseTimer = 0;
+                  break;
+                }
+              }
+            }
+          });
+
+          // 2. Ralentización del 35% a todos los enemigos dentro del recinto de la prisión
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const edx = enemy.x - prison.centerX;
+            const edy = (enemy.y - prison.centerY) / 0.58;
+            const distCenter = Math.hypot(edx, edy);
+            if (distCenter <= prison.radius + 12) {
+              g.enemyManager.applyStatus(enemy, 'slowed', 35);
+            }
+          });
+
+          // 3. Ticks de daño eléctrico de la valla perimetral entre pilares adyacentes
+          prison.tickTimer += dt;
+          if (prison.tickTimer >= prison.tickIntervalMs && actPillars.length >= 2) {
+            prison.tickTimer = 0;
+            let shockTriggered = false;
+
+            for (let i = 0; i < actPillars.length; i++) {
+              const p1 = actPillars[i];
+              const p2 = actPillars[(i + 1) % actPillars.length];
+
+              enemies.forEach((enemy) => {
+                if (enemy.hp <= 0) return;
+                // Distancia punto a segmento de línea
+                const segDx = p2.x - p1.x;
+                const segDy = p2.y - p1.y;
+                const lenSq = segDx * segDx + segDy * segDy;
+                let t = lenSq > 0 ? ((enemy.x - p1.x) * segDx + (enemy.y - p1.y) * segDy) / lenSq : 0;
+                t = Math.max(0, Math.min(1, t));
+                const closeX = p1.x + t * segDx;
+                const closeY = p1.y + t * segDy;
+                const distFence = Math.hypot(enemy.x - closeX, enemy.y - closeY);
+
+                if (distFence <= enemy.radius + 14) {
+                  const shockDmg = prison.contactDamagePerTick;
+                  enemy.hp -= shockDmg;
+
+                  // Micro-interrupción y rechazo perimetral
+                  const pushAng = Math.atan2(enemy.y - closeY, enemy.x - closeX);
+                  enemy.x += Math.cos(pushAng) * 3.5;
+                  enemy.y += Math.sin(pushAng) * 3.5 * 0.58;
+
+                  if (!shockTriggered) {
+                    shockTriggered = true;
+                    elementalSound.playConductivePrisonPerimeterShock();
+                  }
+
+                  g.floatingTexts.push({
+                    id: `txt_cp_shock_${frameNow}_${enemy.id}_${Math.random()}`,
+                    x: enemy.x + (Math.random() - 0.5) * 12,
+                    y: enemy.y - 24,
+                    text: `⚡ -${shockDmg}`,
+                    color: '#b388ff',
+                    fontSize: 12,
+                    opacity: 1,
+                    vy: -1.2,
+                    life: 24,
+                  });
+
+                  // Chispas eléctricas
+                  for (let s = 0; s < 3; s++) {
+                    g.particles.push({
+                      id: `cp_shock_spk_${frameNow}_${Math.random()}`,
+                      x: enemy.x,
+                      y: enemy.y - 10,
+                      vx: (Math.random() - 0.5) * 2.2,
+                      vy: -1.0 - Math.random() * 1.8,
+                      radius: 1.3,
+                      color: Math.random() < 0.5 ? '#ffffff' : '#7c4dff',
+                      alpha: 1,
+                      life: 14,
+                      type: 'spark',
+                    });
+                  }
+                }
+              });
+            }
+          }
+
+          if (prison.phaseTimer >= prison.activeDurationMs) {
+            prison.phase = 'imploding';
+            prison.phaseTimer = 0;
+          }
+        }
+        // FASE D: Implosión reactiva terminal y detonación en el epicentro (260ms)
+        else if (prison.phase === 'imploding') {
+          if (!prison.hasImploded) {
+            prison.hasImploded = true;
+            elementalSound.playConductivePrisonImplosion(prison.isCharged);
+            g.screenShake = Math.max(g.screenShake, prison.isCharged ? 12.0 : 8.0);
+
+            // Daño de remate a todos los enemigos en el radio de implosión
+            enemies.forEach((enemy) => {
+              const edx = enemy.x - prison.centerX;
+              const edy = (enemy.y - prison.centerY) / 0.58;
+              const distCenter = Math.hypot(edx, edy);
+
+              if (distCenter <= prison.implosionRadius) {
+                const finalImpDmg = prison.implosionDamage;
+                enemy.hp -= finalImpDmg;
+
+                // Atracción hacia el epicentro por la implosión de succión
+                const pullAng = Math.atan2(prison.centerY - enemy.y, prison.centerX - enemy.x);
+                enemy.x += Math.cos(pullAng) * 6.5;
+                enemy.y += Math.sin(pullAng) * 6.5 * 0.58;
+
+                g.floatingTexts.push({
+                  id: `txt_cp_implode_${frameNow}_${enemy.id}`,
+                  x: enemy.x + (Math.random() - 0.5) * 16,
+                  y: enemy.y - 32,
+                  text: prison.isCharged ? `💥 ¡SOBRECARGA CRIOCONDUCTORA! -${finalImpDmg}` : `💥 ¡IMPLOSIÓN! -${finalImpDmg}`,
+                  color: prison.isCharged ? '#b388ff' : '#00e5ff',
+                  fontSize: prison.isCharged ? 17 : 14,
+                  opacity: 1,
+                  vy: -1.6,
+                  life: 38,
+                });
+              }
+            });
+
+            // Metralla de fragmentos de hielo y piedra disparados hacia el centro
+            prison.pillars.forEach((p) => {
+              p.destroyed = true;
+              const inAng = Math.atan2(prison.centerY - p.y, prison.centerX - p.x);
+              for (let s = 0; s < 6; s++) {
+                const spd = 3.0 + Math.random() * 3.5;
+                const sprAng = inAng + (Math.random() - 0.5) * 0.8;
+                g.particles.push({
+                  id: `cp_debris_${frameNow}_${p.id}_${s}`,
+                  x: p.x,
+                  y: p.y - p.maxHeight * 0.4,
+                  vx: Math.cos(sprAng) * spd,
+                  vy: Math.sin(sprAng) * spd * 0.58 - 1.2,
+                  radius: 1.5 + Math.random() * 2.0,
+                  color: s % 3 === 0 ? '#00e5ff' : (s % 2 === 0 ? '#b388ff' : '#263238'),
+                  alpha: 1,
+                  life: 22,
+                  type: s % 2 === 0 ? 'ice' : 'stone_chip',
+                });
+              }
+            });
+          }
+
+          if (prison.phaseTimer >= prison.implosionDurationMs) {
+            prison.phase = 'finished';
+            prison.finished = true;
+            g.conductivePrisons.splice(cpIdx, 1);
+            continue;
+          }
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -8129,6 +8538,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.devastatingGlaciers,
             g.telluricBarriers,
             g.obsidianVolcanoes,
+            g.conductivePrisons,
             g.forestLevel ?? undefined
           );
         }
@@ -8404,6 +8814,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
                     : activeRecipe.id === 'obsidian_volcano'
                     ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
+                    : activeRecipe.id === 'conductive_prison'
+                    ? 'border-indigo-400 shadow-[0_0_32px_rgba(124,77,255,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
@@ -8433,6 +8845,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
                     : activeRecipe.id === 'obsidian_volcano'
                     ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
+                    : activeRecipe.id === 'conductive_prison'
+                    ? 'border-indigo-500 shadow-[0_0_22px_rgba(124,77,255,0.75)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -8472,6 +8886,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
                 : activeRecipe.id === 'obsidian_volcano'
                 ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
+                : activeRecipe.id === 'conductive_prison'
+                ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA CRIOCONDUCTORA +50%! ⚡❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'PRISIÓN ⚡❄️🏛️')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -8508,6 +8924,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-amber-600 via-yellow-400 to-stone-600 shadow-[0_0_8px_#f59e0b]'
                       : activeRecipe.id === 'obsidian_volcano'
                       ? 'bg-gradient-to-r from-orange-600 via-fuchsia-500 to-cyan-300 shadow-[0_0_8px_#c026d3]'
+                      : activeRecipe.id === 'conductive_prison'
+                      ? 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600 shadow-[0_0_8px_#7c4dff]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

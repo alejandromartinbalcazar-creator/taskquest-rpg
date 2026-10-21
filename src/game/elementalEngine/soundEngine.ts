@@ -2901,6 +2901,193 @@ class ElementalSoundEngine {
     source.start(now);
     source.stop(now + shatterLen);
   }
+
+  // =========================================================================
+  // PRISIÓN CONDUCTORA (RAYO + HIELO + TIERRA: PILARES CRIOTÉCNICOS E IMPLOSIÓN)
+  // =========================================================================
+
+  // 1. Invocación y emergencia telúrica-crioconductora de los pilares
+  public playConductivePrisonCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-golpe de emergencia telúrica
+    const thud = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(isCharged ? 110 : 130, now);
+    thud.frequency.exponentialRampToValueAtTime(35, now + 0.32);
+
+    thudGain.gain.setValueAtTime(isCharged ? 0.5 : 0.4, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+    thud.connect(thudGain);
+    thudGain.connect(this.ctx.destination);
+    thud.start(now);
+    thud.stop(now + 0.32);
+
+    // Chispazo de ignición de alta tensión
+    const zap = this.ctx.createOscillator();
+    const zapGain = this.ctx.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(750, now);
+    zap.frequency.exponentialRampToValueAtTime(2200, now + 0.22);
+
+    zapGain.gain.setValueAtTime(0.28, now);
+    zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+    const zapFilter = this.ctx.createBiquadFilter();
+    zapFilter.type = 'highpass';
+    zapFilter.frequency.setValueAtTime(500, now);
+
+    zap.connect(zapFilter);
+    zapFilter.connect(zapGain);
+    zapGain.connect(this.ctx.destination);
+    zap.start(now);
+    zap.stop(now + 0.24);
+
+    // Resonancia de cristal gélido
+    const ice = this.ctx.createOscillator();
+    const iceGain = this.ctx.createGain();
+    ice.type = 'sine';
+    ice.frequency.setValueAtTime(1400, now + 0.05);
+    ice.frequency.exponentialRampToValueAtTime(900, now + 0.3);
+
+    iceGain.gain.setValueAtTime(0.2, now + 0.05);
+    iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+    ice.connect(iceGain);
+    iceGain.connect(this.ctx.destination);
+    ice.start(now + 0.05);
+    ice.stop(now + 0.3);
+  }
+
+  // 2. Descarga perimetral al tocar la valla de relámpagos
+  public playConductivePrisonPerimeterShock() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1600, now);
+    osc.frequency.exponentialRampToValueAtTime(320, now + 0.07);
+
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1200, now);
+    filter.Q.setValueAtTime(3.5, now);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  }
+
+  // 3. Impacto absorbido por un pilar criotécnico
+  public playConductivePrisonPillarHit() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Golpe sordo de roca
+    const rock = this.ctx.createOscillator();
+    const rGain = this.ctx.createGain();
+    rock.type = 'triangle';
+    rock.frequency.setValueAtTime(220, now);
+    rock.frequency.exponentialRampToValueAtTime(70, now + 0.12);
+    rGain.gain.setValueAtTime(0.3, now);
+    rGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    rock.connect(rGain);
+    rGain.connect(this.ctx.destination);
+    rock.start(now);
+    rock.stop(now + 0.12);
+
+    // Resonancia de hielo quebrándose
+    const ice = this.ctx.createOscillator();
+    const iGain = this.ctx.createGain();
+    ice.type = 'sine';
+    ice.frequency.setValueAtTime(1800, now);
+    ice.frequency.exponentialRampToValueAtTime(1100, now + 0.14);
+    iGain.gain.setValueAtTime(0.18, now);
+    iGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    ice.connect(iGain);
+    iGain.connect(this.ctx.destination);
+    ice.start(now);
+    ice.stop(now + 0.14);
+  }
+
+  // 4. Implosión reactiva terminal y colapso de la prisión
+  public playConductivePrisonImplosion(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // 1. Tensión de succión hacia el centro (inward tension)
+    const suck = this.ctx.createOscillator();
+    const suckGain = this.ctx.createGain();
+    suck.type = 'sine';
+    suck.frequency.setValueAtTime(280, now);
+    suck.frequency.exponentialRampToValueAtTime(950, now + 0.16);
+    suckGain.gain.setValueAtTime(0.15, now);
+    suckGain.gain.linearRampToValueAtTime(0.35, now + 0.16);
+    suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    suck.connect(suckGain);
+    suckGain.connect(this.ctx.destination);
+    suck.start(now);
+    suck.stop(now + 0.18);
+
+    // 2. Detonación violenta en el epicentro (magna explosión electro-gélida)
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'triangle';
+    boom.frequency.setValueAtTime(isCharged ? 180 : 160, now + 0.16);
+    boom.frequency.exponentialRampToValueAtTime(32, now + 0.16 + 0.42);
+
+    boomGain.gain.setValueAtTime(isCharged ? 0.65 : 0.5, now + 0.16);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16 + 0.42);
+
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(now + 0.16);
+    boom.stop(now + 0.16 + 0.42);
+
+    // 3. Ruido de metralla de hielo y roca
+    const shatLen = 0.32;
+    const buff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * shatLen), this.ctx.sampleRate);
+    const data = buff.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buff;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(700, now + 0.16);
+
+    const sGain = this.ctx.createGain();
+    sGain.gain.setValueAtTime(isCharged ? 0.45 : 0.35, now + 0.16);
+    sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16 + shatLen);
+
+    source.connect(filter);
+    filter.connect(sGain);
+    sGain.connect(this.ctx.destination);
+    source.start(now + 0.16);
+    source.stop(now + 0.16 + shatLen);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

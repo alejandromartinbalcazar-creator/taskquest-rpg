@@ -36,6 +36,8 @@ import {
   TelluricRockInstance,
   ObsidianVolcanoEntity,
   ObsidianBladeInstance,
+  ConductivePrisonEntity,
+  ConductivePrisonPillarNode,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -94,6 +96,7 @@ export class IsometricRenderer {
     devastatingGlaciers: DevastatingGlacierEntity[] = [],
     telluricBarriers: TelluricBarrierEntity[] = [],
     obsidianVolcanoes: ObsidianVolcanoEntity[] = [],
+    conductivePrisons: ConductivePrisonEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -168,6 +171,9 @@ export class IsometricRenderer {
     // 3.84 Dibujar Suelo, Fisuras de Magma, Vapor y Columna Eruptiva de Volcán de Obsidiana (Fuego + Hielo + Tierra)
     this.drawObsidianVolcanoGround(ctx, obsidianVolcanoes);
 
+    // 3.85 Dibujar Suelo, Escarcha, Valla de Relámpagos e Implosión de Prisión Conductora (Rayo + Hielo + Tierra)
+    this.drawConductivePrisonFloor(ctx, conductivePrisons);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -195,6 +201,8 @@ export class IsometricRenderer {
       this.drawTelluricAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'obsidian') {
       this.drawObsidianAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'conductive_prison') {
+      this.drawConductivePrisonAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -386,6 +394,20 @@ export class IsometricRenderer {
             y: blade.y,
             draw: () => this.drawObsidianBladeBody(ctx, blade, volcano),
           });
+        });
+      }
+    });
+
+    // Pilares criotécnicos de Prisión Conductora (Rayo + Hielo + Tierra) integrados en Depth Sorting
+    conductivePrisons.forEach((prison) => {
+      if (prison.phase !== 'finished') {
+        prison.pillars.forEach((pillar) => {
+          if (!pillar.destroyed) {
+            renderList.push({
+              y: pillar.y,
+              draw: () => this.drawConductivePrisonPillar(ctx, pillar, prison),
+            });
+          }
         });
       }
     });
@@ -1745,6 +1767,67 @@ export class IsometricRenderer {
         ctx.fillStyle = obsGrad;
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Malla crioconductora y arcos voltaicos para Prisión Conductora (Rayo + Hielo + Tierra)
+      const isConductivePrison = wizard.chargeType === 'conductive_prison';
+      if (isConductivePrison) {
+        ctx.shadowBlur = 0;
+        const nodeCount = isReady ? 6 : 4;
+        const arcPhase = Date.now() * 0.008;
+
+        for (let nc = 0; nc < nodeCount; nc++) {
+          const nAng = arcPhase + (nc * Math.PI * 2) / nodeCount;
+          const nDist = 20 + ratio * 14;
+          const nx = Math.cos(nAng) * nDist;
+          const ny = 6 + Math.sin(nAng) * (nDist * 0.58);
+
+          // Mini pilar holográfico en la base
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.fillStyle = nc % 2 === 0 ? (isReady ? '#80d8ff' : '#00e5ff') : (isReady ? '#b388ff' : '#7c4dff');
+          ctx.shadowColor = nc % 2 === 0 ? '#00e5ff' : '#7c4dff';
+          ctx.shadowBlur = isReady ? 6 : 3;
+
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(2.5, 0);
+          ctx.lineTo(0, 3);
+          ctx.lineTo(-2.5, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Rayo en zig-zag conectando con el siguiente nodo
+          const nextAng = arcPhase + ((nc + 1) * Math.PI * 2) / nodeCount;
+          const nextNx = Math.cos(nextAng) * nDist;
+          const nextNy = 6 + Math.sin(nextAng) * (nDist * 0.58);
+
+          ctx.strokeStyle = isReady ? '#ffffff' : '#80d8ff';
+          ctx.lineWidth = isReady ? 1.4 : 0.9;
+          ctx.beginPath();
+          ctx.moveTo(nx, ny - 4);
+          const midX = (nx + nextNx) * 0.5 + (Math.random() - 0.5) * 4;
+          const midY = (ny + nextNy) * 0.5 - 4 + (Math.random() - 0.5) * 3;
+          ctx.lineTo(midX, midY);
+          ctx.lineTo(nextNx, nextNy - 4);
+          ctx.stroke();
+        }
+
+        // Foco de energía de alto voltaje en la punta del báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 12 : 6.5 + ratio * 4.0) + Math.sin(Date.now() * 0.03) * 1.5;
+        const cpGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.5);
+        cpGrad.addColorStop(0, '#ffffff');
+        cpGrad.addColorStop(0.3, isReady ? '#e0f7fa' : '#80d8ff');
+        cpGrad.addColorStop(0.65, isReady ? '#b388ff' : '#7c4dff');
+        cpGrad.addColorStop(0.9, '#263238');
+        cpGrad.addColorStop(1, 'rgba(38, 50, 56, 0)');
+        ctx.fillStyle = cpGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -7447,6 +7530,392 @@ export class IsometricRenderer {
       isReady
         ? '¡FUSIÓN VÍTREA (+50% DAÑO · MAYOR RADIO · 10 CUCHILLAS DENSAS)! 🌋🖤❄️'
         : 'VOLCÁN DE OBSIDIANA (ERUPCIÓN & CUCHILLAS VÍTREAS) 🌋',
+      tx,
+      ty - ry - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // PRISIÓN CONDUCTORA (RAYO + HIELO + TIERRA: PILARES CRIOTÉCNICOS E IMPLOSIÓN)
+  // =========================================================================
+
+  // 1. Suelo, escarcha gélida, valla voltaica perimetral e implosión central
+  private static drawConductivePrisonFloor(
+    ctx: CanvasRenderingContext2D,
+    prisons: ConductivePrisonEntity[]
+  ) {
+    if (!prisons || prisons.length === 0) return;
+    const squish = 0.58;
+    const now = Date.now();
+
+    prisons.forEach((prison) => {
+      if (prison.phase === 'finished') return;
+
+      const cx = prison.centerX;
+      const cy = prison.centerY;
+      const r = prison.radius;
+      const isCharged = prison.isCharged;
+
+      ctx.save();
+
+      // A. Cuenca de escarcha criogénica y niebla gélida en el suelo
+      const groundGrad = ctx.createRadialGradient(cx, cy, 8, cx, cy, r * 1.15);
+      if (prison.phase === 'imploding') {
+        // En implosión: destello central blanco-cian cegador
+        const prog = Math.min(1.0, prison.phaseTimer / prison.implosionDurationMs);
+        groundGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * (1 - prog)})`);
+        groundGrad.addColorStop(0.35, `rgba(0, 229, 255, ${0.75 * (1 - prog)})`);
+        groundGrad.addColorStop(0.75, `rgba(124, 77, 255, ${0.5 * (1 - prog)})`);
+        groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else {
+        groundGrad.addColorStop(0, isCharged ? 'rgba(0, 229, 255, 0.22)' : 'rgba(0, 229, 255, 0.15)');
+        groundGrad.addColorStop(0.45, isCharged ? 'rgba(124, 77, 255, 0.16)' : 'rgba(124, 77, 255, 0.1)');
+        groundGrad.addColorStop(0.85, 'rgba(38, 50, 56, 0.2)');
+        groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
+
+      ctx.fillStyle = groundGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r * 1.12, r * 1.12 * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // B. Anillo rúnico perimetral
+      const ringAlpha = prison.phase === 'fracture'
+        ? Math.min(1.0, 0.3 + (prison.phaseTimer / prison.eruptDurationMs) * 0.7)
+        : (prison.phase === 'imploding' ? Math.max(0, 1 - prison.phaseTimer / prison.implosionDurationMs) : 0.65 + Math.sin(now * 0.006) * 0.2);
+
+      ctx.strokeStyle = isCharged ? `rgba(179, 136, 255, ${ringAlpha})` : `rgba(0, 229, 255, ${ringAlpha})`;
+      ctx.lineWidth = isCharged ? 2.4 : 1.6;
+      ctx.setLineDash([8, 6, 3, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // C. Trazas rúnicas desde el epicentro hacia la base de cada pilar
+      prison.pillars.forEach((p) => {
+        if (p.destroyed) return;
+        ctx.strokeStyle = `rgba(128, 216, 255, ${ringAlpha * 0.6})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        const midX = (cx + p.x) * 0.5 + Math.sin(now * 0.007 + p.facetSeed) * 3;
+        const midY = (cy + p.y) * 0.5 + Math.cos(now * 0.007 + p.facetSeed) * 2;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      });
+
+      // D. Valla de Relámpagos de Alto Voltaje conectando pilares adyacentes
+      const activePillars = prison.pillars.filter((p) => !p.destroyed);
+      const pCount = activePillars.length;
+
+      if (pCount >= 2 && (prison.phase === 'active' || prison.phase === 'imploding' || prison.phase === 'erupting')) {
+        for (let i = 0; i < pCount; i++) {
+          const p1 = activePillars[i];
+          const p2 = activePillars[(i + 1) % pCount];
+
+          const p1TopY = p1.y - p1.height;
+          const p2TopY = p2.y - p2.height;
+
+          // D.1 Cortina electromagnética de escarcha y plasma translúcida
+          const curtainGrad = ctx.createLinearGradient(p1.x, p1TopY, p2.x, p2.y);
+          curtainGrad.addColorStop(0, isCharged ? 'rgba(124, 77, 255, 0.22)' : 'rgba(0, 229, 255, 0.16)');
+          curtainGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)');
+          curtainGrad.addColorStop(1, isCharged ? 'rgba(0, 229, 255, 0.22)' : 'rgba(124, 77, 255, 0.16)');
+
+          ctx.fillStyle = curtainGrad;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p1.x, p1TopY);
+          ctx.lineTo(p2.x, p2TopY);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.closePath();
+          ctx.fill();
+
+          // D.2 Arco voltaico de alta tensión en las cúspides
+          if (prison.phase === 'imploding') {
+            // Durante implosión, los arcos se deforman y tensan bruscamente hacia el epicentro
+            const prog = Math.min(1.0, prison.phaseTimer / prison.implosionDurationMs);
+            const suckX = cx + (Math.random() - 0.5) * 10;
+            const suckY = cy + (Math.random() - 0.5) * 8;
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1TopY);
+            ctx.quadraticCurveTo(suckX, suckY, p2.x, p2TopY);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          } else {
+            // Arco en zig-zag continuo en la cúspide
+            const segments = 5;
+            ctx.strokeStyle = isCharged ? '#ffffff' : '#e0f7fa';
+            ctx.lineWidth = isCharged ? 2.2 : 1.6;
+            ctx.shadowColor = isCharged ? '#b388ff' : '#00e5ff';
+            ctx.shadowBlur = 6;
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1TopY);
+            for (let s = 1; s < segments; s++) {
+              const t = s / segments;
+              const sx = p1.x + (p2.x - p1.x) * t + (Math.random() - 0.5) * 8;
+              const sy = p1TopY + (p2TopY - p1TopY) * t + (Math.random() - 0.5) * 7;
+              ctx.lineTo(sx, sy);
+            }
+            ctx.lineTo(p2.x, p2TopY);
+            ctx.stroke();
+
+            // Arco secundario inferior a media altura
+            ctx.strokeStyle = isCharged ? '#7c4dff' : '#00e5ff';
+            ctx.lineWidth = 1.2;
+            const mid1Y = p1.y - p1.height * 0.45;
+            const mid2Y = p2.y - p2.height * 0.45;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, mid1Y);
+            const midSegX = (p1.x + p2.x) * 0.5 + (Math.random() - 0.5) * 6;
+            const midSegY = (mid1Y + mid2Y) * 0.5 + (Math.random() - 0.5) * 5;
+            ctx.lineTo(midSegX, midSegY);
+            ctx.lineTo(p2.x, mid2Y);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja un Pilar Criotécnico (base de pizarra rocosa + aguja de hielo cristalino + corona voltaica)
+  private static drawConductivePrisonPillar(
+    ctx: CanvasRenderingContext2D,
+    pillar: ConductivePrisonPillarNode,
+    prison: ConductivePrisonEntity
+  ) {
+    if (pillar.height <= 2 || pillar.destroyed) return;
+
+    const squish = 0.58;
+    const isCharged = prison.isCharged;
+    const isImploding = prison.phase === 'imploding';
+    const curH = pillar.height;
+    const r = pillar.radius;
+
+    ctx.save();
+
+    // Sombra elíptica en el suelo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+    ctx.beginPath();
+    ctx.ellipse(pillar.x, pillar.y + 2, r * 1.15, r * 1.15 * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Temblor visual si fue golpeado o al implosionar
+    let drawX = pillar.x;
+    let drawY = pillar.y;
+    if (pillar.hitFlash > 0 || isImploding) {
+      const shakeAmt = isImploding ? 4 : 2.5;
+      drawX += (Math.random() - 0.5) * shakeAmt;
+      drawY += (Math.random() - 0.5) * shakeAmt;
+    }
+
+    const rockHeight = curH * 0.38; // 38% base de roca
+    const iceHeight = curH * 0.62;  // 62% aguja de cristal gélido
+
+    // 1. BASE DE ROCA PIZARRA (Estructura sólida inferior #263238 / #1e293b)
+    const rockGrad = ctx.createLinearGradient(drawX - r, drawY, drawX + r, drawY - rockHeight);
+    rockGrad.addColorStop(0, '#1e293b');
+    rockGrad.addColorStop(0.5, '#263238');
+    rockGrad.addColorStop(1, '#37474f');
+
+    ctx.fillStyle = rockGrad;
+    ctx.beginPath();
+    ctx.moveTo(drawX - r, drawY);
+    ctx.lineTo(drawX - r * 0.85, drawY - rockHeight);
+    ctx.lineTo(drawX, drawY - rockHeight - r * 0.25 * squish);
+    ctx.lineTo(drawX + r * 0.85, drawY - rockHeight);
+    ctx.lineTo(drawX + r, drawY);
+    ctx.lineTo(drawX, drawY + r * 0.35 * squish);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#455a64';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // 2. CUERPO FACETADO DE CRISTAL DE HIELO (Estructura superior translúcida #00e5ff / #80d8ff)
+    const tipX = drawX;
+    const tipY = drawY - curH;
+    const midX = drawX;
+    const midY = drawY - rockHeight;
+
+    // Cara izquierda del cristal (sombra gélida cian)
+    const iceLeftGrad = ctx.createLinearGradient(drawX - r * 0.85, midY, tipX, tipY);
+    iceLeftGrad.addColorStop(0, isCharged ? '#00b0ff' : '#00bcd4');
+    iceLeftGrad.addColorStop(0.6, '#00e5ff');
+    iceLeftGrad.addColorStop(1, '#e0f7fa');
+
+    ctx.fillStyle = iceLeftGrad;
+    ctx.beginPath();
+    ctx.moveTo(drawX - r * 0.85, midY);
+    ctx.lineTo(midX, midY - r * 0.25 * squish);
+    ctx.lineTo(tipX, tipY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cara derecha del cristal (reflejo brillante y translúcido)
+    const iceRightGrad = ctx.createLinearGradient(midX, midY, drawX + r * 0.85, tipY);
+    iceRightGrad.addColorStop(0, '#80d8ff');
+    iceRightGrad.addColorStop(0.5, '#e0f7fa');
+    iceRightGrad.addColorStop(1, '#ffffff');
+
+    ctx.fillStyle = iceRightGrad;
+    ctx.beginPath();
+    ctx.moveTo(midX, midY - r * 0.25 * squish);
+    ctx.lineTo(drawX + r * 0.85, midY);
+    ctx.lineTo(tipX, tipY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. VENA CONDUCTORA INTERIOR (Arista violeta de alto voltaje a lo largo del pilar)
+    ctx.strokeStyle = isCharged ? '#b388ff' : '#7c4dff';
+    ctx.lineWidth = isCharged ? 2.0 : 1.4;
+    ctx.shadowColor = '#7c4dff';
+    ctx.shadowBlur = isCharged ? 6 : 3;
+    ctx.beginPath();
+    ctx.moveTo(midX, midY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Aristas afiladas de cristal
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.moveTo(drawX - r * 0.85, midY);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(drawX + r * 0.85, midY);
+    ctx.stroke();
+
+    // 4. ORBE CONDUCTOR / CHISPA EN LA CÚSPIDE DEL PILAR
+    const orbPulse = Math.sin(Date.now() * 0.02 + pillar.facetSeed) * 1.5;
+    const orbR = (isCharged ? 5.5 : 4.0) + orbPulse * 0.8;
+    const orbGrad = ctx.createRadialGradient(tipX, tipY, 1, tipX, tipY, orbR * 2.2);
+    orbGrad.addColorStop(0, '#ffffff');
+    orbGrad.addColorStop(0.35, '#80d8ff');
+    orbGrad.addColorStop(0.7, '#7c4dff');
+    orbGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+
+    ctx.fillStyle = orbGrad;
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, orbR * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 5. FLASH DE IMPACTO
+    if (pillar.hitFlash > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.moveTo(drawX - r, drawY);
+      ctx.lineTo(drawX - r * 0.85, midY);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(drawX + r * 0.85, midY);
+      ctx.lineTo(drawX + r, drawY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Prisión Conductora
+  private static drawConductivePrisonAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+
+    // Radio: tap ~88px (4 pilares), cargado ~122px (6 pilares)
+    const baseRadius = 88;
+    const targetRadius = isReady ? 122 : Math.floor(baseRadius + ratio * 34);
+    const rx = targetRadius;
+    const ry = targetRadius * squish;
+
+    const aimDist = 165;
+    const tx = wizard.x + Math.cos(wizard.facingAngle) * aimDist;
+    const ty = wizard.y + Math.sin(wizard.facingAngle) * aimDist;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Línea de trayectoria
+    ctx.strokeStyle = isReady ? 'rgba(179, 136, 255, 0.45)' : 'rgba(0, 229, 255, 0.35)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Relleno elíptico en el suelo
+    const aimGrad = ctx.createRadialGradient(tx, ty, 6, tx, ty, rx);
+    aimGrad.addColorStop(0, isReady ? 'rgba(124, 77, 255, 0.28)' : 'rgba(0, 229, 255, 0.2)');
+    aimGrad.addColorStop(0.7, isReady ? 'rgba(0, 229, 255, 0.16)' : 'rgba(124, 77, 255, 0.1)');
+    aimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = aimGrad;
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillo perimetral
+    ctx.strokeStyle = isReady ? '#b388ff' : '#00e5ff';
+    ctx.lineWidth = isReady ? 2.5 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pilares holográficos rotando ligeramente
+    const nodeCount = isReady ? 6 : 4;
+    for (let i = 0; i < nodeCount; i++) {
+      const ang = (i * Math.PI * 2) / nodeCount + now * 0.001;
+      const px = tx + Math.cos(ang) * rx;
+      const py = ty + Math.sin(ang) * ry;
+
+      ctx.save();
+      ctx.translate(px, py - 14);
+      ctx.strokeStyle = isReady ? '#ffffff' : '#80d8ff';
+      ctx.fillStyle = isReady ? 'rgba(179, 136, 255, 0.5)' : 'rgba(0, 229, 255, 0.4)';
+      ctx.lineWidth = 1.4;
+
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(4, 0);
+      ctx.lineTo(0, 4);
+      ctx.lineTo(-4, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#b388ff' : '#80d8ff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡SOBRECARGA CRIOCONDUCTORA (6 PILARES · +50% DAÑO · DOBLE IMPLOSIÓN)! ⚡❄️🏛️'
+        : 'PRISIÓN CONDUCTORA (4 PILARES) ⚡❄️',
       tx,
       ty - ry - 14
     );
