@@ -3088,6 +3088,159 @@ class ElementalSoundEngine {
     source.start(now + 0.16);
     source.stop(now + 0.16 + shatLen);
   }
+
+  // =========================================================================
+  // NÚCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA: ARTEFACTO ESCALABLE Y SUPERNOVA)
+  // =========================================================================
+
+  // 1. Lanzamiento y anclaje del artefacto magnético
+  public playOverloadCoreDeploy(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Silbido magnético descendente
+    const whistle = this.ctx.createOscillator();
+    const wGain = this.ctx.createGain();
+    whistle.type = 'sine';
+    whistle.frequency.setValueAtTime(isCharged ? 950 : 800, now);
+    whistle.frequency.exponentialRampToValueAtTime(180, now + 0.18);
+    wGain.gain.setValueAtTime(0.25, now);
+    wGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    whistle.connect(wGain);
+    wGain.connect(this.ctx.destination);
+    whistle.start(now);
+    whistle.stop(now + 0.18);
+
+    // Impacto sordo telúrico al anclarse
+    const thud = this.ctx.createOscillator();
+    const tGain = this.ctx.createGain();
+    thud.type = 'triangle';
+    thud.frequency.setValueAtTime(isCharged ? 140 : 160, now + 0.15);
+    thud.frequency.exponentialRampToValueAtTime(40, now + 0.35);
+    tGain.gain.setValueAtTime(isCharged ? 0.45 : 0.35, now + 0.15);
+    tGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    thud.connect(tGain);
+    tGain.connect(this.ctx.destination);
+    thud.start(now + 0.15);
+    thud.stop(now + 0.35);
+  }
+
+  // 2. Pulso radial periódico de daño y calor (escala con nivel 1, 2 y 3)
+  public playOverloadCorePulse(level: number) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const baseFreq = level === 1 ? 320 : (level === 2 ? 520 : 780);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = level >= 2 ? 'sawtooth' : 'triangle';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.35, now + 0.08);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(level === 3 ? 2400 : (level === 2 ? 1500 : 900), now);
+
+    gain.gain.setValueAtTime(level === 3 ? 0.28 : (level === 2 ? 0.22 : 0.16), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
+  // 3. Alarma electromagnética al alcanzar el Nivel 3 (Masa Crítica)
+  public playOverloadCoreCriticalAlarm() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const alarm = this.ctx.createOscillator();
+    const aGain = this.ctx.createGain();
+    alarm.type = 'sine';
+    alarm.frequency.setValueAtTime(880, now);
+    alarm.frequency.linearRampToValueAtTime(1320, now + 0.12);
+    aGain.gain.setValueAtTime(0.2, now);
+    aGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    alarm.connect(aGain);
+    aGain.connect(this.ctx.destination);
+    alarm.start(now);
+    alarm.stop(now + 0.14);
+  }
+
+  // 4. Detonación masiva de supernova geológica (escala según nivel 1, 2 o 3 y si fue cargado)
+  public playOverloadCoreDetonation(level: number, isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // 1. Implosión previa instantánea (80ms)
+    const suck = this.ctx.createOscillator();
+    const suckGain = this.ctx.createGain();
+    suck.type = 'sine';
+    suck.frequency.setValueAtTime(140, now);
+    suck.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+    suckGain.gain.setValueAtTime(0.2, now);
+    suckGain.gain.linearRampToValueAtTime(0.35, now + 0.08);
+    suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    suck.connect(suckGain);
+    suckGain.connect(this.ctx.destination);
+    suck.start(now);
+    suck.stop(now + 0.09);
+
+    // 2. Estallido sísmico colosal (detonación de magma y relámpago)
+    const boomStart = now + 0.08;
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'triangle';
+    const startFreq = level === 3 ? 200 : (level === 2 ? 160 : 130);
+    boom.frequency.setValueAtTime(startFreq, boomStart);
+    boom.frequency.exponentialRampToValueAtTime(28, boomStart + 0.45);
+
+    const mult = level === 3 ? 0.75 : (level === 2 ? 0.58 : 0.42);
+    boomGain.gain.setValueAtTime(isCharged ? mult * 1.15 : mult, boomStart);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, boomStart + 0.45);
+
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(boomStart);
+    boom.stop(boomStart + 0.45);
+
+    // 3. Crack voltaico de plasma
+    const snapLen = level === 3 ? 0.35 : 0.22;
+    const snapBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * snapLen), this.ctx.sampleRate);
+    const sd = snapBuff.getChannelData(0);
+    for (let i = 0; i < sd.length; i++) {
+      sd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.07));
+    }
+    const snapSource = this.ctx.createBufferSource();
+    snapSource.buffer = snapBuff;
+    const snapFilter = this.ctx.createBiquadFilter();
+    snapFilter.type = 'bandpass';
+    snapFilter.frequency.setValueAtTime(1400, boomStart);
+
+    const snapGain = this.ctx.createGain();
+    snapGain.gain.setValueAtTime(level === 3 ? 0.45 : 0.3, boomStart);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, boomStart + snapLen);
+
+    snapSource.connect(snapFilter);
+    snapFilter.connect(snapGain);
+    snapGain.connect(this.ctx.destination);
+    snapSource.start(boomStart);
+    snapSource.stop(boomStart + snapLen);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

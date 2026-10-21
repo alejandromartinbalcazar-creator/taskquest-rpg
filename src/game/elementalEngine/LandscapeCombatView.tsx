@@ -41,6 +41,8 @@ import {
   ObsidianBladeInstance,
   ConductivePrisonEntity,
   ConductivePrisonPillarNode,
+  OverloadCoreEntity,
+  OverloadCoreLevel,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -501,6 +503,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     telluricBarriers: [] as TelluricBarrierEntity[],
     obsidianVolcanoes: [] as ObsidianVolcanoEntity[],
     conductivePrisons: [] as ConductivePrisonEntity[],
+    overloadCores: [] as OverloadCoreEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -809,6 +812,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.telluricBarriers = [];
       g.obsidianVolcanoes = [];
       g.conductivePrisons = [];
+      g.overloadCores = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -916,6 +920,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const wizard = g.wizard;
       const recipe = activeRecipe;
 
+      // Reactivación anticipada: si ya hay un Núcleo de Sobrecarga activo en el terreno, detonarlo inmediatamente
+      const existingOverloadCore = g.overloadCores.find((c) => !c.finished && c.phase !== 'detonating');
+      if (existingOverloadCore) {
+        existingOverloadCore.phase = 'detonating';
+        existingOverloadCore.phaseTimer = 0;
+        return;
+      }
+
       // Reproducir sonido característico de cada hechizo
       if (recipe.id === 'basic_spark') elementalSound.playBasicSpark();
       else if (recipe.id === 'fire_shot') elementalSound.playFireShot();
@@ -964,7 +976,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'conductive_prison') {
         // Prisión Conductora gestiona sus propios sonidos de invocación, choque perimetral, impacto e implosión
       }
-      else if (recipe.id === 'overload_core') elementalSound.playExplosiveOverload();
+      else if (recipe.id === 'overload_core') {
+        // Núcleo de Sobrecarga gestiona sus propios sonidos de despliegue, pulsos periódicos, alarma crítica y detonación
+      }
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
       else elementalSound.playFireShot();
 
@@ -1023,9 +1037,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana / Prisión Conductora: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana / Prisión Conductora / Núcleo de Sobrecarga: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2822,6 +2836,83 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
+      // 6.11 NÚCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA: Artefacto Desplegable Inestable, Acumulación Temporal y Detonación Masiva)
+      else if (recipe.id === 'overload_core') {
+        // Si se invocó cargado: Inicia directamente en Nivel 2 (Masa Inestable, elapsedMs = 1500) con 3 fragmentos orbitales
+        const startLvl: OverloadCoreLevel = isCharged ? 2 : 1;
+        const initialElapsedMs = isCharged ? 1500 : 0;
+        const initialDetR = isCharged ? 157 : 105;
+        const initialPulseR = isCharged ? 95 : 70;
+        const initialInterval = isCharged ? 350 : 500;
+
+        const initialFrags = [];
+        if (isCharged) {
+          for (let f = 0; f < 3; f++) {
+            initialFrags.push({
+              id: `frag-${f}`,
+              orbitAngle: (f * Math.PI * 2) / 3,
+              orbitRadius: 36,
+              orbitSpeed: 3.5,
+              height: 12,
+              size: 5,
+              roughPoints: [
+                { x: -4, y: -2 },
+                { x: 0, y: -5 },
+                { x: 4, y: -2 },
+                { x: 3, y: 4 },
+                { x: -3, y: 3 },
+              ],
+              burnGlow: 0.8,
+            });
+          }
+        }
+
+        g.overloadCores.push({
+          id: `overload_core_${now}`,
+          startX: wizard.x,
+          startY: wizard.y,
+          targetX,
+          targetY,
+          currentX: wizard.x,
+          currentY: wizard.y,
+          height: 10,
+          phase: 'launching',
+          phaseTimer: 0,
+          elapsedMs: initialElapsedMs,
+          isCharged,
+          level: startLvl,
+          lastLevel: startLvl,
+          pulseTimer: 0,
+          pulseInterval: initialInterval,
+          pulseCount: 0,
+          detonationRadius: initialDetR,
+          pulseRadius: initialPulseR,
+          rotationAngle: 0,
+          vibrationOffset: { x: 0, y: 0 },
+          rockFragments: initialFrags,
+          finished: false,
+        });
+
+        elementalSound.playOverloadCoreDeploy(isCharged);
+        g.screenShake = isCharged ? 5.0 : 3.5;
+
+        if (isCharged) {
+          g.floatingTexts.push({
+            id: `txt_oc_charge_${now}`,
+            x: wizard.x,
+            y: wizard.y - 32,
+            text: '💣⚡🌋 ¡DESPLIEGUE EN NIVEL 2 (+50% DAÑO)!',
+            color: '#ffd600',
+            fontSize: 14,
+            opacity: 1,
+            vy: -1.3,
+            life: 38,
+          });
+        }
+
+        setElementQueue([]);
+        return;
+      }
       // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
       else if (recipe.id === 'elemental_cataclysm') {
         g.screenShake = 20;
@@ -2974,6 +3065,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
   const startCharge = useCallback(() => {
     if (isDefeated || isVictorious) return;
+    const hasActiveOverloadCore = gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating');
+    if (hasActiveOverloadCore) {
+      handleAttack();
+      return;
+    }
     if (activeRecipe.id === 'fire_shot') {
       startChanneledAttack('fire', 'attack');
       return;
@@ -2987,7 +3083,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
     let cType = 'arcane';
-    if (activeRecipe.id === 'conductive_prison') cType = 'conductive_prison';
+    if (activeRecipe.id === 'overload_core') cType = 'overload_core';
+    else if (activeRecipe.id === 'conductive_prison') cType = 'conductive_prison';
     else if (activeRecipe.id === 'obsidian_volcano') cType = 'obsidian';
     else if (activeRecipe.id === 'telluric_barrier') cType = 'telluric';
     else if (activeRecipe.id === 'devastating_glacier') cType = 'glacier';
@@ -3009,7 +3106,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (activeRecipe.id !== 'lightning_storm') {
       elementalSound.playChargeStart();
     }
-  }, [activeRecipe.elements, activeRecipe.id, isDefeated, isVictorious, startChanneledAttack]);
+  }, [activeRecipe.elements, activeRecipe.id, handleAttack, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
     const wizard = gameStateRef.current.wizard;
@@ -3019,7 +3116,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+    const wasCharged = (activeRecipe.id === 'overload_core' || activeRecipe.id === 'conductive_prison' || activeRecipe.id === 'obsidian_volcano' || activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
       ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
@@ -3325,7 +3422,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isTelluric = activeRecipe.id === 'telluric_barrier';
         const isObsidian = activeRecipe.id === 'obsidian_volcano';
         const isConductivePrison = activeRecipe.id === 'conductive_prison';
-        const maxChargeTime = (isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isOverloadCore = activeRecipe.id === 'overload_core';
+        const maxChargeTime = (isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3645,6 +3743,30 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Esquirlas de roca magnética, chispas eléctricas y fuego magmático hacia el báculo para Núcleo de Sobrecarga
+        else if (isOverloadCore) {
+          if (Math.random() < 0.6 + wizard.chargeRatio * 0.4) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 18 + Math.random() * 26;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 12 + Math.sin(wizard.facingAngle) * 10;
+            const pTypeRand = Math.random();
+            const pType = pTypeRand < 0.35 ? 'spark' : (pTypeRand < 0.7 ? 'ember' : 'stone_chip');
+            const pColor = pType === 'spark' ? '#ffd600' : (pType === 'ember' ? '#ff6d00' : '#263238');
+            g.particles.push({
+              id: `oc-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (3.0 + wizard.chargeRatio * 2.8),
+              vy: -Math.sin(pAng) * (1.6 + wizard.chargeRatio * 1.6) - 0.4,
+              radius: 1.5 + Math.random() * 2.0,
+              color: pColor,
+              alpha: 1,
+              life: 14,
+              type: pType,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -3885,6 +4007,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               radius: 17,
               color: '#b388ff',
               secondaryColor: '#00e5ff',
+              alpha: 1,
+              life: 18,
+              maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isOverloadCore) {
+            elementalSound.playChargeReady();
+            g.screenShake = 8.0;
+            g.particles.push({
+              id: `oc-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 18,
+              color: '#ffd600',
+              secondaryColor: '#ff6d00',
               alpha: 1,
               life: 18,
               maxLife: 18,
@@ -8461,6 +8600,429 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.17 Actualizar Núcleo de Sobrecarga (Fuego + Rayo + Tierra: Artefacto Desplegable Inestable, Pulsos Radiales y Detonación Masiva Escalada)
+      for (let coreIdx = g.overloadCores.length - 1; coreIdx >= 0; coreIdx--) {
+        const core = g.overloadCores[coreIdx];
+        core.elapsedMs += dt;
+        core.phaseTimer += dt;
+        core.rotationAngle += 0.04;
+
+        // FASE A: LANZAMIENTO PARABÓLICO HACIA LA ZONA OBJETIVO (~180ms)
+        if (core.phase === 'launching') {
+          const launchDuration = 180;
+          const prog = Math.min(1.0, core.phaseTimer / launchDuration);
+          core.currentX = core.startX + (core.targetX - core.startX) * prog;
+          core.currentY = core.startY + (core.targetY - core.startY) * prog;
+          core.height = Math.sin(prog * Math.PI) * 45;
+
+          // Estela de chispas y humo volcánico durante el vuelo
+          if (Math.random() < 0.6) {
+            g.particles.push({
+              id: `core-flight-${frameNow}-${Math.random()}`,
+              x: core.currentX,
+              y: core.currentY - core.height,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: (Math.random() - 0.5) * 1.5,
+              radius: 1.5 + Math.random() * 2.0,
+              color: Math.random() < 0.5 ? '#ff6d00' : '#ffd600',
+              alpha: 0.9,
+              life: 14,
+              type: 'spark',
+            });
+          }
+
+          if (core.phaseTimer >= launchDuration) {
+            core.phase = 'pulsing';
+            core.phaseTimer = 0;
+            core.height = 14;
+            g.screenShake = 4.5;
+            for (let i = 0; i < 10; i++) {
+              const ang = Math.random() * Math.PI * 2;
+              const spd = 2 + Math.random() * 3;
+              g.particles.push({
+                id: `core-land-${frameNow}-${i}`,
+                x: core.currentX,
+                y: core.currentY,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd * 0.58 - 1.0,
+                radius: 1.5 + Math.random() * 2,
+                color: i % 2 === 0 ? '#ff9100' : '#263238',
+                alpha: 1,
+                life: 18,
+                type: 'stone_chip',
+              });
+            }
+          }
+          continue;
+        }
+
+        // FASE B: FASE ACTIVA / PULSANTE (Acumulación temporal de sobrecarga, pulsos periódicos y vibración)
+        if (core.phase === 'pulsing') {
+          // 1. Progresión de niveles de sobrecarga
+          let curLvl: OverloadCoreLevel = 1;
+          if (core.elapsedMs >= 3000) {
+            curLvl = 3;
+          } else if (core.elapsedMs >= 1500) {
+            curLvl = 2;
+          }
+          core.level = curLvl;
+
+          // Actualizar parámetros según nivel
+          if (core.level === 1) {
+            core.pulseInterval = 500;
+            core.pulseRadius = 70;
+            core.detonationRadius = 105;
+            core.vibrationOffset = {
+              x: (Math.random() - 0.5) * 1.2,
+              y: (Math.random() - 0.5) * 1.0,
+            };
+          } else if (core.level === 2) {
+            core.pulseInterval = 350;
+            core.pulseRadius = 95;
+            core.detonationRadius = 157;
+            core.vibrationOffset = {
+              x: (Math.random() - 0.5) * 2.8,
+              y: (Math.random() - 0.5) * 2.2,
+            };
+
+            // Si entra al Nivel 2, generar 3 fragmentos de roca magnética orbitales
+            if (core.lastLevel < 2) {
+              core.lastLevel = 2;
+              g.screenShake = 6.0;
+              elementalSound.playOverloadCorePulse(2);
+              core.rockFragments = [];
+              for (let f = 0; f < 3; f++) {
+                core.rockFragments.push({
+                  id: `frag-${f}`,
+                  orbitAngle: (f * Math.PI * 2) / 3,
+                  orbitRadius: 36,
+                  orbitSpeed: 3.5,
+                  height: 12,
+                  size: 5,
+                  roughPoints: [
+                    { x: -4, y: -2 },
+                    { x: 0, y: -5 },
+                    { x: 4, y: -2 },
+                    { x: 3, y: 4 },
+                    { x: -3, y: 3 },
+                  ],
+                  burnGlow: 0.8,
+                });
+              }
+              g.floatingTexts.push({
+                id: `txt_core_lvl2_${frameNow}`,
+                x: core.currentX,
+                y: core.currentY - 45,
+                text: '⚡⚡ ¡MASA INESTABLE (NIVEL 2)!',
+                color: '#ffd600',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.2,
+                life: 30,
+              });
+            }
+          } else if (core.level === 3) {
+            core.pulseInterval = 200;
+            core.pulseRadius = 130;
+            core.detonationRadius = 210;
+            core.vibrationOffset = {
+              x: (Math.random() - 0.5) * 5.2,
+              y: (Math.random() - 0.5) * 4.2,
+            };
+
+            // Si entra al Nivel 3, alarma crítica sonora y expandir a 5 fragmentos
+            if (core.lastLevel < 3) {
+              core.lastLevel = 3;
+              g.screenShake = 9.0;
+              if (!core.criticalAlarmPlayed) {
+                core.criticalAlarmPlayed = true;
+                elementalSound.playOverloadCoreCriticalAlarm();
+              }
+              if (core.rockFragments.length < 5) {
+                for (let f = core.rockFragments.length; f < 5; f++) {
+                  core.rockFragments.push({
+                    id: `frag-${f}`,
+                    orbitAngle: (f * Math.PI * 2) / 5,
+                    orbitRadius: 48,
+                    orbitSpeed: 5.5,
+                    height: 14,
+                    size: 6,
+                    roughPoints: [
+                      { x: -5, y: -3 },
+                      { x: 0, y: -6 },
+                      { x: 5, y: -3 },
+                      { x: 4, y: 5 },
+                      { x: -4, y: 4 },
+                    ],
+                    burnGlow: 1.0,
+                  });
+                }
+              }
+              g.floatingTexts.push({
+                id: `txt_core_crit_${frameNow}`,
+                x: core.currentX,
+                y: core.currentY - 50,
+                text: '⚠️ ¡SOBRECARGA CRÍTICA (NIVEL 3)! 💣',
+                color: '#ff1744',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.4,
+                life: 32,
+              });
+            }
+          }
+
+          // 2. Rotación de fragmentos orbitales
+          if (core.rockFragments && core.rockFragments.length > 0) {
+            core.rockFragments.forEach((frag) => {
+              frag.orbitAngle += frag.orbitSpeed * (dt / 1000);
+            });
+          }
+
+          // 3. Emisión periódica de pulsos radiales
+          core.pulseTimer += dt;
+          if (core.pulseTimer >= core.pulseInterval) {
+            core.pulseTimer = 0;
+            core.pulseCount++;
+            elementalSound.playOverloadCorePulse(core.level);
+
+            const statBonus = Math.floor(player.stats.attack * 0.35 + player.stats.knowledge * 0.35);
+            const baseDmg = identifyRecipe(['fire', 'lightning', 'earth']).damage + statBonus;
+            const pulseDmgRatio = core.level === 1 ? 0.16 : (core.level === 2 ? 0.24 : 0.35);
+            const pulseDmg = Math.max(8, Math.floor(baseDmg * pulseDmgRatio));
+
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const edx = enemy.x - core.currentX;
+              const edy = (enemy.y - core.currentY) / 0.58;
+              const edist = Math.hypot(edx, edy);
+
+              if (edist <= core.pulseRadius) {
+                enemy.hp -= pulseDmg;
+                enemy.hitFlash = 120;
+                if (core.level >= 2) {
+                  const existingSlow = enemy.statuses.find((s) => s.type === 'slowed' || s.type === 'shocked');
+                  if (existingSlow) {
+                    existingSlow.duration = Math.max(existingSlow.duration, core.level === 3 ? 140 : 80);
+                  } else {
+                    enemy.statuses.push({
+                      type: 'slowed',
+                      duration: core.level === 3 ? 140 : 80,
+                      maxDuration: core.level === 3 ? 140 : 80,
+                    });
+                  }
+                }
+                if (core.level === 3) {
+                  const existingBurn = enemy.statuses.find((s) => s.type === 'burning');
+                  if (existingBurn) {
+                    existingBurn.duration = Math.max(existingBurn.duration, 2000);
+                  } else {
+                    enemy.statuses.push({
+                      type: 'burning',
+                      duration: 2000,
+                      maxDuration: 2000,
+                      damagePerTick: 10,
+                    });
+                  }
+                }
+
+                g.floatingTexts.push({
+                  id: `pulse-dmg-${frameNow}-${enemy.id}-${Math.random()}`,
+                  x: enemy.x + (Math.random() - 0.5) * 12,
+                  y: enemy.y - 18,
+                  text: `-${pulseDmg}`,
+                  color: core.level === 3 ? '#ff1744' : (core.level === 2 ? '#ffd600' : '#ff9100'),
+                  fontSize: 12,
+                  opacity: 1,
+                  vy: -1.2,
+                  life: 22,
+                });
+
+                for (let sp = 0; sp < 4; sp++) {
+                  g.particles.push({
+                    id: `pulse-spk-${frameNow}-${Math.random()}`,
+                    x: enemy.x,
+                    y: enemy.y - 12,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    radius: 1.2 + Math.random() * 1.5,
+                    color: core.level === 3 ? '#ff5252' : '#ffd600',
+                    alpha: 1,
+                    life: 14,
+                    type: 'spark',
+                  });
+                }
+              }
+            });
+
+            // Partículas de descarga radial
+            const sparkCount = core.level === 3 ? 16 : (core.level === 2 ? 10 : 6);
+            for (let sp = 0; sp < sparkCount; sp++) {
+              const spkAng = (sp * Math.PI * 2) / sparkCount + Math.random() * 0.3;
+              const spkSpd = 2.5 + Math.random() * (core.level * 1.8);
+              g.particles.push({
+                id: `pulse-wave-spk-${frameNow}-${sp}`,
+                x: core.currentX,
+                y: core.currentY,
+                vx: Math.cos(spkAng) * spkSpd,
+                vy: Math.sin(spkAng) * spkSpd * 0.58,
+                radius: 1.5 + Math.random() * 1.6,
+                color: core.level === 3 ? '#ff1744' : (core.level === 2 ? '#ffd600' : '#ff9100'),
+                alpha: 1,
+                life: 16,
+                type: 'spark',
+              });
+            }
+          }
+
+          // 4. Auto-detonación al alcanzar tiempo límite (3500ms)
+          if (core.elapsedMs >= 3500) {
+            core.phase = 'detonating';
+            core.phaseTimer = 0;
+          }
+        }
+
+        // FASE C: DETONACIÓN MASIVA ESCALADA (Anticipada o al expirar tiempo límite)
+        if (core.phase === 'detonating') {
+          elementalSound.playOverloadCoreDetonation(core.level, core.isCharged);
+          g.screenShake = core.level === 3 ? 18.0 : (core.level === 2 ? 12.0 : 8.0);
+
+          const statBonus = Math.floor(player.stats.attack * 0.35 + player.stats.knowledge * 0.35);
+          const baseRecipeDmg = identifyRecipe(['fire', 'lightning', 'earth']).damage + statBonus;
+          const multiplier = core.level === 1 ? 1.0 : (core.level === 2 ? 1.5 : 2.2);
+          const chargeExtra = core.isCharged ? 1.15 : 1.0;
+          const finalDetonationDmg = Math.floor(baseRecipeDmg * multiplier * chargeExtra);
+          const detRadius = core.detonationRadius;
+
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const edx = enemy.x - core.currentX;
+            const edy = (enemy.y - core.currentY) / 0.58;
+            const edist = Math.hypot(edx, edy);
+
+            if (edist <= detRadius) {
+              enemy.hp -= finalDetonationDmg;
+              enemy.hitFlash = 180;
+
+              const pushAngle = Math.atan2(enemy.y - core.currentY, enemy.x - core.currentX);
+              const pushForce = core.level === 3 ? 16.0 : (core.level === 2 ? 11.5 : 8.0);
+              enemy.x += Math.cos(pushAngle) * pushForce;
+              enemy.y += Math.sin(pushAngle) * pushForce * 0.58;
+
+              if (core.level === 3) {
+                const existingBurn = enemy.statuses.find((s) => s.type === 'burning');
+                if (existingBurn) {
+                  existingBurn.duration = Math.max(existingBurn.duration, 4000);
+                  existingBurn.damagePerTick = 14;
+                } else {
+                  enemy.statuses.push({
+                    type: 'burning',
+                    duration: 4000,
+                    maxDuration: 4000,
+                    damagePerTick: 14,
+                  });
+                }
+                const existingSlow = enemy.statuses.find((s) => s.type === 'frozen' || s.type === 'slowed');
+                if (existingSlow) {
+                  existingSlow.duration = Math.max(existingSlow.duration, 220);
+                } else {
+                  enemy.statuses.push({
+                    type: 'slowed',
+                    duration: 220,
+                    maxDuration: 220,
+                  });
+                }
+              } else if (core.level === 2) {
+                const existingBurn = enemy.statuses.find((s) => s.type === 'burning');
+                if (existingBurn) {
+                  existingBurn.duration = Math.max(existingBurn.duration, 2200);
+                  existingBurn.damagePerTick = 9;
+                } else {
+                  enemy.statuses.push({
+                    type: 'burning',
+                    duration: 2200,
+                    maxDuration: 2200,
+                    damagePerTick: 9,
+                  });
+                }
+                const existingSlow = enemy.statuses.find((s) => s.type === 'slowed');
+                if (existingSlow) {
+                  existingSlow.duration = Math.max(existingSlow.duration, 100);
+                } else {
+                  enemy.statuses.push({
+                    type: 'slowed',
+                    duration: 100,
+                    maxDuration: 100,
+                  });
+                }
+              }
+
+              g.floatingTexts.push({
+                id: `det-dmg-${frameNow}-${enemy.id}-${Math.random()}`,
+                x: enemy.x + (Math.random() - 0.5) * 16,
+                y: enemy.y - 28,
+                text: `-${finalDetonationDmg} 💣💥`,
+                color: core.level === 3 ? '#ff1744' : (core.level === 2 ? '#ffd600' : '#ff9100'),
+                fontSize: core.level === 3 ? 18 : 15,
+                opacity: 1,
+                vy: -1.8,
+                life: 38,
+              });
+            }
+          });
+
+          g.terrainManager.obstacles.forEach((obs) => {
+            if (obs.hp <= 0) return;
+            const odx = obs.x - core.currentX;
+            const ody = (obs.y - core.currentY) / 0.58;
+            if (Math.hypot(odx, ody) <= detRadius) {
+              obs.hp = Math.max(0, obs.hp - finalDetonationDmg);
+            }
+          });
+
+          g.terrainManager.spawnMagmaFissure(core.currentX, core.currentY, core.level === 3 ? 75 : 55);
+
+          const particleCount = core.level === 3 ? 42 : (core.level === 2 ? 28 : 18);
+          for (let p = 0; p < particleCount; p++) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pSpd = 3.5 + Math.random() * (core.level * 3.5);
+            const pType = p % 3 === 0 ? 'spark' : (p % 3 === 1 ? 'stone_chip' : 'ember');
+            g.particles.push({
+              id: `det-part-${frameNow}-${p}`,
+              x: core.currentX,
+              y: core.currentY,
+              vx: Math.cos(pAng) * pSpd,
+              vy: Math.sin(pAng) * pSpd * 0.58 - (pType === 'spark' ? 2.5 : 1.2),
+              radius: 2.0 + Math.random() * 3.0,
+              color: pType === 'spark' ? (core.level === 3 ? '#ffffff' : '#ffd600') : (pType === 'ember' ? '#ff3d00' : '#263238'),
+              alpha: 1,
+              life: 25 + Math.floor(Math.random() * 15),
+              type: pType,
+            });
+          }
+
+          g.particles.push({
+            id: `det-shockwave-${frameNow}`,
+            x: core.currentX,
+            y: core.currentY,
+            vx: 0,
+            vy: 0,
+            radius: detRadius,
+            color: core.level === 3 ? '#ff1744' : (core.level === 2 ? '#ffd600' : '#ff9100'),
+            secondaryColor: '#ffffff',
+            alpha: 1,
+            life: 22,
+            maxLife: 22,
+            type: 'ring',
+          });
+
+          core.phase = 'finished';
+          core.finished = true;
+          g.overloadCores.splice(coreIdx, 1);
+          continue;
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -8539,6 +9101,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.telluricBarriers,
             g.obsidianVolcanoes,
             g.conductivePrisons,
+            g.overloadCores,
             g.forestLevel ?? undefined
           );
         }
@@ -8816,8 +9379,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
                     : activeRecipe.id === 'conductive_prison'
                     ? 'border-indigo-400 shadow-[0_0_32px_rgba(124,77,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'overload_core'
+                    ? 'border-amber-400 shadow-[0_0_35px_rgba(255,109,0,0.95)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
-                : (activeRecipe.id === 'lightning_storm'
+                : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                    ? 'border-red-500 shadow-[0_0_36px_rgba(255,23,68,1.0)] animate-pulse'
+                    : activeRecipe.id === 'lightning_storm'
                     ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
                     : activeRecipe.id === 'ice_lance'
                     ? 'border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
@@ -8847,12 +9414,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
                     : activeRecipe.id === 'conductive_prison'
                     ? 'border-indigo-500 shadow-[0_0_22px_rgba(124,77,255,0.75)]'
+                    : activeRecipe.id === 'overload_core'
+                    ? 'border-amber-500 shadow-[0_0_24px_rgba(255,109,0,0.8)]'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
-            <span className="text-2xl">{activeRecipe.icon}</span>
+            <span className="text-2xl">
+              {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                ? '💣💥'
+                : activeRecipe.icon}
+            </span>
             <span className="text-[11px] font-black tracking-wider mt-0.5">
-              {activeRecipe.id === 'fire_shot'
+              {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                ? '¡DETONAR!'
+                : activeRecipe.id === 'fire_shot'
                 ? 'CANALIZAR'
                 : activeRecipe.id === 'ice_shard'
                 ? 'CANALIZAR'
@@ -8888,6 +9463,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
                 : activeRecipe.id === 'conductive_prison'
                 ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA CRIOCONDUCTORA +50%! ⚡❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'PRISIÓN ⚡❄️🏛️')
+                : activeRecipe.id === 'overload_core'
+                ? (chargeVisualRatio >= 1.0 ? '¡MASA INESTABLE +50%! 💣⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 💣⚡' : 'NÚCLEO 💣⚡🌋')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -8926,6 +9503,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-orange-600 via-fuchsia-500 to-cyan-300 shadow-[0_0_8px_#c026d3]'
                       : activeRecipe.id === 'conductive_prison'
                       ? 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600 shadow-[0_0_8px_#7c4dff]'
+                      : activeRecipe.id === 'overload_core'
+                      ? 'bg-gradient-to-r from-red-600 via-amber-500 to-yellow-300 shadow-[0_0_8px_#ffd600]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}

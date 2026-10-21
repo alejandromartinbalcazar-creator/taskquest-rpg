@@ -266,16 +266,6 @@ export interface GameEnemy {
   teleportTimer?: number;
 }
 
-export interface OverloadCoreEntity {
-  id: string;
-  x: number;
-  y: number;
-  timer: number;
-  maxTimer: number;
-  radius: number;
-  damage: number;
-}
-
 export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';
 
 export interface InfernalCrownEntity {
@@ -842,6 +832,48 @@ export interface ConductivePrisonEntity {
   hasImploded: boolean;
   hitImplosionEnemyIds: string[];
   finished: boolean;
+}
+
+// NÚCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA: ARTEFACTO DESPLEGABLE, ESCALADO EN 3 NIVELES Y DETONACIÓN MANUAL/AUTOMÁTICA)
+export type OverloadCorePhase = 'launching' | 'pulsing' | 'detonating' | 'finished';
+export type OverloadCoreLevel = 1 | 2 | 3;
+
+export interface OverloadCoreRockFragment {
+  id: string;
+  orbitAngle: number;
+  orbitRadius: number;
+  orbitSpeed: number;
+  height: number;
+  size: number;
+  roughPoints: { x: number; y: number }[];
+  burnGlow: number;
+}
+
+export interface OverloadCoreEntity {
+  id: string;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  currentX: number;
+  currentY: number;
+  height: number;
+  phase: OverloadCorePhase;
+  phaseTimer: number;
+  elapsedMs: number;
+  isCharged: boolean;
+  level: OverloadCoreLevel;
+  lastLevel: OverloadCoreLevel;
+  pulseTimer: number;
+  pulseInterval: number;
+  pulseCount: number;
+  detonationRadius: number;
+  pulseRadius: number;
+  rotationAngle: number;
+  vibrationOffset: { x: number; y: number };
+  rockFragments: OverloadCoreRockFragment[];
+  finished: boolean;
+  criticalAlarmPlayed?: boolean;
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas

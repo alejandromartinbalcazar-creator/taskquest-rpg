@@ -38,6 +38,7 @@ import {
   ObsidianBladeInstance,
   ConductivePrisonEntity,
   ConductivePrisonPillarNode,
+  OverloadCoreEntity,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -97,6 +98,7 @@ export class IsometricRenderer {
     telluricBarriers: TelluricBarrierEntity[] = [],
     obsidianVolcanoes: ObsidianVolcanoEntity[] = [],
     conductivePrisons: ConductivePrisonEntity[] = [],
+    overloadCores: OverloadCoreEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -174,6 +176,9 @@ export class IsometricRenderer {
     // 3.85 Dibujar Suelo, Escarcha, Valla de Relámpagos e Implosión de Prisión Conductora (Rayo + Hielo + Tierra)
     this.drawConductivePrisonFloor(ctx, conductivePrisons);
 
+    // 3.86 Dibujar Suelo, Glifos de Imán Telúrico y Ondas de Pulso de Núcleo de Sobrecarga (Fuego + Rayo + Tierra)
+    this.drawOverloadCoreFloor(ctx, overloadCores);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -203,6 +208,8 @@ export class IsometricRenderer {
       this.drawObsidianAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'conductive_prison') {
       this.drawConductivePrisonAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'overload_core') {
+      this.drawOverloadCoreAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -408,6 +415,16 @@ export class IsometricRenderer {
               draw: () => this.drawConductivePrisonPillar(ctx, pillar, prison),
             });
           }
+        });
+      }
+    });
+
+    // Núcleos de Sobrecarga (Fuego + Rayo + Tierra) integrados en Depth Sorting
+    overloadCores.forEach((core) => {
+      if (core.phase !== 'finished') {
+        renderList.push({
+          y: core.currentY,
+          draw: () => this.drawOverloadCoreEntity(ctx, core),
         });
       }
     });
@@ -1828,6 +1845,60 @@ export class IsometricRenderer {
         ctx.fillStyle = cpGrad;
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Vórtice de plasma ígneo, magnetismo y esquirlas orbitales de Núcleo de Sobrecarga (Fuego + Rayo + Tierra)
+      const isOverloadCore = wizard.chargeType === 'overload_core';
+      if (isOverloadCore) {
+        ctx.shadowBlur = 0;
+        const shardCount = isReady ? 5 : 3;
+        const orbitPhase = Date.now() * 0.009;
+        for (let sc = 0; sc < shardCount; sc++) {
+          const sAng = orbitPhase + (sc * Math.PI * 2) / shardCount;
+          const sDist = 18 + ratio * 16;
+          const sx = Math.cos(sAng) * sDist;
+          const sy = 4 + Math.sin(sAng) * (sDist * 0.58);
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(sAng + Math.PI / 4);
+          ctx.fillStyle = sc % 2 === 0 ? '#ff6d00' : '#ffd600';
+          ctx.shadowColor = sc % 2 === 0 ? '#ff3d00' : '#ffff00';
+          ctx.shadowBlur = isReady ? 8 : 4;
+          ctx.beginPath();
+          ctx.moveTo(0, -4);
+          ctx.lineTo(3, 0);
+          ctx.lineTo(0, 4);
+          ctx.lineTo(-3, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Arco de descarga eléctrica al mago
+          if (Math.random() < 0.35) {
+            ctx.strokeStyle = isReady ? '#fff59d' : '#ffab00';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo((Math.random() - 0.5) * 6, -8 + (Math.random() - 0.5) * 6);
+            ctx.stroke();
+          }
+        }
+
+        // Foco de energía de plasma sobrecalentado en el báculo
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+        const pulseR = (isReady ? 13 : 7.0 + ratio * 4.5) + Math.sin(Date.now() * 0.035) * 1.8;
+        const ocGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.6);
+        ocGrad.addColorStop(0, '#ffffff');
+        ocGrad.addColorStop(0.25, isReady ? '#ffff8d' : '#ffe082');
+        ocGrad.addColorStop(0.6, isReady ? '#ff6d00' : '#ff9100');
+        ocGrad.addColorStop(0.85, '#d50000');
+        ocGrad.addColorStop(1, 'rgba(213, 0, 0, 0)');
+        ctx.fillStyle = ocGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.6, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -7916,6 +7987,462 @@ export class IsometricRenderer {
       isReady
         ? '¡SOBRECARGA CRIOCONDUCTORA (6 PILARES · +50% DAÑO · DOBLE IMPLOSIÓN)! ⚡❄️🏛️'
         : 'PRISIÓN CONDUCTORA (4 PILARES) ⚡❄️',
+      tx,
+      ty - ry - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // NÚCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA)
+  // =========================================================================
+
+  // 1. Suelo, glifos electromagnéticos, fisuras y ondas de pulso del Núcleo de Sobrecarga
+  private static drawOverloadCoreFloor(
+    ctx: CanvasRenderingContext2D,
+    overloadCores: OverloadCoreEntity[]
+  ) {
+    if (!overloadCores || overloadCores.length === 0) return;
+
+    const squish = 0.58;
+    const now = Date.now();
+
+    overloadCores.forEach((core) => {
+      if (core.phase === 'finished') return;
+
+      const cx = core.currentX;
+      const cy = core.currentY;
+      const lvl = core.level;
+
+      ctx.save();
+
+      // Sombra elíptica suave en el suelo bajo el núcleo flotante
+      const shadowRadius = 16 + lvl * 5;
+      const shadowGrad = ctx.createRadialGradient(cx, cy, 2, cx, cy, shadowRadius);
+      shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+      shadowGrad.addColorStop(0.5, 'rgba(20, 10, 5, 0.4)');
+      shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = shadowGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, shadowRadius, shadowRadius * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Fisuras magmático-eléctricas radiando en el suelo
+      const fissureCount = 6 + lvl * 2;
+      for (let f = 0; f < fissureCount; f++) {
+        const fAng = (f * Math.PI * 2) / fissureCount + (f % 2 === 0 ? 0.15 : -0.15);
+        const fDist = (24 + lvl * 8) * (0.8 + ((f * 37) % 10) * 0.04);
+        const fx = cx + Math.cos(fAng) * fDist;
+        const fy = cy + Math.sin(fAng) * (fDist * squish);
+
+        ctx.strokeStyle = lvl === 3 ? 'rgba(255, 23, 68, 0.75)' : lvl === 2 ? 'rgba(255, 109, 0, 0.65)' : 'rgba(255, 152, 0, 0.5)';
+        ctx.lineWidth = lvl === 3 ? 2.2 : 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        const midX = (cx + fx) * 0.5 + Math.sin(f * 2.3) * 4;
+        const midY = (cy + fy) * 0.5 + Math.cos(f * 1.9) * 3;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+
+        // Núcleo brillante en la fisura
+        ctx.strokeStyle = lvl === 3 ? '#ffffff' : '#ffd600';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(midX, midY);
+        ctx.stroke();
+      }
+
+      // Zona de peligro / advertencia de detonación actual
+      const detR = core.detonationRadius;
+      const warnGrad = ctx.createRadialGradient(cx, cy, 8, cx, cy, detR);
+      if (lvl === 3) {
+        warnGrad.addColorStop(0, 'rgba(255, 23, 68, 0.28)');
+        warnGrad.addColorStop(0.6, 'rgba(255, 109, 0, 0.18)');
+        warnGrad.addColorStop(1, 'rgba(224, 64, 251, 0.04)');
+      } else if (lvl === 2) {
+        warnGrad.addColorStop(0, 'rgba(255, 109, 0, 0.22)');
+        warnGrad.addColorStop(0.7, 'rgba(255, 214, 0, 0.12)');
+        warnGrad.addColorStop(1, 'rgba(255, 109, 0, 0.02)');
+      } else {
+        warnGrad.addColorStop(0, 'rgba(255, 152, 0, 0.15)');
+        warnGrad.addColorStop(0.7, 'rgba(255, 214, 0, 0.08)');
+        warnGrad.addColorStop(1, 'rgba(255, 152, 0, 0.01)');
+      }
+
+      ctx.fillStyle = warnGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, detR, detR * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Anillo perimetral punteado de la detonación
+      ctx.strokeStyle = lvl === 3 ? '#ff1744' : lvl === 2 ? '#ffab00' : '#ffd54f';
+      ctx.lineWidth = lvl === 3 ? 2.4 : 1.6;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, detR, detR * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Ondas concéntricas de pulso radial en expansión (cuando emite una descarga periódica)
+      if (core.pulseTimer < 320) {
+        const pulseRatio = core.pulseTimer / 320;
+        const currentPulseR = core.pulseRadius * pulseRatio;
+        const pulseAlpha = (1.0 - pulseRatio) * 0.85;
+
+        ctx.strokeStyle = lvl === 3
+          ? `rgba(255, 255, 255, ${pulseAlpha})`
+          : lvl === 2
+          ? `rgba(255, 214, 0, ${pulseAlpha})`
+          : `rgba(255, 109, 0, ${pulseAlpha})`;
+        ctx.lineWidth = 2.5 * (1.0 - pulseRatio) + 0.8;
+        ctx.shadowColor = lvl === 3 ? '#ff1744' : '#ffd600';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, currentPulseR, currentPulseR * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Líneas de succión gravitatoria hacia el centro (efecto telúrico-magnético)
+      const spokeCount = 8;
+      for (let s = 0; s < spokeCount; s++) {
+        const sAng = (s * Math.PI * 2) / spokeCount + (now * 0.002);
+        const sDist = detR * 0.85;
+        const inDist = 18 + ((now * 0.04 + s * 15) % (sDist - 18));
+        const px = cx + Math.cos(sAng) * inDist;
+        const py = cy + Math.sin(sAng) * (inDist * squish);
+
+        ctx.fillStyle = lvl === 3 ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 214, 0, 0.55)';
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja el Núcleo de Sobrecarga (Orbe de plasma flotante + esquirlas orbitales + arcos eléctricos + HUD de sobrecarga)
+  private static drawOverloadCoreEntity(
+    ctx: CanvasRenderingContext2D,
+    core: OverloadCoreEntity
+  ) {
+    if (core.phase === 'finished') return;
+
+    const squish = 0.58;
+    const now = Date.now();
+    const lvl = core.level;
+
+    // Altura de levitación con oscilación vertical
+    const hoverH = core.phase === 'launching' ? core.height : 14 + Math.sin(now * 0.006) * 3;
+    const vx = core.currentX + core.vibrationOffset.x;
+    const vy = core.currentY - hoverH + core.vibrationOffset.y;
+
+    // Radio visual del orbe según su nivel
+    const coreR = lvl === 1 ? 12 : lvl === 2 ? 16 : 21;
+
+    ctx.save();
+
+    // 1. DIBUJAR ESQUIRLAS DE ROCA ORBITALES (Fase 2 y 3)
+    if (core.rockFragments && core.rockFragments.length > 0) {
+      core.rockFragments.forEach((frag) => {
+        const fx = core.currentX + Math.cos(frag.orbitAngle) * frag.orbitRadius;
+        const fy = (core.currentY - hoverH * 0.75) + Math.sin(frag.orbitAngle) * (frag.orbitRadius * squish);
+
+        // Rayo voltaico conectando el núcleo central con la esquirla
+        ctx.strokeStyle = lvl === 3 ? '#ffffff' : lvl === 2 ? '#fff176' : '#ffb74d';
+        ctx.lineWidth = lvl === 3 ? 1.6 : 1.1;
+        ctx.shadowColor = lvl === 3 ? '#ff1744' : '#ffd600';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        const midX = (vx + fx) * 0.5 + (Math.random() - 0.5) * 5;
+        const midY = (vy + fy) * 0.5 + (Math.random() - 0.5) * 5;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Cuerpo facetado de la roca magnetizada
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(frag.orbitAngle + Math.PI / 4);
+
+        const rockGrad = ctx.createLinearGradient(-frag.size, -frag.size, frag.size, frag.size);
+        rockGrad.addColorStop(0, '#37474f');
+        rockGrad.addColorStop(0.5, '#212121');
+        rockGrad.addColorStop(1, '#0d0d0d');
+        ctx.fillStyle = rockGrad;
+
+        ctx.beginPath();
+        if (frag.roughPoints && frag.roughPoints.length > 0) {
+          ctx.moveTo(frag.roughPoints[0].x, frag.roughPoints[0].y);
+          for (let p = 1; p < frag.roughPoints.length; p++) {
+            ctx.lineTo(frag.roughPoints[p].x, frag.roughPoints[p].y);
+          }
+        } else {
+          ctx.rect(-frag.size, -frag.size, frag.size * 2, frag.size * 2);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Borde encendido de magma
+        ctx.strokeStyle = lvl === 3 ? '#ff5252' : '#ff9100';
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    // 2. CORONA DE ENERGÍA Y ANILLOS DE CONTENCIÓN MAGNÉTICA
+    // Halo difuso de plasma
+    const haloR = coreR * 2.2;
+    const haloGrad = ctx.createRadialGradient(vx, vy, coreR * 0.5, vx, vy, haloR);
+    if (lvl === 3) {
+      haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+      haloGrad.addColorStop(0.3, 'rgba(255, 23, 68, 0.6)');
+      haloGrad.addColorStop(0.7, 'rgba(224, 64, 251, 0.35)');
+      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    } else if (lvl === 2) {
+      haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+      haloGrad.addColorStop(0.35, 'rgba(255, 214, 0, 0.55)');
+      haloGrad.addColorStop(0.75, 'rgba(255, 109, 0, 0.25)');
+      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    } else {
+      haloGrad.addColorStop(0, 'rgba(255, 235, 59, 0.6)');
+      haloGrad.addColorStop(0.4, 'rgba(255, 109, 0, 0.4)');
+      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    }
+
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.arc(vx, vy, haloR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillos elípticos de contención rotando a contracorriente
+    const ringRot1 = core.rotationAngle;
+    const ringRot2 = -core.rotationAngle * 0.75;
+
+    ctx.save();
+    ctx.translate(vx, vy);
+    ctx.rotate(ringRot1);
+    ctx.strokeStyle = lvl === 3 ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 214, 0, 0.65)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, coreR * 1.5, coreR * 0.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(vx, vy);
+    ctx.rotate(ringRot2);
+    ctx.strokeStyle = lvl === 3 ? 'rgba(255, 23, 68, 0.8)' : 'rgba(255, 109, 0, 0.65)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, coreR * 1.35, coreR * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.setLineDash([]);
+
+    // 3. CUERPO ESFÉRICO CENTRAL (Esfera de roca ígnea + plasma supercrítico)
+    const sphereGrad = ctx.createRadialGradient(
+      vx - coreR * 0.35,
+      vy - coreR * 0.35,
+      coreR * 0.1,
+      vx,
+      vy,
+      coreR
+    );
+
+    if (lvl === 3) {
+      sphereGrad.addColorStop(0, '#ffffff');
+      sphereGrad.addColorStop(0.35, '#ff80ab');
+      sphereGrad.addColorStop(0.7, '#d50000');
+      sphereGrad.addColorStop(1, '#212121');
+    } else if (lvl === 2) {
+      sphereGrad.addColorStop(0, '#ffffff');
+      sphereGrad.addColorStop(0.3, '#ffd600');
+      sphereGrad.addColorStop(0.65, '#ff6d00');
+      sphereGrad.addColorStop(1, '#263238');
+    } else {
+      sphereGrad.addColorStop(0, '#ffff8d');
+      sphereGrad.addColorStop(0.4, '#ff9100');
+      sphereGrad.addColorStop(0.8, '#dd2c00');
+      sphereGrad.addColorStop(1, '#212121');
+    }
+
+    ctx.fillStyle = sphereGrad;
+    ctx.shadowColor = lvl === 3 ? '#ff1744' : '#ffd600';
+    ctx.shadowBlur = lvl === 3 ? 16 : 9;
+    ctx.beginPath();
+    ctx.arc(vx, vy, coreR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Fisuras incandescentes en la superficie de la esfera
+    const crackCount = 4;
+    for (let c = 0; c < crackCount; c++) {
+      const crkAng = (c * Math.PI) / 2 + core.rotationAngle * 0.4;
+      const c1x = vx + Math.cos(crkAng) * (coreR * 0.2);
+      const c1y = vy + Math.sin(crkAng) * (coreR * 0.2);
+      const c2x = vx + Math.cos(crkAng) * (coreR * 0.85);
+      const c2y = vy + Math.sin(crkAng) * (coreR * 0.85);
+
+      ctx.strokeStyle = lvl === 3 ? '#ffffff' : '#ffff8d';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(c1x, c1y);
+      ctx.lineTo((c1x + c2x) * 0.5 + Math.sin(c * 2) * 2, (c1y + c2y) * 0.5 + Math.cos(c * 2) * 2);
+      ctx.lineTo(c2x, c2y);
+      ctx.stroke();
+    }
+
+    // Chispas violentas en Nivel 3 (Sobrecarga Crítica)
+    if (lvl === 3) {
+      const sparkCount = 6;
+      for (let s = 0; s < sparkCount; s++) {
+        const sAng = (s * Math.PI * 2) / sparkCount + Math.random() * 0.5;
+        const sLen = coreR + 8 + Math.random() * 14;
+        ctx.strokeStyle = Math.random() < 0.5 ? '#ffffff' : '#ff1744';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(vx + Math.cos(sAng) * sLen, vy + Math.sin(sAng) * sLen);
+        ctx.stroke();
+      }
+    }
+
+    // 4. BADGE HUD DE NIVEL Y BARRA DE PROGRESO DE SOBRECARGA
+    const badgeY = vy - coreR - 16;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+
+    let badgeText = '⚡ NÚCLEO I (100%)';
+    let badgeColor = '#ffb74d';
+    if (lvl === 2) {
+      badgeText = '⚡⚡ NÚCLEO II (+50%)';
+      badgeColor = '#ffd600';
+    } else if (lvl === 3) {
+      badgeText = '⚠️ ¡SOBRECARGA CRÍTICA! (+120%) 💣';
+      badgeColor = (now % 200 < 100) ? '#ffffff' : '#ff1744';
+    }
+
+    ctx.fillStyle = badgeColor;
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(badgeText, vx, badgeY);
+
+    // Barra de tiempo restante hacia auto-detonación (3500ms total)
+    const barW = 38;
+    const barH = 3;
+    const progress = Math.min(1.0, core.elapsedMs / 3500);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(vx - barW / 2, badgeY + 4, barW, barH);
+
+    ctx.fillStyle = lvl === 3 ? '#ff1744' : lvl === 2 ? '#ffd600' : '#ff9100';
+    ctx.fillRect(vx - barW / 2, badgeY + 4, barW * progress, barH);
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Núcleo de Sobrecarga
+  private static drawOverloadCoreAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+
+    // Tap despliega a Nivel 1 (~105px detonación); Cargado despliega a Nivel 2 (~157px detonación)
+    const baseRadius = 105;
+    const targetRadius = isReady ? 157 : Math.floor(baseRadius + ratio * 52);
+    const rx = targetRadius;
+    const ry = targetRadius * squish;
+
+    const aimDist = 165;
+    const tx = wizard.x + Math.cos(wizard.facingAngle) * aimDist;
+    const ty = wizard.y + Math.sin(wizard.facingAngle) * aimDist;
+    const now = Date.now();
+
+    ctx.save();
+
+    // Línea de trayectoria en arco parabólico
+    ctx.strokeStyle = isReady ? 'rgba(255, 214, 0, 0.55)' : 'rgba(255, 109, 0, 0.45)';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    const midX = (wizard.x + tx) * 0.5;
+    const midY = (wizard.y + ty) * 0.5 - 28;
+    ctx.quadraticCurveTo(midX, midY, tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Relleno elíptico en el suelo con degradado térmico-voltaico
+    const aimGrad = ctx.createRadialGradient(tx, ty, 8, tx, ty, rx);
+    aimGrad.addColorStop(0, isReady ? 'rgba(255, 214, 0, 0.28)' : 'rgba(255, 109, 0, 0.22)');
+    aimGrad.addColorStop(0.65, isReady ? 'rgba(255, 109, 0, 0.16)' : 'rgba(255, 214, 0, 0.1)');
+    aimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = aimGrad;
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillo perimetral punteado
+    ctx.strokeStyle = isReady ? '#ffd600' : '#ff9100';
+    ctx.lineWidth = isReady ? 2.4 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Silueta holográfica del núcleo flotando en el objetivo
+    const ghostH = 14 + Math.sin(now * 0.006) * 3;
+    const ghostY = ty - ghostH;
+    const ghostR = isReady ? 16 : 12;
+
+    ctx.save();
+    ctx.fillStyle = isReady ? 'rgba(255, 214, 0, 0.5)' : 'rgba(255, 109, 0, 0.45)';
+    ctx.strokeStyle = isReady ? '#ffffff' : '#ffd600';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(tx, ghostY, ghostR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Mini esquirlas holográficas orbitando si está cargado (Nivel 2)
+    if (isReady) {
+      for (let s = 0; s < 3; s++) {
+        const sAng = (s * Math.PI * 2) / 3 + now * 0.003;
+        const sx = tx + Math.cos(sAng) * (ghostR * 2.0);
+        const sy = ghostY + Math.sin(sAng) * (ghostR * 2.0 * squish);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#ffd600' : '#ffb74d';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡DESPLIEGUE SOBRECARGADO (NIVEL 2 INICIAL · +50% DAÑO BASE)! 💣⚡🌋'
+        : 'NÚCLEO DE SOBRECARGA (NIVEL 1) 💣⚡',
       tx,
       ty - ry - 14
     );
