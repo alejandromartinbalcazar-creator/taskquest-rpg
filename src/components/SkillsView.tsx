@@ -4,13 +4,7 @@ import { ELEMENT_SKILLS, ELEMENTAL_FUSIONS } from '../services/gameData';
 import {
   Sparkles,
   Lock,
-  CheckCircle2,
-  Zap,
-  Flame,
-  Mountain,
-  Snowflake,
-  Shield,
-  Layers
+  CheckCircle2
 } from 'lucide-react';
 import { sound } from '../services/soundService';
 import confetti from 'canvas-confetti';
@@ -340,6 +334,16 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
   // Nodo seleccionado actualmente para ver detalles
   const [selectedNodeId, setSelectedNodeId] = useState<string>('fire-1');
 
+  // Nivel requerido según tier/fusión (para deleveling y sellado de habilidades)
+  const getRequiredLevel = (node: RadialNode): number => {
+    if (node.id === 'core') return 1;
+    if (node.isFusion) return 4;
+    if (node.tier === 1) return 1;
+    if (node.tier === 2) return 3;
+    if (node.tier === 3) return 6;
+    return 1;
+  };
+
   // Comprobar si un nodo está desbloqueado
   const isNodeUnlocked = (node: RadialNode): boolean => {
     if (node.id === 'core') return true;
@@ -359,7 +363,9 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
   };
 
   const selectedNode = radialNodes.find((n) => n.id === selectedNodeId) || radialNodes[1];
+  const selectedNodeReqLevel = getRequiredLevel(selectedNode);
   const isSelectedUnlocked = isNodeUnlocked(selectedNode);
+  const isSelectedLevelLocked = isSelectedUnlocked && player.level < selectedNodeReqLevel;
   const isSelectedPrereqMet = arePrerequisitesMet(selectedNode);
   const canUnlockSelected = !isSelectedUnlocked && isSelectedPrereqMet && player.skillPoints >= selectedNode.costSP;
 
@@ -382,7 +388,7 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
 
   // Manejar equipamiento
   const handleEquipSelected = () => {
-    if (!isSelectedUnlocked) return;
+    if (!isSelectedUnlocked || isSelectedLevelLocked) return;
 
     if (selectedNode.isFusion && selectedNode.fusionId) {
       const fusion = ELEMENTAL_FUSIONS.find((f) => f.id === selectedNode.fusionId);
@@ -496,6 +502,8 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
           {/* 2. DIBUJAR CADA NODO RADIAL INTERACTIVO */}
           {radialNodes.map((node) => {
             const unlocked = isNodeUnlocked(node);
+            const reqLvl = getRequiredLevel(node);
+            const isLevelLocked = unlocked && player.level < reqLvl;
             const prereqMet = arePrerequisitesMet(node);
             const isSelected = selectedNodeId === node.id;
             const isCore = node.id === 'core';
@@ -528,14 +536,18 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
                   cy={node.y}
                   r={nodeRadius}
                   fill={
-                    unlocked
+                    isLevelLocked
+                      ? '#1c0a0a'
+                      : unlocked
                       ? '#0d0f17'
                       : prereqMet
                       ? '#171926'
                       : '#0a0a0f'
                   }
                   stroke={
-                    unlocked
+                    isLevelLocked
+                      ? '#ef4444'
+                      : unlocked
                       ? node.color
                       : prereqMet
                       ? '#57534e'
@@ -545,7 +557,7 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
                 />
 
                 {/* Resplandor de desbloqueado */}
-                {unlocked && (
+                {unlocked && !isLevelLocked && (
                   <circle
                     cx={node.x}
                     cy={node.y}
@@ -554,6 +566,20 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
                     stroke={node.color}
                     strokeWidth={1.5}
                     strokeOpacity={0.6}
+                  />
+                )}
+
+                {/* Indicador de bloqueo por degradación */}
+                {isLevelLocked && (
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={nodeRadius + 2}
+                    fill="none"
+                    stroke="#ef4444"
+                    strokeWidth={1.5}
+                    strokeDasharray="2 2"
+                    strokeOpacity={0.8}
                   />
                 )}
 
@@ -568,6 +594,19 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
                 >
                   {unlocked ? node.icon : prereqMet ? node.icon : '🔒'}
                 </text>
+
+                {/* Candado rojo superpuesto si está bloqueada por nivel */}
+                {isLevelLocked && (
+                  <text
+                    x={node.x + 9}
+                    y={node.y - 7}
+                    fontSize={10}
+                    textAnchor="middle"
+                    className="pointer-events-none select-none"
+                  >
+                    🔒
+                  </text>
+                )}
               </g>
             );
           })}
@@ -616,12 +655,25 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
                 <span className="text-[10px] text-amber-300 font-bold bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
                   {selectedNode.bonus}
                 </span>
+                <span className="text-[10px] text-stone-400 font-semibold bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
+                  Requiere Nivel {selectedNodeReqLevel}
+                </span>
                 {!isSelectedUnlocked && selectedNode.id !== 'core' && (
                   <span className="text-[10px] text-stone-400">
                     Costo: <strong>{selectedNode.costSP} SP</strong>
                   </span>
                 )}
               </div>
+
+              {/* Alerta de habilidad sellada por degradación */}
+              {isSelectedLevelLocked && (
+                <div className="mt-2 bg-red-950/70 border border-red-500/60 rounded-xl px-2.5 py-1.5 flex items-center gap-2 text-[11px] text-red-200">
+                  <Lock className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <span>
+                    <strong className="text-red-300">Sellada por degradación:</strong> Requiere Nivel {selectedNodeReqLevel} (Nivel actual: {player.level}). ¡Sube de nivel para reactivarla!
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -631,6 +683,15 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
               <span className="text-[10px] font-bold text-purple-400 bg-purple-950 px-2 py-1 rounded-xl border border-purple-800">
                 Núcleo Activo
               </span>
+            ) : isSelectedLevelLocked ? (
+              <button
+                disabled
+                className="px-3 py-2 bg-red-950/80 text-red-400 border border-red-800/80 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-90 shadow"
+                title={`Requiere Nivel ${selectedNodeReqLevel} para equiparse`}
+              >
+                <Lock className="w-3.5 h-3.5 text-red-500" />
+                <span>Nv. {selectedNodeReqLevel} Req.</span>
+              </button>
             ) : isSelectedUnlocked ? (
               <button
                 onClick={handleEquipSelected}

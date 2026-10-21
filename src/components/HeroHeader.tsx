@@ -1,6 +1,6 @@
 import React from 'react';
 import { Player, Task } from '../types';
-import { Coins, Key, Volume2, VolumeX, AlertTriangle, Download } from 'lucide-react';
+import { Coins, Key, Volume2, VolumeX, AlertTriangle, Download, Skull, ShieldAlert } from 'lucide-react';
 import { sound } from '../services/soundService';
 
 interface HeroHeaderProps {
@@ -17,10 +17,27 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   isDamagedAnimation,
 }) => {
   const [soundOn, setSoundOn] = React.useState(sound.isEnabled());
+  const [now, setNow] = React.useState(() => Date.now());
 
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
   const overdueCount = tasks.filter(
-    (t) => !t.completed && new Date(t.dueDate).getTime() < Date.now()
+    (t) => !t.completed && !t.isFailed && new Date(t.dueDate).getTime() < now
   ).length;
+
+  const urgentTasks = tasks.filter(
+    (t) =>
+      !t.completed &&
+      !t.isFailed &&
+      !t.isHonorDebt &&
+      new Date(t.dueDate).getTime() > now &&
+      new Date(t.dueDate).getTime() - now <= 4 * 3600 * 1000
+  );
+
+  const isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now));
+  const isAgony = !!player.isAgony;
 
   const toggleSound = () => {
     const next = !soundOn;
@@ -37,6 +54,18 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
             <span className="text-base font-black text-amber-400 tracking-wider flex items-center gap-1.5">
               ⚔️ TASKQUEST
             </span>
+            {isAgony && (
+              <span className="text-[10px] font-bold text-red-300 bg-red-950 px-2 py-0.5 rounded-full border border-red-500/70 animate-pulse flex items-center gap-1">
+                <ShieldAlert className="w-3 h-3 text-red-400" />
+                Agonía
+              </span>
+            )}
+            {isCursed && (
+              <span className="text-[10px] font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-500/70 flex items-center gap-1">
+                <Skull className="w-3 h-3 text-purple-400" />
+                -15% EXP
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -83,9 +112,20 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
           <div className={`bg-red-950/70 border border-red-500/50 text-red-200 px-2.5 py-1 rounded-xl text-[11px] flex items-center justify-between animate-pulse ${isDamagedAnimation ? 'animate-damage' : ''}`}>
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-              <span>¡{overdueCount} tarea(s) vencida(s)! Tu personaje se debilita.</span>
+              <span>¡{overdueCount} tarea(s) vencida(s)! Penalización de deleveling aplicada.</span>
             </div>
-            <span className="font-bold text-red-400">-15 HP</span>
+            <span className="font-bold text-red-400">Peligro</span>
+          </div>
+        )}
+
+        {/* Alerta de urgencia pre-expiración (<4 horas) */}
+        {overdueCount === 0 && urgentTasks.length > 0 && (
+          <div className="bg-amber-950/70 border border-amber-500/60 text-amber-200 px-2.5 py-1 rounded-xl text-[11px] flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>¡{urgentTasks.length} tarea(s) al borde de vencer (&lt;4h)! Evita perder nivel.</span>
+            </div>
+            <span className="font-bold text-amber-400 text-[10px]">¡Urgente!</span>
           </div>
         )}
       </div>

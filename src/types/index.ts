@@ -35,7 +35,13 @@ export interface Task {
   recurrenceDays?: number[]; // [1, 2, 3, 4, 5, 6, 0] donde 1=Lunes, 2=Martes... 0=Domingo
   completed: boolean;
   completedAt?: string;
+  isFailed?: boolean;
+  failedAt?: string;
+  isHonorDebt?: boolean;
+  honorDebtExpiresAt?: string;
+  recoveredExpOnRedeem?: number;
   penalizedCount?: number; // Veces que ha causado daño por vencimiento
+  penalizedDelevelCount?: number; // Veces que ha causado deleveling directo
 }
 
 export type BaseElement = 'fire' | 'lightning' | 'earth' | 'ice';
@@ -111,6 +117,46 @@ export interface Player {
   totalDamageSufferedFromProcrastination: number;
   cleanStreakDays: number;
   lastDamageTimestamp?: string;
+  // Sistema de Deleveling y Consecuencias Severas
+  isAgony?: boolean; // Estado de Bancarrota / Agonía (cuando falla en Nivel 1)
+  curseExpiresAt?: string; // Fin de la Maldición por Incumplimiento (-15% EXP)
+  isCursed?: boolean;
+  totalDelevelsSuffered?: number;
+  delevelHistory?: DelevelRecord[];
+}
+
+export interface DelevelRecord {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  timestamp: string;
+  previousLevel: number;
+  newLevel: number;
+  levelsLost: number;
+  hpLost: number;
+  statsLost: {
+    attack: number;
+    speed: number;
+    defense: number;
+    knowledge: number;
+  };
+  isAgonyTriggered?: boolean;
+  redeemed?: boolean;
+}
+
+export interface DelevelEvent {
+  task: Task;
+  previousLevel: number;
+  newLevel: number;
+  levelsLost: number;
+  hpLost: number;
+  statsLost: {
+    attack: number;
+    speed: number;
+    defense: number;
+    knowledge: number;
+  };
+  isAgony: boolean;
 }
 
 export interface Enemy {

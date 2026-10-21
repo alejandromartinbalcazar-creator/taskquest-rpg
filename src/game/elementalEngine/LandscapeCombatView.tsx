@@ -453,6 +453,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       animFrame: 0,
       hitFlash: 0,
       staffOrbColor: '#94a3b8',
+      isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
       isDashing: false,
       dashTimer: 0,
       dashCooldown: 0,
@@ -3530,6 +3531,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       const g = gameStateRef.current;
       const wizard = g.wizard;
+      wizard.isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now()));
       const enemies = g.enemyManager.enemies;
 
       // 1. Dash y Movimiento del Mago (WASD / Flechas / Joystick)

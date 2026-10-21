@@ -17,7 +17,10 @@ import {
   Shield,
   BookOpen,
   Calendar,
-  Heart
+  Heart,
+  Skull,
+  Scale,
+  ShieldAlert
 } from 'lucide-react';
 
 interface TaskViewProps {
@@ -26,6 +29,8 @@ interface TaskViewProps {
   onCompleteTask: (taskId: string) => void;
   onAddTask: (newTask: Omit<Task, 'id' | 'completed'>) => void;
   onDeleteTask?: (taskId: string) => void;
+  onFailTask?: (taskId: string) => void;
+  onRedeemHonorDebt?: (taskId: string) => void;
 }
 
 export const TaskView: React.FC<TaskViewProps> = ({
@@ -34,8 +39,11 @@ export const TaskView: React.FC<TaskViewProps> = ({
   onCompleteTask,
   onAddTask,
   onDeleteTask,
+  onFailTask,
+  onRedeemHonorDebt,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [taskToFail, setTaskToFail] = useState<Task | null>(null);
 
   // Formulario de nueva misión
   const [newTitle, setNewTitle] = useState('');
@@ -118,7 +126,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   };
 
   // Ordenar tareas por vencimiento más próximo
-  const nowTime = Date.now();
+  const [nowTime] = useState(() => Date.now());
   const sortedPendingTasks = tasks
     .filter((t) => !t.completed)
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
@@ -164,6 +172,15 @@ export const TaskView: React.FC<TaskViewProps> = ({
   const hpPercent = Math.max(0, Math.min(100, (player.currentHp / player.maxHp) * 100));
   const expPercent = Math.max(0, Math.min(100, (player.exp / player.maxExp) * 100));
   const isCriticalHp = player.currentHp <= 25;
+  const isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > nowTime));
+  const isAgony = !!player.isAgony;
+
+  // Misiones a menos de 4 horas de expirar (urgencia crítica)
+  const urgentTasks = sortedPendingTasks.filter((t) => {
+    if (t.isFailed || t.isHonorDebt) return false;
+    const diffHours = (new Date(t.dueDate).getTime() - nowTime) / (1000 * 60 * 60);
+    return diffHours > 0 && diffHours <= 4;
+  });
 
   return (
     <div className="max-w-xl mx-auto px-3 py-3 pb-24 space-y-4">
@@ -191,17 +208,31 @@ export const TaskView: React.FC<TaskViewProps> = ({
               </span>
             </div>
 
-            {isCriticalHp ? (
-              <span className="text-[10px] font-bold text-red-400 bg-red-950/80 px-2 py-0.5 rounded-full border border-red-500/50 flex items-center gap-1 animate-pulse">
-                <AlertTriangle className="w-3 h-3" />
-                Debilitado
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-400" />
-                Óptimo
-              </span>
-            )}
+            <div className="flex items-center gap-1 flex-wrap justify-end">
+              {isAgony && (
+                <span className="text-[10px] font-bold text-red-300 bg-red-950 px-2 py-0.5 rounded-full border border-red-500 animate-pulse flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3 text-red-400" />
+                  Agonía
+                </span>
+              )}
+              {isCursed && (
+                <span className="text-[10px] font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-500/70 flex items-center gap-1">
+                  <Skull className="w-3 h-3 text-purple-400" />
+                  -15% EXP
+                </span>
+              )}
+              {isCriticalHp ? (
+                <span className="text-[10px] font-bold text-red-400 bg-red-950/80 px-2 py-0.5 rounded-full border border-red-500/50 flex items-center gap-1 animate-pulse">
+                  <AlertTriangle className="w-3 h-3" />
+                  Crítico
+                </span>
+              ) : !isAgony && !isCursed && (
+                <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  Óptimo
+                </span>
+              )}
+            </div>
           </div>
 
           {/* BARRA DE VIDA (HP) */}
@@ -246,6 +277,23 @@ export const TaskView: React.FC<TaskViewProps> = ({
         </div>
       </div>
 
+      {/* BANNER DE PELIGRO INMINENTE POR PROCRASTINACIÓN (<4 HORAS) */}
+      {urgentTasks.length > 0 && (
+        <div className="bg-gradient-to-r from-red-950 via-rose-950 to-red-950 border-2 border-red-500 rounded-2xl p-3 shadow-[0_0_22px_rgba(239,68,68,0.4)] animate-pulse flex items-center gap-3">
+          <div className="p-2 bg-red-900/60 rounded-xl border border-red-400/50 text-red-300 shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-400 animate-bounce" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-black text-red-100 uppercase tracking-wide flex items-center gap-1.5">
+              ⚠️ ¡Peligro Inminente de Deleveling!
+            </h4>
+            <p className="text-[11px] text-red-200 leading-tight mt-0.5">
+              Tu héroe está al borde del abismo. Completa <span className="font-bold underline text-white">"{urgentTasks[0].title}"</span> en las próximas {Math.max(1, Math.ceil((new Date(urgentTasks[0].dueDate).getTime() - nowTime) / (1000 * 60 * 60)))}h para evitar la pérdida directa de nivel y degradación de atributos.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* 2. CABECERA DE MISIONES Y BOTÓN NUEVA MISIÓN */}
       {/* ============================================================== */}
@@ -285,16 +333,47 @@ export const TaskView: React.FC<TaskViewProps> = ({
             const dueInfo = formatDue(task.dueDate);
             const recurrenceBadge = formatRecurrenceBadge(task);
             const reminderBadge = formatReminderBadge(task);
+            const diffHours = (new Date(task.dueDate).getTime() - nowTime) / (1000 * 60 * 60);
+            const isUrgent = !dueInfo.isOverdue && !task.isFailed && !task.isHonorDebt && diffHours > 0 && diffHours <= 4;
+            const isHonorDebt = !!task.isHonorDebt;
+
+            let cardClass = 'bg-[#121420] border border-stone-800 hover:border-amber-500/50 text-stone-100';
+            if (isHonorDebt) {
+              cardClass = 'bg-gradient-to-r from-amber-950/60 via-[#1b1522] to-amber-950/50 border-2 border-amber-500/80 shadow-[0_0_16px_rgba(245,158,11,0.25)] text-amber-100';
+            } else if (dueInfo.isOverdue || task.isFailed) {
+              cardClass = 'bg-red-950/70 border-2 border-red-500 text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.35)] animate-pulse';
+            } else if (isUrgent) {
+              cardClass = 'bg-red-950/50 border-2 border-red-500 text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse';
+            }
 
             return (
               <div
                 key={task.id}
-                className={`rounded-2xl p-3.5 transition-all shadow-md relative overflow-hidden flex flex-col justify-between gap-2.5 ${
-                  dueInfo.isOverdue
-                    ? 'bg-red-950/70 border-2 border-red-500 text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.35)] animate-pulse'
-                    : 'bg-[#121420] border border-stone-800 hover:border-amber-500/50 text-stone-100'
-                }`}
+                className={`rounded-2xl p-3.5 transition-all shadow-md relative overflow-hidden flex flex-col justify-between gap-2.5 ${cardClass}`}
               >
+                {/* Banner interno de Deuda de Honor */}
+                {isHonorDebt && (
+                  <div className="bg-amber-950/90 border border-amber-500/70 rounded-xl px-2.5 py-1 flex items-center justify-between text-[11px] font-bold text-amber-200">
+                    <span className="flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>⚖️ Deuda de Honor Activa: Saldar recupera 50% de la EXP</span>
+                    </span>
+                    {task.honorDebtExpiresAt && (
+                      <span className="text-[10px] text-amber-300 font-mono">
+                        Expira en {Math.max(0, Math.ceil((new Date(task.honorDebtExpiresAt).getTime() - nowTime) / (1000 * 60 * 60)))}h
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Banner interno de Urgencia Crítica */}
+                {isUrgent && (
+                  <div className="bg-red-900/80 border border-red-500 rounded-xl px-2.5 py-1 flex items-center gap-1.5 text-[11px] font-bold text-white animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                    <span>⚠️ ¡CRÍTICO! Menos de {Math.max(1, Math.ceil(diffHours))}h para deleveling (-{task.difficulty === 'dificil' || task.difficulty === 'epica' ? '2 niveles' : '1 nivel'})</span>
+                  </div>
+                )}
+
                 {/* Fila Superior: Badges de Repetición, Recordatorio y Afinidad */}
                 <div className="flex items-center justify-between gap-2 text-[11px] flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -320,6 +399,11 @@ export const TaskView: React.FC<TaskViewProps> = ({
                       {task.statAffinity === 'knowledge' && <BookOpen className="w-3 h-3 text-cyan-400" />}
                       <span className="capitalize">{task.statAffinity === 'attack' ? 'Ataque (+3)' : task.statAffinity === 'speed' ? 'Velocidad (+3)' : task.statAffinity === 'defense' ? 'Resistencia (+3)' : 'Conocimiento (+3)'}</span>
                     </span>
+
+                    {/* Badge de Dificultad */}
+                    <span className="text-[10px] font-bold text-stone-400 uppercase bg-black/30 px-1.5 py-0.5 rounded border border-stone-800">
+                      {task.difficulty}
+                    </span>
                   </div>
 
                   {/* Vencimiento / Fecha */}
@@ -327,23 +411,25 @@ export const TaskView: React.FC<TaskViewProps> = ({
                     className={`flex items-center gap-1 font-bold px-2 py-0.5 rounded-lg text-[10px] ${
                       dueInfo.isOverdue
                         ? 'bg-red-900 text-white border border-red-400'
+                        : isUrgent
+                        ? 'bg-red-900/90 text-red-200 border border-red-400'
                         : 'bg-[#181a28] text-stone-300'
                     }`}
                   >
                     <Clock className="w-3 h-3" />
                     <span>{dueInfo.text}</span>
-                    {dueInfo.isOverdue && <span className="ml-1 text-red-200">¡VENCIDA (-15 HP)!</span>}
+                    {dueInfo.isOverdue && <span className="ml-1 text-red-200 font-black">¡VENCIDA!</span>}
                   </div>
                 </div>
 
-                {/* Título de la Tarea y Botón Completar */}
+                {/* Título de la Tarea y Botones de Acción */}
                 <div className="flex items-center justify-between gap-3 pt-1">
                   <h3 className="font-bold text-sm text-stone-100 leading-snug flex-1">
                     {task.title}
                   </h3>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {onDeleteTask && (
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    {onDeleteTask && !isHonorDebt && (
                       <button
                         onClick={() => onDeleteTask(task.id)}
                         className="p-2 text-stone-500 hover:text-red-400 hover:bg-stone-800/60 rounded-xl transition"
@@ -353,13 +439,37 @@ export const TaskView: React.FC<TaskViewProps> = ({
                       </button>
                     )}
 
-                    <button
-                      onClick={() => onCompleteTask(task.id)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Completar</span>
-                    </button>
+                    {/* Botón de Rendirse / Declarar Fallida */}
+                    {onFailTask && !isHonorDebt && !task.isFailed && (
+                      <button
+                        type="button"
+                        onClick={() => setTaskToFail(task)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-300 font-bold text-[11px] rounded-xl transition active:scale-95"
+                        title="Declarar tarea fallida y asumir el deleveling"
+                      >
+                        <Skull className="w-3.5 h-3.5 text-red-400" />
+                        <span>Rendirse</span>
+                      </button>
+                    )}
+
+                    {/* Botón de Saldar Deuda de Honor vs Completar Estándar */}
+                    {onRedeemHonorDebt && isHonorDebt ? (
+                      <button
+                        onClick={() => onRedeemHonorDebt(task.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-amber-950 active:scale-95 transition"
+                      >
+                        <Scale className="w-3.5 h-3.5" />
+                        <span>Saldar Deuda (+50% EXP)</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onCompleteTask(task.id)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Completar</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -622,6 +732,81 @@ export const TaskView: React.FC<TaskViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ============================================================== */}
+      {/* 5. MODAL DE CONFIRMACIÓN PARA DECLARAR TAREA FALLIDA (RENDICIÓN) */}
+      {/* ============================================================== */}
+      {taskToFail && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#121420] border-2 border-red-600 rounded-3xl p-5 max-w-md w-full shadow-2xl relative space-y-3.5">
+            <div className="flex items-center gap-2.5 text-red-400">
+              <div className="p-2 bg-red-950 rounded-xl border border-red-500/50">
+                <Skull className="w-6 h-6 text-red-500 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-red-100 uppercase tracking-wide">
+                  ¿Declarar Misión Fallida?
+                </h3>
+                <p className="text-[11px] text-red-300">
+                  El descuido tiene un precio tangible para tu héroe.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-stone-300">
+              ¿Estás seguro de que deseas rendirte en la misión{' '}
+              <span className="font-bold text-amber-300">"{taskToFail.title}"</span>?
+            </p>
+
+            <div className="bg-red-950/70 border border-red-500/50 rounded-2xl p-3.5 text-xs space-y-1.5 text-red-200">
+              <p className="font-bold text-red-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                Consecuencias reales inmediatas:
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-stone-200">
+                <li>
+                  <span className="font-bold text-red-300">Deleveling directo:</span>{' '}
+                  {taskToFail.difficulty === 'dificil' || taskToFail.difficulty === 'epica'
+                    ? 'Pérdida de 2 niveles completos'
+                    : 'Pérdida de 1 nivel completo'}{' '}
+                  (La barra de EXP se vacía al 0%).
+                </li>
+                <li>
+                  <span className="font-bold text-red-300">Degradación de combate:</span> Reducción permanente de Vida Máxima (-15 HP/nivel) y stats (-2 a ataque, velocidad, defensa y conocimiento por nivel).
+                </li>
+                <li>
+                  <span className="font-bold text-red-300">Maldición por Incumplimiento:</span> -15% de ganancia de EXP en mazmorras durante 24 horas.
+                </li>
+                <li>
+                  <span className="font-bold text-amber-300">Deuda de Honor:</span> Se abrirá una ventana de 24 horas para completar la tarea y recuperar el 50% de la EXP perdida.
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setTaskToFail(null)}
+                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onFailTask && taskToFail) {
+                    onFailTask(taskToFail.id);
+                  }
+                  setTaskToFail(null);
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-950 transition active:scale-95 flex items-center gap-1.5"
+              >
+                <Skull className="w-3.5 h-3.5" />
+                <span>Sí, Declarar Fallida</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

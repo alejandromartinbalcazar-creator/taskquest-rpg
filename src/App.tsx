@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell } from './types';
+import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
 import { HeroHeader } from './components/HeroHeader';
@@ -10,6 +10,7 @@ import { DungeonView } from './components/DungeonView';
 import { CharacterView } from './components/CharacterView';
 import { StatsView } from './components/StatsView';
 import { ApkExportModal } from './components/ApkExportModal';
+import { DelevelModal } from './components/DelevelModal';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('tasks');
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isDamagedAnimation, setIsDamagedAnimation] = useState(false);
+  const [delevelModalEvent, setDelevelModalEvent] = useState<DelevelEvent | null>(null);
 
   // Guardar en Storage al cambiar estados
   useEffect(() => {
@@ -35,23 +37,25 @@ export function App() {
 
   // SISTEMA DE CASTIGO CONTRA LA PROCRASTINACIÓN:
   // Chequea periódicamente si hay tareas cuya fecha límite expiró.
-  // Si vencieron y siguen pendientes, el personaje sufre daño directo (-15 HP).
-  const checkProcrastination = useCallback(() => {
-    const result = StorageService.checkProcrastinationDamage(player, tasks);
-    if (result.damageDealt > 0) {
-      sound.playProcrastinationDamage();
+  // Aplica deleveling directo, degradación de atributos, reinicio de EXP,
+  // maldición (-15% EXP en mazmorras) y activa la ventana de Deuda de Honor (24h).
+  const checkTaskPenalties = useCallback(() => {
+    const penaltyResult = StorageService.checkOverdueTaskPenalties(player, tasks);
+    if (penaltyResult.delevelEvents.length > 0) {
+      sound.playDelevelCrackSound();
       setIsDamagedAnimation(true);
-      setTimeout(() => setIsDamagedAnimation(false), 500);
-      setPlayer(result.updatedPlayer);
-      setTasks(result.updatedTasks);
+      setTimeout(() => setIsDamagedAnimation(false), 700);
+      setPlayer(penaltyResult.updatedPlayer);
+      setTasks(penaltyResult.updatedTasks);
+      setDelevelModalEvent(penaltyResult.delevelEvents[0]);
     }
   }, [player, tasks]);
 
   useEffect(() => {
-    checkProcrastination();
-    const interval = setInterval(checkProcrastination, 15000); // Chequeo cada 15 segundos
+    checkTaskPenalties();
+    const interval = setInterval(checkTaskPenalties, 15000); // Chequeo cada 15 segundos
     return () => clearInterval(interval);
-  }, [checkProcrastination]);
+  }, [checkTaskPenalties]);
 
   // Manejador de Ganancia de EXP y Level Up
   const grantExp = (amount: number, goldAmount: number = 0) => {
@@ -250,10 +254,41 @@ export function App() {
 
   // Victoria en Mazmorra
   const handleBattleVictory = (floorNumber: number, expReward: number, goldReward: number) => {
-    grantExp(expReward, goldReward);
+    // Si la maldición por incumplimiento está activa, penalización del 15% de EXP
+    const isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now()));
+    const finalExp = isCursed ? Math.max(1, Math.floor(expReward * 0.85)) : expReward;
+    grantExp(finalExp, goldReward);
     setDungeons((prev) =>
       prev.map((d) => (d.floorNumber === floorNumber ? { ...d, cleared: true } : d))
     );
+  };
+
+  // Rendirse / Declarar Tarea Fallida (Penalización Directa)
+  const handleFailTask = (taskId: string) => {
+    const result = StorageService.failTaskManually(player, tasks, taskId);
+    if (result.event) {
+      sound.playDelevelCrackSound();
+      setIsDamagedAnimation(true);
+      setTimeout(() => setIsDamagedAnimation(false), 700);
+      setPlayer(result.updatedPlayer);
+      setTasks(result.updatedTasks);
+      setDelevelModalEvent(result.event);
+    }
+  };
+
+  // Saldar Deuda de Honor (Recuperar 50% de EXP perdida)
+  const handleRedeemHonorDebt = (taskId: string) => {
+    const result = StorageService.redeemHonorDebt(player, tasks, taskId);
+    if (result.recoveredExp > 0) {
+      sound.playHonorRedeemedSound();
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+      setPlayer(result.updatedPlayer);
+      setTasks(result.updatedTasks);
+    }
   };
 
   // Daño en Mazmorra
@@ -304,6 +339,8 @@ export function App() {
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}
             onDeleteTask={handleDeleteTask}
+            onFailTask={handleFailTask}
+            onRedeemHonorDebt={handleRedeemHonorDebt}
           />
         )}
 
@@ -356,6 +393,14 @@ export function App() {
         isOpen={isApkModalOpen}
         onClose={() => setIsApkModalOpen(false)}
       />
+
+      {/* Modal Dramático de Deleveling y Fractura de Poder */}
+      {delevelModalEvent && (
+        <DelevelModal
+          event={delevelModalEvent}
+          onClose={() => setDelevelModalEvent(null)}
+        />
+      )}
     </div>
   );
 }

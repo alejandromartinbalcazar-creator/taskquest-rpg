@@ -76,6 +76,7 @@ export class IsometricRenderer {
       chargeType?: string;
       channelLockTimer?: number;
       channeledStream?: ChanneledStreamState | null;
+      isCursed?: boolean;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -1109,6 +1110,7 @@ export class IsometricRenderer {
       chargeType?: string;
       channelLockTimer?: number;
       channeledStream?: ChanneledStreamState | null;
+      isCursed?: boolean;
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -2076,6 +2078,36 @@ export class IsometricRenderer {
       ctx.beginPath();
       ctx.arc(0, -10, 24, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // Aura de Maldición por Incumplimiento (Miasma sutil morado/oscuro al pie y cuerpo del mago)
+    if (wizard.isCursed) {
+      ctx.save();
+      const curseTime = performance.now() * 0.003;
+      const pulse = Math.sin(curseTime * 2) * 3;
+      
+      // Halo radial espectral oscuro
+      const auraGrad = ctx.createRadialGradient(0, -10, 6, 0, -10, 26 + pulse);
+      auraGrad.addColorStop(0, 'rgba(126, 34, 206, 0.45)');
+      auraGrad.addColorStop(0.5, 'rgba(88, 28, 135, 0.28)');
+      auraGrad.addColorStop(0.85, 'rgba(24, 9, 39, 0.15)');
+      auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(0, -10, 28 + pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Esferas oscuras giratorias de remordimiento
+      for (let i = 0; i < 3; i++) {
+        const orbitAngle = curseTime * 1.5 + (i * Math.PI * 2) / 3;
+        const ox = Math.cos(orbitAngle) * (18 + Math.sin(curseTime * 3 + i) * 3);
+        const oy = -10 + Math.sin(orbitAngle) * (11 + Math.cos(curseTime * 2 + i) * 2);
+        ctx.fillStyle = 'rgba(192, 132, 252, 0.55)';
+        ctx.beginPath();
+        ctx.arc(ox, oy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     const isLevitating = !!(wizard.channelLockTimer && wizard.channelLockTimer > 0);

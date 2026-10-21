@@ -327,6 +327,10 @@ export const DEFAULT_PLAYER: Player = {
   totalTasksCompleted: 0,
   totalDamageSufferedFromProcrastination: 0,
   cleanStreakDays: 1,
+  isAgony: false,
+  isCursed: false,
+  totalDelevelsSuffered: 0,
+  delevelHistory: [],
 };
 
 // TAREAS INICIALES DE EJEMPLO

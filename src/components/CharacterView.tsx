@@ -9,7 +9,9 @@ import {
   Sparkles,
   Edit2,
   Check,
-  ShieldAlert
+  ShieldAlert,
+  Skull,
+  TrendingDown
 } from 'lucide-react';
 
 interface CharacterViewProps {
@@ -25,6 +27,7 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [nameInput, setNameInput] = useState(player.name);
+  const [now] = useState(() => Date.now());
 
   const handleSaveName = () => {
     if (nameInput.trim()) {
@@ -135,18 +138,32 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
 
         <p className="text-xs text-purple-400 font-bold mt-0.5">{player.title}</p>
 
-        {/* Estado del Héroe */}
-        {player.currentHp <= 25 ? (
-          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950/70 border border-red-500/50 text-[11px] text-red-200">
-            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-            <span>Debilitado por Procrastinar ({player.currentHp} HP)</span>
-          </div>
-        ) : (
-          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-500/40 text-[11px] text-emerald-300">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Enfoque Óptimo ({player.cleanStreakDays} días de racha)</span>
-          </div>
-        )}
+        {/* Estado del Héroe y Efectos de Castigo */}
+        <div className="mt-3 flex items-center justify-center gap-1.5 flex-wrap">
+          {player.isAgony && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950 border border-red-500 text-[11px] text-red-200 animate-pulse">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              <span>En Agonía / Bancarrota (Piso Nivel 1)</span>
+            </div>
+          )}
+          {player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-950/90 border border-purple-500/70 text-[11px] text-purple-200">
+              <Skull className="w-3.5 h-3.5 text-purple-400" />
+              <span>Maldición (-15% EXP en mazmorras)</span>
+            </div>
+          )}
+          {player.currentHp <= 25 ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950/70 border border-red-500/50 text-[11px] text-red-200">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              <span>Debilitado ({player.currentHp} HP)</span>
+            </div>
+          ) : !player.isAgony && !(player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now) && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-500/40 text-[11px] text-emerald-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Enfoque Óptimo ({player.cleanStreakDays} días de racha)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ATRIBUTOS DEL MAGO (LIMPIO Y FÁCIL DE ENTENDER) */}
@@ -201,6 +218,68 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
             );
           })}
         </div>
+      </div>
+
+      {/* REGISTRO DE CASTIGO: HISTORIAL DE DELEVELING */}
+      <div className="bg-[#121420] border-2 border-stone-800 rounded-3xl p-4 shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-xl bg-red-950/70 border border-red-500/40 text-red-400">
+              <TrendingDown className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-stone-200 uppercase tracking-wide">
+                Consecuencias Reales: Deleveling
+              </h4>
+              <p className="text-[10px] text-stone-400">
+                Pérdidas de nivel y degradación de poder por tareas expiradas.
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[11px] font-black text-red-400 bg-red-950 px-2.5 py-1 rounded-full border border-red-800">
+              {player.totalDelevelsSuffered || 0} Niveles Perdidos
+            </span>
+          </div>
+        </div>
+
+        {player.delevelHistory && player.delevelHistory.length > 0 ? (
+          <div className="space-y-2 pt-1">
+            {player.delevelHistory.slice(0, 5).map((record) => (
+              <div
+                key={record.id}
+                className="bg-[#161825] border border-red-950 p-2.5 rounded-2xl flex items-center justify-between text-xs"
+              >
+                <div>
+                  <div className="font-bold text-stone-200 flex items-center gap-1.5">
+                    <Skull className="w-3 h-3 text-red-400 shrink-0" />
+                    <span>{record.taskTitle}</span>
+                  </div>
+                  <div className="text-[10px] text-stone-400 flex items-center gap-2 mt-0.5">
+                    <span>{new Date(record.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>•</span>
+                    <span className="text-red-400 font-bold font-mono">Nv. {record.previousLevel} ➔ Nv. {record.newLevel}</span>
+                    <span>•</span>
+                    <span className="text-stone-400 font-mono">-{record.hpLost} Max HP</span>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-black text-red-300 bg-red-900/60 border border-red-700/60 px-2 py-0.5 rounded-lg">
+                    -{record.levelsLost} {record.levelsLost === 1 ? 'Nivel' : 'Niveles'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-4 bg-[#0d0f17] rounded-2xl border border-dashed border-stone-800">
+            <p className="text-xs text-stone-400">
+              ✨ Tu récord está impecable. No has sufrido deleveling por incumplimiento.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
