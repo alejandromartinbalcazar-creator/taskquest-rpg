@@ -689,6 +689,27 @@ export interface AmbientLeafParticle {
   alpha: number;
 }
 
+export interface FireBarrierEntity {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  flameHeight: number;
+  maxHealth: number;
+  health: number;
+  isExtinguished: boolean;
+  extinguishProgress: number; // 0 (ardiendo) a 1.0 (totalmente extinta)
+  hitFlash: number;
+  lastDamageTime: number;
+  flamePillars: Array<{
+    relX: number;
+    relY: number;
+    size: number;
+    phaseOffset: number;
+  }>;
+}
+
 export interface LevelChunk {
   id: string;
   indexX: number;
@@ -707,6 +728,7 @@ export interface ForestLevelData {
   trees: ForestTreeEntity[];
   puzzleWheel: PuzzleWheelEntity;
   gateDoor: GateDoorEntity;
+  fireBarriers: FireBarrierEntity[];
   boundaryColliders: Array<{ x: number; y: number; radius: number }>;
   ambientLeaves: AmbientLeafParticle[];
   trailWaypoints: Array<{ x: number; y: number; width: number }>;

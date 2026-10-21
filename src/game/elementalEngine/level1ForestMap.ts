@@ -7,6 +7,7 @@ import {
   ForestTreeEntity,
   PuzzleWheelEntity,
   GateDoorEntity,
+  FireBarrierEntity,
   AmbientLeafParticle,
   PhysicalObstacle,
 } from './types';
@@ -131,6 +132,72 @@ export function createLevel1Forest(): {
     pillarRightX: 1340,
   };
 
+  // 4.5 Función auxiliar para crear lengüetas de fuego animadas en las barreras
+  const createFlamePillars = (width: number) => {
+    const pillars: Array<{ relX: number; relY: number; size: number; phaseOffset: number }> = [];
+    const count = Math.max(8, Math.floor(width / 20));
+    for (let i = 0; i < count; i++) {
+      const relX = -width / 2 + (i + 0.5) * (width / count);
+      const relY = Math.sin(i * 1.6) * 5;
+      const size = 18 + Math.cos(i * 2.1) * 5;
+      const phaseOffset = i * 0.45;
+      pillars.push({ relX, relY, size, phaseOffset });
+    }
+    return pillars;
+  };
+
+  // 4.6 Barreras de Fuego del Bosque (Requieren Magia de Hielo para ser Extinguidas)
+  const fireBarriers: FireBarrierEntity[] = [
+    // BARRERA 1: Curva Oeste del Sendero (Desfiladero tras salir del campamento)
+    {
+      id: 'fire-barrier-1',
+      x: 1050,
+      y: 6450,
+      width: 260,
+      height: 44,
+      flameHeight: 58,
+      maxHealth: 100,
+      health: 100,
+      isExtinguished: false,
+      extinguishProgress: 0,
+      hitFlash: 0,
+      lastDamageTime: 0,
+      flamePillars: createFlamePillars(260),
+    },
+    // BARRERA 2: Sendero Este aproximándose al Checkpoint / Portón
+    {
+      id: 'fire-barrier-2',
+      x: 1320,
+      y: 5050,
+      width: 270,
+      height: 44,
+      flameHeight: 58,
+      maxHealth: 100,
+      health: 100,
+      isExtinguished: false,
+      extinguishProgress: 0,
+      hitFlash: 0,
+      lastDamageTime: 0,
+      flamePillars: createFlamePillars(270),
+    },
+    // BARRERA 3: Camino de piedra ascendente tras el portón hacia la Arena del Jefe
+    {
+      id: 'fire-barrier-3',
+      x: 1200,
+      y: 3200,
+      width: 300,
+      height: 44,
+      flameHeight: 62,
+      maxHealth: 100,
+      health: 100,
+      isExtinguished: false,
+      extinguishProgress: 0,
+      hitFlash: 0,
+      lastDamageTime: 0,
+      flamePillars: createFlamePillars(300),
+    },
+  ];
+
   // 5. Bosque de árboles densos con Tronco (Y-Sort) y Canopy Superior
   const trees: ForestTreeEntity[] = [];
   const treeColors = ['#1e3a1e', '#163319', '#244524', '#17361b'];
@@ -204,6 +271,17 @@ export function createLevel1Forest(): {
   for (let bx = 1360; bx <= 2100; bx += 50) {
     boundaryColliders.push({ x: bx, y: 3980, radius: 28 });
   }
+
+  // Rocas ciclópeas flanqueando los extremos laterales de cada Barrera de Fuego
+  // Barrera 1 (X: 1050, Y: 6450, W: 260)
+  boundaryColliders.push({ x: 1050 - 130 - 22, y: 6450, radius: 26 });
+  boundaryColliders.push({ x: 1050 + 130 + 22, y: 6450, radius: 26 });
+  // Barrera 2 (X: 1320, Y: 5050, W: 270)
+  boundaryColliders.push({ x: 1320 - 135 - 22, y: 5050, radius: 26 });
+  boundaryColliders.push({ x: 1320 + 135 + 22, y: 5050, radius: 26 });
+  // Barrera 3 (X: 1200, Y: 3200, W: 300)
+  boundaryColliders.push({ x: 1200 - 150 - 22, y: 3200, radius: 26 });
+  boundaryColliders.push({ x: 1200 + 150 + 22, y: 3200, radius: 26 });
 
   // 7. Obstáculos físicos iniciales (Cajas, Barriles destructibles, Carpa, Hoguera)
   const initialObstacles: PhysicalObstacle[] = [];
@@ -427,6 +505,7 @@ export function createLevel1Forest(): {
     trees,
     puzzleWheel,
     gateDoor,
+    fireBarriers,
     boundaryColliders,
     ambientLeaves,
     trailWaypoints,

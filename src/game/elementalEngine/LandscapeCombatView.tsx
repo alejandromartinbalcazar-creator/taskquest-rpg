@@ -482,6 +482,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     plasmaTornadoes: [] as PlasmaTornadoEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
+    lastFireBarrierBurnTime: 0,
+    lastExtinguishSizzleTime: 0,
     particles: [] as Particle[],
     floatingTexts: [] as FloatingText[],
     screenShake: 0,
@@ -3287,6 +3289,51 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             }
           }
         }
+
+        // Colisión física y daño por fuego con las Barreras de Fuego activas
+        if (forest.fireBarriers) {
+          forest.fireBarriers.forEach((barrier) => {
+            if (barrier.isExtinguished) return;
+            const halfW = barrier.width / 2;
+            const halfH = barrier.height / 2;
+            const inX = wizard.x >= barrier.x - halfW - 12 && wizard.x <= barrier.x + halfW + 12;
+            const inY = Math.abs(wizard.y - barrier.y) < halfH + wizard.radius;
+            if (inX && inY) {
+              // Empuje físico para bloquear el paso
+              if (wizard.y > barrier.y) {
+                wizard.y = barrier.y + halfH + wizard.radius;
+              } else {
+                wizard.y = barrier.y - halfH - wizard.radius;
+              }
+
+              // Daño por quemadura periódica al tocar físicamente las llamas
+              if (frameNow - (g.lastFireBarrierBurnTime || 0) >= 550) {
+                g.lastFireBarrierBurnTime = frameNow;
+                elementalSound.playFireBurnHurt();
+                wizard.hitFlash = 10;
+                g.screenShake = 3.5;
+                const burnDmg = 5;
+                g.currentHp = Math.max(0, g.currentHp - burnDmg);
+                setCurrentHp(g.currentHp);
+                onPlayerTakeDamage(burnDmg);
+                g.floatingTexts.push({
+                  id: `burn_${frameNow}`,
+                  x: wizard.x,
+                  y: wizard.y - 24,
+                  text: '-5 🔥 ¡QUEMADURA!',
+                  color: '#ff4500',
+                  fontSize: 13,
+                  opacity: 1,
+                  vy: -1.0,
+                  life: 25,
+                });
+                if (g.currentHp <= 0) {
+                  setIsDefeated(true);
+                }
+              }
+            }
+          });
+        }
       }
 
       // SEGUIMIENTO DE CÁMARA CERCANA (con anticipación hacia la dirección del mago)
@@ -3500,6 +3547,185 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+
+        // INTERACCIÓN CON MAGIA DE HIELO SOBRE LAS BARRERAS DE FUEGO
+        if (forest.fireBarriers) {
+          forest.fireBarriers.forEach((barrier) => {
+            if (barrier.hitFlash > 0) barrier.hitFlash--;
+
+            if (!barrier.isExtinguished) {
+              const halfW = barrier.width / 2;
+              const halfH = barrier.height / 2;
+
+              // A. Proyectiles amigables de Hielo (ice_shard, ice_lance, cryo_storm, etc.)
+              g.projectiles.forEach((p) => {
+                if (p.isHostile || p.life <= 0) return;
+                const isIce = p.spellType === 'ice_shard' || p.spellType === 'ice_lance' || p.spellType === 'cryo_storm' || p.statusToApply === 'frozen';
+                if (!isIce) return;
+
+                const inX = p.x >= barrier.x - halfW - p.radius && p.x <= barrier.x + halfW + p.radius;
+                const inY = Math.abs(p.y - barrier.y) <= halfH + p.radius;
+                if (inX && inY) {
+                  p.life = 0; // Se extingue al chocar contra las llamas
+                  const dmg = p.spellType === 'ice_lance' ? 55 : (p.spellType === 'cryo_storm' ? 35 : 25);
+                  barrier.health = Math.max(0, barrier.health - dmg);
+                  barrier.hitFlash = 12;
+                  barrier.lastDamageTime = frameNow;
+                  elementalSound.playFireExtinguishSizzle();
+
+                  g.floatingTexts.push({
+                    id: `ext_hit_${frameNow}_${p.id}`,
+                    x: p.x,
+                    y: barrier.y - 28,
+                    text: `-${dmg} ❄️ ENFRIANDO`,
+                    color: '#00f0ff',
+                    fontSize: 13,
+                    opacity: 1,
+                    vy: -1.1,
+                    life: 25,
+                  });
+
+                  for (let s = 0; s < 8; s++) {
+                    const sAng = Math.random() * Math.PI * 2;
+                    g.particles.push({
+                      id: `steam_p_${frameNow}_${Math.random()}`,
+                      x: p.x,
+                      y: p.y,
+                      vx: Math.cos(sAng) * 2.0,
+                      vy: Math.sin(sAng) * 1.5 - 1.2,
+                      radius: 2.5 + Math.random() * 2.0,
+                      color: s % 2 === 0 ? '#e0f7fa' : '#ffffff',
+                      alpha: 0.85,
+                      life: 18,
+                    });
+                  }
+                }
+              });
+
+              // B. Chorro Continuo de Hielo (Orbe de Hielo / Habilidad Canalizada)
+              if (wizard.channeledStream.active && wizard.channeledStream.type === 'ice') {
+                const stream = wizard.channeledStream;
+                const distToBarrier = Math.hypot(barrier.x - wizard.x, (barrier.y - wizard.y) / 0.58);
+                if (distToBarrier <= stream.range + halfW) {
+                  const angToBarrier = Math.atan2((barrier.y - wizard.y) / 0.58, barrier.x - wizard.x);
+                  let angDiff = Math.abs(angToBarrier - stream.aimAngle);
+                  while (angDiff > Math.PI) angDiff = Math.abs(angDiff - Math.PI * 2);
+
+                  if (angDiff <= stream.spreadAngle / 2 + 0.35) {
+                    barrier.health = Math.max(0, barrier.health - dt * 0.08);
+                    barrier.hitFlash = 5;
+                    barrier.lastDamageTime = frameNow;
+
+                    if (frameNow - (g.lastExtinguishSizzleTime || 0) >= 140) {
+                      g.lastExtinguishSizzleTime = frameNow;
+                      elementalSound.playFireExtinguishSizzle();
+                    }
+
+                    if (Math.random() < 0.45) {
+                      g.particles.push({
+                        id: `steam_c_${frameNow}_${Math.random()}`,
+                        x: barrier.x + (Math.random() - 0.5) * barrier.width * 0.7,
+                        y: barrier.y - 10 + (Math.random() - 0.5) * 10,
+                        vx: (Math.random() - 0.5) * 1.8,
+                        vy: -1.8 - Math.random() * 2.2,
+                        radius: 3.0 + Math.random() * 2.5,
+                        color: '#e0f7fa',
+                        alpha: 0.8,
+                        life: 20,
+                      });
+                    }
+                  }
+                }
+              }
+
+              // C. Rayo Criogénico continuo
+              g.cryoBeams.forEach((beam) => {
+                const bx1 = wizard.x + Math.cos(beam.aimAngle) * 16;
+                const by1 = wizard.y - 12 + Math.sin(beam.aimAngle) * 10;
+                const bx2 = bx1 + Math.cos(beam.aimAngle) * beam.range;
+                const by2 = by1 + Math.sin(beam.aimAngle) * beam.range * 0.72;
+                const minX = Math.min(bx1, bx2);
+                const maxX = Math.max(bx1, bx2);
+                if (barrier.x + halfW >= minX && barrier.x - halfW <= maxX) {
+                  const bdx = bx2 - bx1;
+                  const bdy = by2 - by1;
+                  const t = Math.max(0, Math.min(1, ((barrier.y - by1) / (bdy || 1))));
+                  const px = bx1 + t * bdx;
+                  if (Math.abs(px - barrier.x) <= halfW + 15) {
+                    barrier.health = Math.max(0, barrier.health - dt * 0.12);
+                    barrier.hitFlash = 6;
+                    barrier.lastDamageTime = frameNow;
+                    if (frameNow - (g.lastExtinguishSizzleTime || 0) >= 120) {
+                      g.lastExtinguishSizzleTime = frameNow;
+                      elementalSound.playFireExtinguishSizzle();
+                    }
+                  }
+                }
+              });
+
+              // D. Púas de Erupción Glacial
+              g.glacialEruptions.forEach((eruption) => {
+                eruption.segments.forEach((seg) => {
+                  if (seg.emerged && Math.abs(seg.x - barrier.x) <= halfW + 25 && Math.abs(seg.y - barrier.y) <= halfH + 25) {
+                    barrier.health = Math.max(0, barrier.health - dt * 0.18);
+                    barrier.hitFlash = 8;
+                    barrier.lastDamageTime = frameNow;
+                  }
+                });
+              });
+
+              // E. Vórtice de Choque Térmico
+              g.thermalVortices.forEach((vortex) => {
+                if (Math.hypot(vortex.x - barrier.x, (vortex.y - barrier.y) / 0.58) <= vortex.currentRadius + halfW) {
+                  barrier.health = Math.max(0, barrier.health - dt * 0.15);
+                  barrier.hitFlash = 8;
+                }
+              });
+
+              // Comprobación de Extinción Total de la Barrera de Fuego
+              if (barrier.health <= 0) {
+                barrier.health = 0;
+                barrier.isExtinguished = true;
+                elementalSound.playFireBarrierExtinguished();
+                g.screenShake = 9;
+
+                g.floatingTexts.push({
+                  id: `ext_done_${frameNow}_${barrier.id}`,
+                  x: barrier.x,
+                  y: barrier.y - 42,
+                  text: '❄️ ¡BARRERA DE FUEGO EXTINTA! PASO LIBRE',
+                  color: '#38bdf8',
+                  fontSize: 14,
+                  opacity: 1,
+                  vy: -1.3,
+                  life: 55,
+                });
+
+                // Erupción voluminosa de vapor blanco y chispas disipadas
+                for (let s = 0; s < 26; s++) {
+                  const sAng = Math.random() * Math.PI * 2;
+                  const sSpd = 1.6 + Math.random() * 3.6;
+                  g.particles.push({
+                    id: `steam_blast_${frameNow}_${s}`,
+                    x: barrier.x + (Math.random() - 0.5) * barrier.width,
+                    y: barrier.y - 8,
+                    vx: Math.cos(sAng) * sSpd,
+                    vy: Math.sin(sAng) * sSpd * 0.58 - 1.4,
+                    radius: 3.5 + Math.random() * 3.5,
+                    color: s % 3 === 0 ? '#38bdf8' : (s % 2 === 0 ? '#e0f7fa' : '#ffffff'),
+                    alpha: 0.95,
+                    life: 28,
+                  });
+                }
+              }
+            } else {
+              // Si ya está extinguida, animar extinguishProgress hacia 1.0
+              if (barrier.extinguishProgress < 1.0) {
+                barrier.extinguishProgress = Math.min(1.0, barrier.extinguishProgress + dt / 800);
+              }
+            }
+          });
+        }
       }
 
       // 3. Actualizar IA de Enemigos
@@ -3528,6 +3754,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           resolveCircleObstacleCollision(enemy, obs);
         });
       });
+
+      // Colisión de enemigos contra Barreras de Fuego activas
+      if (g.forestLevel && g.forestLevel.fireBarriers) {
+        g.forestLevel.fireBarriers.forEach((barrier) => {
+          if (barrier.isExtinguished) return;
+          const halfW = barrier.width / 2;
+          const halfH = barrier.height / 2;
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            if (enemy.x >= barrier.x - halfW - enemy.radius && enemy.x <= barrier.x + halfW + enemy.radius) {
+              if (Math.abs(enemy.y - barrier.y) < halfH + enemy.radius) {
+                if (enemy.y > barrier.y) {
+                  enemy.y = barrier.y + halfH + enemy.radius;
+                } else {
+                  enemy.y = barrier.y - halfH - enemy.radius;
+                }
+              }
+            }
+          });
+        });
+      }
 
       // 4. Actualizar Proyectiles y Colisiones
       for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {

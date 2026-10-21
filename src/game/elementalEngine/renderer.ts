@@ -27,6 +27,7 @@ import {
   ForestTreeEntity,
   PuzzleWheelEntity,
   GateDoorEntity,
+  FireBarrierEntity,
   AmbientLeafParticle,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
@@ -192,6 +193,16 @@ export class IsometricRenderer {
         renderList.push({
           y: forestLevel.gateDoor.y,
           draw: () => this.drawGateDoor(ctx, forestLevel.gateDoor),
+        });
+      }
+
+      if (forestLevel.fireBarriers) {
+        forestLevel.fireBarriers.forEach((barrier) => {
+          if (!isInFrustum(barrier.x, barrier.y, barrier.width + 120, frustum)) return;
+          renderList.push({
+            y: barrier.y,
+            draw: () => this.drawFireBarrier(ctx, barrier, wizard),
+          });
         });
       }
     }
@@ -3898,6 +3909,11 @@ export class IsometricRenderer {
       ctx.ellipse(arenaCenterX, arenaCenterY, arenaRadius * 0.65, arenaRadius * 0.42, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
+
+    // 5. Suelo calcinado y cenizas para las Barreras de Fuego
+    if (levelData.fireBarriers) {
+      this.drawFireBarriersGround(ctx, frustum, levelData.fireBarriers);
+    }
   }
 
   // CAPA 2 (Y-SORTED): Tronco de árbol y raíces en el suelo
@@ -4147,6 +4163,243 @@ export class IsometricRenderer {
 
     drawPillar(gate.pillarLeftX);
     drawPillar(gate.pillarRightX);
+
+    ctx.restore();
+  }
+
+  // CAPA DE SUELO: Suelo calcinado y cenizas para las Barreras de Fuego
+  private static drawFireBarriersGround(
+    ctx: CanvasRenderingContext2D,
+    frustum: FrustumBounds,
+    barriers: FireBarrierEntity[]
+  ) {
+    const squish = 0.58;
+    barriers.forEach((barrier) => {
+      if (!isInFrustum(barrier.x, barrier.y, barrier.width + 60, frustum)) return;
+
+      const bx = barrier.x;
+      const by = barrier.y;
+      const bw = barrier.width;
+      const bh = barrier.height;
+
+      ctx.save();
+      if (!barrier.isExtinguished) {
+        // Suelo calcinado bajo las llamas
+        ctx.fillStyle = 'rgba(20, 10, 5, 0.72)';
+        ctx.beginPath();
+        ctx.ellipse(bx, by, bw * 0.54, (bh + 14) * 0.54 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Resplandor térmico de magma en el suelo
+        const magmaGrad = ctx.createRadialGradient(bx, by, 10, bx, by, bw * 0.52);
+        magmaGrad.addColorStop(0, 'rgba(255, 109, 0, 0.45)');
+        magmaGrad.addColorStop(0.5, 'rgba(234, 88, 12, 0.22)');
+        magmaGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+        ctx.fillStyle = magmaGrad;
+        ctx.beginPath();
+        ctx.ellipse(bx, by, bw * 0.52, (bh + 10) * 0.52 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fisuras de lava brillantes en el terreno
+        ctx.strokeStyle = 'rgba(255, 180, 0, 0.6)';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        const crackSteps = 8;
+        for (let c = 0; c <= crackSteps; c++) {
+          const cx = bx - bw * 0.44 + (c / crackSteps) * (bw * 0.88);
+          const cy = by + (Math.sin(c * 2.2 + Date.now() * 0.002) * 5) * squish;
+          if (c === 0) ctx.moveTo(cx, cy);
+          else ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+      } else {
+        // Suelo de ceniza fría y hollín extinto
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
+        ctx.beginPath();
+        ctx.ellipse(bx, by, bw * 0.52, (bh + 8) * 0.5 * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Escarcha helada y cristales disipados
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.ellipse(bx, by, bw * 0.48, (bh + 4) * 0.46 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+
+  // CAPA Y-SORTED: Barrera de Fuego Llameante y Reactiva al Hielo
+  private static drawFireBarrier(
+    ctx: CanvasRenderingContext2D,
+    barrier: FireBarrierEntity,
+    wizard: { x: number; y: number }
+  ) {
+    ctx.save();
+    const bx = barrier.x;
+    const by = barrier.y;
+    const bw = barrier.width;
+    const squish = 0.58;
+    const nowTime = Date.now() * 0.003;
+
+    if (!barrier.isExtinguished) {
+      // 1. Resplandor e iluminación ambiental de calor
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const glowGrad = ctx.createRadialGradient(bx, by - 24, 20, bx, by - 24, bw * 0.55);
+      glowGrad.addColorStop(0, 'rgba(255, 109, 0, 0.35)');
+      glowGrad.addColorStop(0.6, 'rgba(234, 88, 12, 0.15)');
+      glowGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.ellipse(bx, by - 24, bw * 0.55, 60, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 2. Columnas y lengüetas de llamas entrelazadas
+      const healthRatio = Math.max(0.1, barrier.health / barrier.maxHealth);
+      const isCooling = barrier.hitFlash > 0;
+
+      barrier.flamePillars.forEach((pillar, pIdx) => {
+        const px = bx + pillar.relX;
+        const py = by + pillar.relY * squish;
+        const flamePulse = Math.sin(nowTime * 3.5 + pillar.phaseOffset);
+        const flameH = (barrier.flameHeight + flamePulse * 10) * healthRatio;
+        const sway = Math.cos(nowTime * 2.8 + pillar.phaseOffset) * 5;
+        const flameW = pillar.size * (0.8 + healthRatio * 0.4);
+
+        ctx.save();
+
+        // Gradiente vertical de la llama
+        const flameGrad = ctx.createLinearGradient(px, py, px + sway, py - flameH);
+        if (isCooling) {
+          // Destello de escarcha/enfriamiento al ser impactada por hielo
+          flameGrad.addColorStop(0, '#ffffff');
+          flameGrad.addColorStop(0.35, '#bae6fd');
+          flameGrad.addColorStop(0.7, '#38bdf8');
+          flameGrad.addColorStop(1, '#0284c7');
+        } else {
+          // Fuego ardiente estándar
+          flameGrad.addColorStop(0, '#ffffff');
+          flameGrad.addColorStop(0.2, '#fef08a');
+          flameGrad.addColorStop(0.55, '#ff6d00');
+          flameGrad.addColorStop(0.85, '#ea580c');
+          flameGrad.addColorStop(1, '#b91c1c');
+        }
+
+        ctx.fillStyle = flameGrad;
+        ctx.beginPath();
+        ctx.moveTo(px - flameW, py);
+        ctx.quadraticCurveTo(px - flameW * 0.5 + sway * 0.6, py - flameH * 0.55, px + sway, py - flameH);
+        ctx.quadraticCurveTo(px + flameW * 0.5 + sway * 0.6, py - flameH * 0.55, px + flameW, py);
+        ctx.closePath();
+        ctx.fill();
+
+        // Núcleo blanco incandescente en la base
+        ctx.fillStyle = isCooling ? 'rgba(255, 255, 255, 0.85)' : 'rgba(254, 240, 138, 0.85)';
+        ctx.beginPath();
+        ctx.ellipse(px, py - 4, flameW * 0.45, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Ascuas y chispas flotando verticalmente
+        if ((pIdx + Math.floor(nowTime * 4)) % 3 === 0) {
+          const sparkY = py - flameH - ((nowTime * 40 + pillar.phaseOffset * 20) % 35);
+          const sparkX = px + Math.sin(nowTime * 4 + pillar.phaseOffset) * 6;
+          ctx.fillStyle = isCooling ? '#38bdf8' : '#fde047';
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // 3. Destello de impacto global al recibir daño de hielo
+      if (barrier.hitFlash > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(224, 247, 250, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(bx, by - barrier.flameHeight * 0.4, bw * 0.5, barrier.flameHeight * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 4. HUD / Indicador Táctico flotante al aproximarse el mago
+      const distToWizard = Math.hypot(wizard.x - bx, (wizard.y - by) / squish);
+      if (distToWizard < 240 || barrier.health < barrier.maxHealth) {
+        ctx.save();
+        const hudY = by - barrier.flameHeight - 24;
+        ctx.translate(bx, hudY);
+
+        // Fondo oscuro translúcido
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 1.5;
+        const bW = 160;
+        const bH = 32;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(-bW / 2, -bH / 2, bW, bH, 8);
+        } else {
+          ctx.rect(-bW / 2, -bH / 2, bW, bH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        // Título del obstáculo
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('BARRERA DE FUEGO ❄️', 0, -4);
+
+        // Barra de salud / extinción (de Rojo fuego a Cian hielo)
+        const barW = 136;
+        const barH = 5;
+        const barX = -barW / 2;
+        const barY = 4;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        const fillW = Math.max(0, barW * (barrier.health / barrier.maxHealth));
+        const barGrad = ctx.createLinearGradient(barX, barY, barX + barW, barY);
+        barGrad.addColorStop(0, '#ef4444');
+        barGrad.addColorStop(0.5, '#f97316');
+        barGrad.addColorStop(1, '#00e5ff');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(barX, barY, fillW, barH);
+
+        ctx.restore();
+      }
+    } else {
+      // Estado Extinguido: Humo tenue y cenizas frías
+      const smokeAlpha = Math.max(0, (1 - barrier.extinguishProgress) * 0.6);
+      if (smokeAlpha > 0.02) {
+        ctx.save();
+        ctx.globalAlpha = smokeAlpha;
+        for (let s = 0; s < 5; s++) {
+          const sx = bx + (Math.sin(s * 1.5) * bw * 0.35);
+          const sy = by - 14 - (s * 8);
+          ctx.fillStyle = '#94a3b8';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 8 + s * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Insignia discreta de camino despejado al acercarse
+      const distToWizard = Math.hypot(wizard.x - bx, (wizard.y - by) / squish);
+      if (distToWizard < 180) {
+        ctx.save();
+        ctx.translate(bx, by - 26);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✔ FUEGO EXTINTO — PASO LIBRE', 0, 0);
+        ctx.restore();
+      }
+    }
 
     ctx.restore();
   }
