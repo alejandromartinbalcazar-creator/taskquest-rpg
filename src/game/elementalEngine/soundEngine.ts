@@ -3394,6 +3394,200 @@ class ElementalSoundEngine {
     shatter.start(now);
     shatter.stop(now + 0.26);
   }
+
+  // =========================================================================
+  // CATACLISMO ELEMENTAL (FUEGO + RAYO + HIELO + TIERRA: SECUENCIA DE 4 FASES)
+  // =========================================================================
+
+  // 0. Conjuración Inicial (Sintonía Tetra-Elemental)
+  public playCataclysmCast(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Acorde tetra-elemental armonizado
+    const freqs = [110, 220, 330, 440];
+    freqs.forEach((f, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(f, now);
+      osc.frequency.linearRampToValueAtTime(f * 1.05, now + 0.35);
+
+      gain.gain.setValueAtTime(isCharged ? 0.12 : 0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.38);
+    });
+  }
+
+  // 1. Fase 1: Fisura Tectónica (Tierra - Estruendo sísmico sordo y fractura)
+  public playCataclysmPhase1Earth(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bajo sísmico de fractura
+    const sub = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(isCharged ? 65 : 55, now);
+    sub.frequency.exponentialRampToValueAtTime(20, now + 0.55);
+
+    subGain.gain.setValueAtTime(isCharged ? 0.6 : 0.45, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+    sub.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.55);
+
+    // Crujido tectónico de placas rocosas
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'triangle';
+    crack.frequency.setValueAtTime(isCharged ? 140 : 110, now);
+    crack.frequency.exponentialRampToValueAtTime(35, now + 0.45);
+
+    crackGain.gain.setValueAtTime(isCharged ? 0.35 : 0.25, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    crack.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crack.start(now);
+    crack.stop(now + 0.45);
+  }
+
+  // 2. Fase 2: Erupción Ígnea (Fuego - Columnas de magma rugiente)
+  public playCataclysmPhase2Fire(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Rugido de magma presurizado
+    const roar = this.ctx.createOscillator();
+    const roarGain = this.ctx.createGain();
+    roar.type = 'sawtooth';
+    roar.frequency.setValueAtTime(80, now);
+    roar.frequency.linearRampToValueAtTime(isCharged ? 220 : 180, now + 0.25);
+    roar.frequency.exponentialRampToValueAtTime(45, now + 0.55);
+
+    const roarFilter = this.ctx.createBiquadFilter();
+    roarFilter.type = 'lowpass';
+    roarFilter.frequency.setValueAtTime(isCharged ? 480 : 380, now);
+
+    roarGain.gain.setValueAtTime(isCharged ? 0.5 : 0.38, now);
+    roarGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+    roar.connect(roarFilter);
+    roarFilter.connect(roarGain);
+    roarGain.connect(this.ctx.destination);
+    roar.start(now);
+    roar.stop(now + 0.55);
+  }
+
+  // 3. Fase 3: Onda Polar de Cero Absoluto (Hielo - Congelación instantánea y caída acústica)
+  public playCataclysmPhase3Ice(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Ping cristalino agudo de congelación absoluta
+    const ping = this.ctx.createOscillator();
+    const pingGain = this.ctx.createGain();
+    ping.type = 'sine';
+    ping.frequency.setValueAtTime(isCharged ? 3200 : 2600, now);
+    ping.frequency.exponentialRampToValueAtTime(620, now + 0.35);
+
+    pingGain.gain.setValueAtTime(isCharged ? 0.4 : 0.3, now);
+    pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    ping.connect(pingGain);
+    pingGain.connect(this.ctx.destination);
+    ping.start(now);
+    ping.stop(now + 0.35);
+
+    // Hiss de vapor polar y escarcha
+    const chill = this.ctx.createOscillator();
+    const chillGain = this.ctx.createGain();
+    chill.type = 'triangle';
+    chill.frequency.setValueAtTime(isCharged ? 1800 : 1400, now);
+    chill.frequency.linearRampToValueAtTime(300, now + 0.45);
+
+    chillGain.gain.setValueAtTime(isCharged ? 0.22 : 0.16, now);
+    chillGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    chill.connect(chillGain);
+    chillGain.connect(this.ctx.destination);
+    chill.start(now);
+    chill.stop(now + 0.45);
+  }
+
+  // 4. Fase 4: Relámpago Titánico y Detonación Radial (Rayo - Trueno colosal y shatter)
+  public playCataclysmPhase4Lightning(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // A. Azote del rayo celeste vertical (transiente de alta energía)
+    const bolt = this.ctx.createOscillator();
+    const boltGain = this.ctx.createGain();
+    bolt.type = 'sawtooth';
+    bolt.frequency.setValueAtTime(isCharged ? 1600 : 1200, now);
+    bolt.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+
+    boltGain.gain.setValueAtTime(isCharged ? 0.75 : 0.55, now);
+    boltGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    bolt.connect(boltGain);
+    boltGain.connect(this.ctx.destination);
+    bolt.start(now);
+    bolt.stop(now + 0.22);
+
+    // B. Explosión sub-bajo devastadora (sub-bass 35Hz que sacude la arena)
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'triangle';
+    boom.frequency.setValueAtTime(isCharged ? 120 : 95, now);
+    boom.frequency.exponentialRampToValueAtTime(24, now + 0.75);
+
+    boomGain.gain.setValueAtTime(isCharged ? 0.85 : 0.65, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(now);
+    boom.stop(now + 0.75);
+
+    // C. Shatter de cristales y rocas sobrecargadas
+    const shatter = this.ctx.createOscillator();
+    const shatterGain = this.ctx.createGain();
+    shatter.type = 'square';
+    shatter.frequency.setValueAtTime(isCharged ? 2400 : 1900, now + 0.05);
+    shatter.frequency.exponentialRampToValueAtTime(320, now + 0.35);
+
+    const shatterFilter = this.ctx.createBiquadFilter();
+    shatterFilter.type = 'bandpass';
+    shatterFilter.frequency.setValueAtTime(1800, now + 0.05);
+
+    shatterGain.gain.setValueAtTime(isCharged ? 0.32 : 0.22, now + 0.05);
+    shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    shatter.connect(shatterFilter);
+    shatterFilter.connect(shatterGain);
+    shatterGain.connect(this.ctx.destination);
+    shatter.start(now + 0.05);
+    shatter.stop(now + 0.35);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();

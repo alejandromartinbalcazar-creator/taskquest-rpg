@@ -923,6 +923,71 @@ export interface GlacialPlasmaStormEntity {
   finished: boolean;
 }
 
+export type ElementalCataclysmPhase =
+  | 'earth_fissure'
+  | 'fire_eruption'
+  | 'ice_wave'
+  | 'lightning_detonation'
+  | 'finished';
+
+export interface CataclysmRockSlab {
+  relX: number;
+  relY: number;
+  width: number;
+  height: number;
+  maxElevation: number;
+  elevation: number;
+  angle: number;
+  tilt: number;
+  color: string;
+}
+
+export interface CataclysmFissure {
+  angle: number;
+  length: number;
+  segments: Array<{ x: number; y: number }>;
+  slabs: CataclysmRockSlab[];
+}
+
+export interface ElementalCataclysmEntity {
+  id: string;
+  x: number;
+  y: number;
+  isCharged: boolean;
+  radius: number;
+  phase: ElementalCataclysmPhase;
+  phaseTimer: number;
+  elapsedMs: number;
+  totalDurationMs: number;
+  earthDurationMs: number;
+  fireDurationMs: number;
+  iceDurationMs: number;
+  lightningDurationMs: number;
+  totalBaseDamage: number;
+  chargeMultiplier: number;
+  statBonus: number;
+  earthHitIds: Set<string>;
+  fireLastTickTime: number;
+  fireTickCount: number;
+  iceHitIds: Set<string>;
+  lightningHitIds: Set<string>;
+  fissures: CataclysmFissure[];
+  magmaColumns: Array<{
+    x: number;
+    y: number;
+    height: number;
+    maxHeight: number;
+    width: number;
+  }>;
+  magmaEruptionProgress: number;
+  iceWaveProgress: number;
+  lightningStrikeProgress: number;
+  shockwaveRadius: number;
+  shockwaveMaxRadius: number;
+  shockwaveAlpha: number;
+  finished: boolean;
+}
+
 // Estructura de Mazmorra con Múltiples Salas Conectadas
 export type RoomType =
   | 'entrance'

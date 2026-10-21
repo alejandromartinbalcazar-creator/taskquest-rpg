@@ -44,6 +44,9 @@ import {
   OverloadCoreEntity,
   OverloadCoreLevel,
   GlacialPlasmaStormEntity,
+  ElementalCataclysmEntity,
+  CataclysmFissure,
+  CataclysmRockSlab,
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
@@ -462,6 +465,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       chargeRatio: 0,
       chargeType: 'arcane' as string,
       chargeSoundPlayed: false,
+      channelLockTimer: 0,
       channeledStream: {
         active: false,
         type: 'fire' as 'fire' | 'ice',
@@ -506,6 +510,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     conductivePrisons: [] as ConductivePrisonEntity[],
     overloadCores: [] as OverloadCoreEntity[],
     glacialPlasmaStorms: [] as GlacialPlasmaStormEntity[],
+    elementalCataclysms: [] as ElementalCataclysmEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -816,6 +821,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.conductivePrisons = [];
       g.overloadCores = [];
       g.glacialPlasmaStorms = [];
+      g.elementalCataclysms = [];
 
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
@@ -1043,9 +1049,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetX = wizard.x;
           targetY = wizard.y;
         }
-      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core') {
-        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana / Prisión Conductora / Núcleo de Sobrecarga: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
-        const targetDist = (recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
+      } else if (recipe.id === 'earth_megalith' || recipe.id === 'magma_eruption' || recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core' || recipe.id === 'elemental_cataclysm') {
+        // Apuntado de Puño Tectónico / Bombardeo Volcánico / Jaula Conductora / Prisión de Permafrost / Lluvia del Infierno / Tormenta Celestial / Glaciar Devastador / Volcán de Obsidiana / Prisión Conductora / Núcleo de Sobrecarga / Cataclismo Elemental: Bloqueo de zona al enemigo prioritario dentro del alcance, o puntería manual
+        const targetDist = (recipe.id === 'elemental_cataclysm' || recipe.id === 'hell_rain' || recipe.id === 'celestial_storm' || recipe.id === 'devastating_glacier' || recipe.id === 'obsidian_volcano' || recipe.id === 'conductive_prison' || recipe.id === 'overload_core') ? 175 : (recipe.id === 'magma_eruption' ? 180 : ((recipe.id === 'crystal_field' || recipe.id === 'permafrost_prison') ? 140 : 220));
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
           const ady = attackAimRef.current.currY - attackAimRef.current.startY;
@@ -2986,33 +2992,139 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
-      // 7. CATACLISMO ELEMENTAL (4 ELEMENTOS)
+      // 7. CATACLISMO ELEMENTAL (FUEGO + RAYO + HIELO + TIERRA: Habilidad Definitiva Tetra-Elemental)
       else if (recipe.id === 'elemental_cataclysm') {
-        g.screenShake = 20;
-        const count = isCharged ? 16 : 12;
-        for (let i = 0; i < count; i++) {
-          const ang = ((Math.PI * 2) / count) * i;
-          g.projectiles.push({
-            id: `cataclysm-${now}-${i}`,
-            x: wizard.x,
-            y: wizard.y,
-            vx: Math.cos(ang) * 7.5,
-            vy: Math.sin(ang) * 7.5,
-            radius: 14,
-            color: i % 2 === 0 ? '#ec4899' : '#facc15',
-            secondaryColor: '#ffffff',
-            damage: 120 * chargeMultiplier,
-            knockback: 9.0,
-            life: 55,
-            maxLife: 55,
-            pierce: 3,
-            piercedIds: [],
-            isHostile: false,
-            spellType: 'elemental_cataclysm',
-            areaOfEffect: 55,
+        const isMaxCharge = isCharged || (chargeRatio !== undefined && chargeRatio >= 0.95);
+        const catRadius = isMaxCharge ? 340 : 240;
+        const multiplier = isMaxCharge ? 1.5 : 1.0;
+        const statBonus = Math.floor(player.stats.attack * 0.4 + player.stats.knowledge * 0.4);
+
+        // Canalización inicial: Durante los primeros 300 ms de lanzamiento, el personaje canaliza quieto (vulnerable táctica)
+        wizard.channelLockTimer = 18; // 18 frames a 60 FPS = 300 ms
+        wizard.isMoving = false;
+
+        // Sonidos de conjuración inicial y Fase 1 (Tierra)
+        elementalSound.playCataclysmCast(isMaxCharge);
+        elementalSound.playCataclysmPhase1Earth(isMaxCharge);
+        g.screenShake = isMaxCharge ? 20 : 16;
+
+        // Generar 4 fisuras diagonales en perspectiva isométrica con segmentos fracturados y placas de roca
+        const fissureAngles = [
+          Math.PI * 0.25 + (Math.random() - 0.5) * 0.18,
+          Math.PI * 0.75 + (Math.random() - 0.5) * 0.18,
+          Math.PI * 1.25 + (Math.random() - 0.5) * 0.18,
+          Math.PI * 1.75 + (Math.random() - 0.5) * 0.18,
+        ];
+
+        const fissures: CataclysmFissure[] = [];
+        const magmaCols: Array<{ x: number; y: number; height: number; maxHeight: number; width: number }> = [];
+
+        fissureAngles.forEach((ang) => {
+          const segCount = isMaxCharge ? 7 : 5;
+          const fissureLen = catRadius * (0.85 + Math.random() * 0.15);
+          const segLen = fissureLen / segCount;
+          const segments: Array<{ x: number; y: number }> = [{ x: targetX, y: targetY }];
+          const slabs: CataclysmRockSlab[] = [];
+
+          let currX = targetX;
+          let currY = targetY;
+
+          for (let s = 1; s <= segCount; s++) {
+            const jitterAng = ang + (Math.random() - 0.5) * 0.35;
+            currX += Math.cos(jitterAng) * segLen;
+            currY += Math.sin(jitterAng) * segLen * 0.58;
+            segments.push({ x: currX, y: currY });
+
+            // Placas de roca tectónicas que emergen en cada segmento
+            if (s >= 2 && Math.random() < 0.85) {
+              const relX = currX - targetX;
+              const relY = currY - targetY;
+              const slabWidth = 14 + Math.random() * 12;
+              const slabHeight = 10 + Math.random() * 8;
+              const maxElev = (isMaxCharge ? 26 : 20) + Math.random() * 6;
+              slabs.push({
+                relX,
+                relY,
+                width: slabWidth,
+                height: slabHeight,
+                maxElevation: maxElev,
+                elevation: 0,
+                angle: jitterAng,
+                tilt: (Math.random() - 0.5) * 0.4,
+                color: Math.random() < 0.5 ? '#3e2723' : '#263238',
+              });
+
+              // Columnas de magma en las fisuras para Fase 2
+              magmaCols.push({
+                x: currX,
+                y: currY,
+                height: 0,
+                maxHeight: (isMaxCharge ? 90 : 65) + Math.random() * 20,
+                width: slabWidth * 0.85,
+              });
+            }
+          }
+
+          fissures.push({
+            angle: ang,
+            length: fissureLen,
+            segments,
+            slabs,
+          });
+        });
+
+        g.elementalCataclysms.push({
+          id: `cataclysm_${now}`,
+          x: targetX,
+          y: targetY,
+          isCharged: isMaxCharge,
+          radius: catRadius,
+          phase: 'earth_fissure',
+          phaseTimer: 0,
+          elapsedMs: 0,
+          totalDurationMs: 2800,
+          earthDurationMs: 600,
+          fireDurationMs: 600,
+          iceDurationMs: 600,
+          lightningDurationMs: 1000,
+          totalBaseDamage: recipe.damage,
+          chargeMultiplier: multiplier,
+          statBonus,
+          earthHitIds: new Set<string>(),
+          fireLastTickTime: 0,
+          fireTickCount: 0,
+          iceHitIds: new Set<string>(),
+          lightningHitIds: new Set<string>(),
+          fissures,
+          magmaColumns: magmaCols,
+          magmaEruptionProgress: 0,
+          iceWaveProgress: 0,
+          lightningStrikeProgress: 0,
+          shockwaveRadius: 0,
+          shockwaveMaxRadius: catRadius,
+          shockwaveAlpha: 1,
+          finished: false,
+        });
+
+        // Partículas sutiles de conjuración tetra-elemental
+        for (let p = 0; p < 12; p++) {
+          const pAng = (p * Math.PI * 2) / 12;
+          const pCol = p % 4 === 0 ? '#ff6d00' : (p % 4 === 1 ? '#ffd600' : (p % 4 === 2 ? '#00e5ff' : '#ffb300'));
+          g.particles.push({
+            id: `cataclysm_cast_${now}_${p}`,
+            x: targetX,
+            y: targetY,
+            vx: Math.cos(pAng) * 3.5,
+            vy: Math.sin(pAng) * 3.5 * 0.58,
+            radius: 3,
+            color: pCol,
+            alpha: 1,
+            life: 25,
           });
         }
-        g.terrainManager.spawnMagmaFissure(wizard.x, wizard.y, 85);
+
+        setElementQueue([]);
+        return;
       }
       // CORONA INFERNAL (FUEGO + FUEGO): Onda de fuego, anillo persistente con daño periódico y detonación centrípeta
       else if (recipe.id === 'fire_inferno') {
@@ -3156,7 +3268,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
     let cType = 'arcane';
-    if (activeRecipe.id === 'glacial_plasma_storm') cType = 'glacial_plasma';
+    if (activeRecipe.id === 'elemental_cataclysm') cType = 'cataclysm';
+    else if (activeRecipe.id === 'glacial_plasma_storm') cType = 'glacial_plasma';
     else if (activeRecipe.id === 'overload_core') cType = 'overload_core';
     else if (activeRecipe.id === 'conductive_prison') cType = 'conductive_prison';
     else if (activeRecipe.id === 'obsidian_volcano') cType = 'obsidian';
@@ -3190,8 +3303,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
-    const wasCharged = (activeRecipe.id === 'glacial_plasma_storm' || activeRecipe.id === 'overload_core' || activeRecipe.id === 'conductive_prison' || activeRecipe.id === 'obsidian_volcano' || activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
-      ? (elapsed >= 480 || wizard.chargeRatio >= 0.95)
+    const wasCharged = (activeRecipe.id === 'elemental_cataclysm' || activeRecipe.id === 'glacial_plasma_storm' || activeRecipe.id === 'overload_core' || activeRecipe.id === 'conductive_prison' || activeRecipe.id === 'obsidian_volcano' || activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
+      ? (elapsed >= 550 || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
     wizard.isCharging = false;
@@ -3455,6 +3568,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (wizard.dashTimer <= 0) {
           wizard.isDashing = false;
         }
+      } else if (wizard.channelLockTimer && wizard.channelLockTimer > 0) {
+        wizard.channelLockTimer--;
+        wizard.isMoving = false;
       } else if (keyVx !== 0 || keyVy !== 0) {
         const len = Math.hypot(keyVx, keyVy);
         const speed = 3.2 + player.stats.speed * 0.08;
@@ -3498,7 +3614,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isConductivePrison = activeRecipe.id === 'conductive_prison';
         const isOverloadCore = activeRecipe.id === 'overload_core';
         const isGlacialPlasma = activeRecipe.id === 'glacial_plasma_storm';
-        const maxChargeTime = (isGlacialPlasma || isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const isCataclysm = activeRecipe.id === 'elemental_cataclysm';
+        const maxChargeTime = (isCataclysm || isGlacialPlasma || isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
@@ -3866,6 +3983,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             });
           }
         }
+        // Torbellino de convergencia tetra-elemental (Fuego, Rayo, Hielo, Tierra) hacia el báculo para Cataclismo Elemental
+        else if (isCataclysm) {
+          if (Math.random() < 0.75 + wizard.chargeRatio * 0.25) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = 20 + Math.random() * 30;
+            const staffX = wizard.x + Math.cos(wizard.facingAngle) * 16;
+            const staffY = wizard.y - 14 + Math.sin(wizard.facingAngle) * 10;
+            const col = Math.random() < 0.25 ? '#ff6d00' : (Math.random() < 0.5 ? '#ffd600' : (Math.random() < 0.75 ? '#00e5ff' : '#ffb300'));
+            g.particles.push({
+              id: `cat-inward-${frameNow}-${Math.random()}`,
+              x: staffX + Math.cos(pAng) * pDist,
+              y: staffY + Math.sin(pAng) * pDist * 0.58,
+              vx: -Math.cos(pAng) * (2.8 + wizard.chargeRatio * 3.5),
+              vy: -Math.sin(pAng) * (1.6 + wizard.chargeRatio * 2.0),
+              radius: 1.8 + Math.random() * 2.0,
+              color: col,
+              alpha: 1,
+              life: 14,
+            });
+          }
+        }
 
         if (wizard.chargeRatio >= 1.0 && !wizard.chargeSoundPlayed) {
           wizard.chargeSoundPlayed = true;
@@ -4143,6 +4281,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               alpha: 1,
               life: 18,
               maxLife: 18,
+              type: 'ring',
+            });
+          } else if (isCataclysm) {
+            elementalSound.playChargeReady();
+            g.screenShake = 12.0;
+            g.particles.push({
+              id: `cat-pulse-${frameNow}`,
+              x: wizard.x,
+              y: wizard.y,
+              vx: 0,
+              vy: 0,
+              radius: 36,
+              color: '#ffffff',
+              secondaryColor: '#ec4899',
+              alpha: 1,
+              life: 22,
+              maxLife: 22,
               type: 'ring',
             });
           } else {
@@ -9446,6 +9601,301 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.19 Actualizar Cataclismo Elemental (Fuego + Rayo + Hielo + Tierra: Devastación en 4 Fases Consecutivas)
+      for (let cIdx = g.elementalCataclysms.length - 1; cIdx >= 0; cIdx--) {
+        const cataclysm = g.elementalCataclysms[cIdx];
+        cataclysm.elapsedMs += dt;
+        cataclysm.phaseTimer += dt;
+
+        const totalDmg = Math.round((cataclysm.totalBaseDamage + cataclysm.statBonus) * cataclysm.chargeMultiplier);
+        const elapsed = cataclysm.elapsedMs;
+        const cx = cataclysm.x;
+        const cy = cataclysm.y;
+        const isCharged = cataclysm.isCharged;
+
+        // FASE 1: TIERRA — FISURA TECTÓNICA (0.0s – 0.6s / 0 - 600 ms)
+        if (elapsed < cataclysm.earthDurationMs) {
+          cataclysm.phase = 'earth_fissure';
+          const earthProg = Math.min(1.0, elapsed / cataclysm.earthDurationMs);
+
+          // Placas tectónicas se elevan progresivamente
+          cataclysm.fissures.forEach((fissure) => {
+            fissure.slabs.forEach((slab) => {
+              slab.elevation = slab.maxElevation * Math.sin(earthProg * Math.PI * 0.5);
+            });
+          });
+
+          // Impacto inicial de Tierra: Daño contundente (15% del total), elevación (Knock-up) e interrupción garantizada
+          const earthDmg = Math.max(1, Math.round(totalDmg * 0.15));
+
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const ed = Math.hypot(enemy.x - cx, (enemy.y - cy) / 0.58);
+            if (ed <= cataclysm.radius && !cataclysm.earthHitIds.has(enemy.id)) {
+              cataclysm.earthHitIds.add(enemy.id);
+
+              enemy.hp -= earthDmg;
+              enemy.hitFlash = 15;
+
+              // Interrupción de ataque y telegráfico
+              enemy.isTelegraphing = false;
+              enemy.telegraphTimer = 0;
+              enemy.attackCooldown = 0;
+              enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, isCharged ? 65 : 45);
+
+              // Elevación vertical (Knock-up) para enemigos comunes
+              if (enemy.archetype !== 'boss') {
+                enemy.y -= (isCharged ? 30 : 22);
+                enemy.x += (Math.random() - 0.5) * 8;
+              }
+
+              g.floatingTexts.push({
+                id: `cat_earth_${frameNow}_${enemy.id}`,
+                x: enemy.x,
+                y: enemy.y - 24,
+                text: isCharged ? `🌍 -${earthDmg} [¡FISURA TECTÓNICA +50%!]` : `🌍 -${earthDmg} [FISURA TECTÓNICA]`,
+                color: '#f59e0b',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.6,
+                life: 38,
+              });
+            }
+          });
+        }
+
+        // FASE 2: FUEGO — ERUPCIÓN ÍGNEA (0.6s – 1.2s / 600 - 1200 ms)
+        else if (elapsed < cataclysm.earthDurationMs + cataclysm.fireDurationMs) {
+          if (cataclysm.phase !== 'fire_eruption') {
+            cataclysm.phase = 'fire_eruption';
+            cataclysm.phaseTimer = 0;
+            elementalSound.playCataclysmPhase2Fire(isCharged);
+            g.screenShake = Math.max(g.screenShake, isCharged ? 14 : 10);
+          }
+
+          // Daño periódico por magma (25% del daño total distribuido en 3 ticks rápidos de 200ms)
+          const fireTickInterval = 200;
+          if (elapsed - cataclysm.fireLastTickTime >= fireTickInterval && cataclysm.fireTickCount < 3) {
+            cataclysm.fireLastTickTime = elapsed;
+            cataclysm.fireTickCount++;
+
+            const fireTickDmg = Math.max(1, Math.round((totalDmg * 0.25) / 3));
+
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const ed = Math.hypot(enemy.x - cx, (enemy.y - cy) / 0.58);
+              if (ed <= cataclysm.radius) {
+                enemy.hp -= fireTickDmg;
+                enemy.hitFlash = 12;
+
+                // Acumulación/renovación de estado quemado (burning)
+                const existingBurn = enemy.statuses.find((s) => s.type === 'burning');
+                if (existingBurn) {
+                  existingBurn.duration = Math.max(existingBurn.duration, 3500);
+                  existingBurn.damagePerTick = Math.max(existingBurn.damagePerTick || 0, Math.round(16 * cataclysm.chargeMultiplier));
+                } else {
+                  enemy.statuses.push({
+                    type: 'burning',
+                    duration: 3500,
+                    maxDuration: 3500,
+                    damagePerTick: Math.round(16 * cataclysm.chargeMultiplier),
+                  });
+                }
+
+                g.floatingTexts.push({
+                  id: `cat_fire_${frameNow}_${enemy.id}_${cataclysm.fireTickCount}`,
+                  x: enemy.x + (Math.random() - 0.5) * 12,
+                  y: enemy.y - 20,
+                  text: `🔥 -${fireTickDmg}`,
+                  color: '#ff6d00',
+                  fontSize: 13,
+                  opacity: 1,
+                  vy: -1.3,
+                  life: 30,
+                });
+              }
+            });
+
+            // Destrucción de obstáculos destructibles en el área
+            for (const obs of g.terrainManager.obstacles) {
+              if (obs.hp > 0) {
+                const od = Math.hypot(obs.x - cx, (obs.y - cy) / 0.58);
+                if (od <= cataclysm.radius) {
+                  obs.hp -= fireTickDmg;
+                }
+              }
+            }
+          }
+        }
+
+        // FASE 3: HIELO — ONDA POLAR DE CERO ABSOLUTO (1.2s – 1.8s / 1200 - 1800 ms)
+        else if (elapsed < cataclysm.earthDurationMs + cataclysm.fireDurationMs + cataclysm.iceDurationMs) {
+          if (cataclysm.phase !== 'ice_wave') {
+            cataclysm.phase = 'ice_wave';
+            cataclysm.phaseTimer = 0;
+            elementalSound.playCataclysmPhase3Ice(isCharged);
+            g.screenShake = Math.max(g.screenShake, 8);
+          }
+
+          // Daño de impacto polar (15% del total) y 100% CONGELACIÓN GARANTIZADA
+          const iceDmg = Math.max(1, Math.round(totalDmg * 0.15));
+
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const ed = Math.hypot(enemy.x - cx, (enemy.y - cy) / 0.58);
+            if (ed <= cataclysm.radius && !cataclysm.iceHitIds.has(enemy.id)) {
+              cataclysm.iceHitIds.add(enemy.id);
+
+              enemy.hp -= iceDmg;
+              enemy.hitFlash = 14;
+
+              // Congelación garantizada al 100% por 1.2 segundos (1200 ms)
+              const existingFreeze = enemy.statuses.find((s) => s.type === 'frozen');
+              if (existingFreeze) {
+                existingFreeze.duration = Math.max(existingFreeze.duration, 1200);
+              } else {
+                enemy.statuses.push({
+                  type: 'frozen',
+                  duration: 1200,
+                  maxDuration: 1200,
+                });
+              }
+
+              enemy.isTelegraphing = false;
+              enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, 72);
+
+              g.floatingTexts.push({
+                id: `cat_ice_${frameNow}_${enemy.id}`,
+                x: enemy.x,
+                y: enemy.y - 24,
+                text: `❄️ -${iceDmg} [¡CERO ABSOLUTO!]`,
+                color: '#00e5ff',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.5,
+                life: 38,
+              });
+            }
+          });
+        }
+
+        // FASE 4: RAYO — RELÁMPAGO TITÁNICO Y DETONACIÓN RADIAL (1.8s – 2.8s / 1800 - 2800 ms)
+        else {
+          if (cataclysm.phase !== 'lightning_detonation') {
+            cataclysm.phase = 'lightning_detonation';
+            cataclysm.phaseTimer = 0;
+          }
+
+          // A los 1900 ms (100 ms tras el relámpago inicial): Gran detonación terminal con shatter
+          if (elapsed >= 1900 && cataclysm.lightningHitIds.size === 0) {
+            elementalSound.playCataclysmPhase4Lightning(isCharged);
+            g.screenShake = isCharged ? 24 : 18;
+
+            const lightningDmg = Math.max(1, Math.round(totalDmg * 0.45));
+
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const ed = Math.hypot(enemy.x - cx, (enemy.y - cy) / 0.58);
+              if (ed <= cataclysm.radius) {
+                cataclysm.lightningHitIds.add(enemy.id);
+
+                enemy.hp -= lightningDmg;
+                enemy.hitFlash = 18;
+
+                // Consumir congelación en Shatter reactivo masivo
+                enemy.statuses = enemy.statuses.filter((s) => s.type !== 'frozen');
+
+                // Fuerte empuje radial centrífugo hacia afuera
+                const dx = enemy.x - cx;
+                const dy = (enemy.y - cy) / 0.58;
+                const dist = Math.max(1, Math.hypot(dx, dy));
+                const pushForce = isCharged ? 22 : 16;
+                enemy.x += (dx / dist) * pushForce;
+                enemy.y += (dy / dist) * pushForce * 0.58;
+
+                g.floatingTexts.push({
+                  id: `cat_bolt_${frameNow}_${enemy.id}`,
+                  x: enemy.x,
+                  y: enemy.y - 28,
+                  text: isCharged ? `⚡💥 -${lightningDmg} [¡DETONACIÓN CATACLÍSMICA +50%!]` : `⚡💥 -${lightningDmg} [¡DETONACIÓN FINAL!]`,
+                  color: '#ffffff',
+                  fontSize: 15,
+                  opacity: 1,
+                  vy: -1.8,
+                  life: 45,
+                });
+
+                // Si es versión cargada y es esbirro básico con HP <= 0: desintegración total
+                if (isCharged && enemy.hp <= 0 && enemy.archetype !== 'boss') {
+                  for (let d = 0; d < 6; d++) {
+                    const dAng = Math.random() * Math.PI * 2;
+                    g.particles.push({
+                      id: `cat_disintegrate_${frameNow}_${enemy.id}_${d}`,
+                      x: enemy.x,
+                      y: enemy.y,
+                      vx: Math.cos(dAng) * (3 + Math.random() * 4),
+                      vy: Math.sin(dAng) * (2 + Math.random() * 3),
+                      radius: 2.5,
+                      color: Math.random() < 0.5 ? '#ec4899' : '#00e5ff',
+                      alpha: 1,
+                      life: 25,
+                    });
+                  }
+                }
+              }
+            });
+
+            // En versión cargada (Hold): Vaporiza proyectiles hostiles enemigos en toda la arena
+            if (isCharged) {
+              g.projectiles = g.projectiles.filter((p) => {
+                if (!p.isHostile) return true;
+                const pd = Math.hypot(p.x - cx, (p.y - cy) / 0.58);
+                if (pd <= cataclysm.radius) {
+                  // Partícula de vaporización
+                  g.particles.push({
+                    id: `cat_vap_${frameNow}_${Math.random()}`,
+                    x: p.x,
+                    y: p.y,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -2,
+                    radius: 3,
+                    color: '#e0f7fa',
+                    alpha: 0.9,
+                    life: 15,
+                  });
+                  return false;
+                }
+                return true;
+              });
+            }
+
+            // Anillo de onda de choque radial expansivo (partícula tipo 'ring')
+            g.particles.push({
+              id: `cat_shockring_${frameNow}`,
+              x: cx,
+              y: cy,
+              vx: 0,
+              vy: 0,
+              radius: cataclysm.radius,
+              color: '#ffffff',
+              secondaryColor: '#ec4899',
+              alpha: 1,
+              life: 22,
+              maxLife: 22,
+              type: 'ring',
+            });
+          }
+
+          // Limpieza final al agotar los 2800 ms de la secuencia completa
+          if (elapsed >= cataclysm.totalDurationMs) {
+            cataclysm.phase = 'finished';
+            cataclysm.finished = true;
+            g.elementalCataclysms.splice(cIdx, 1);
+            continue;
+          }
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
       for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].hp <= 0) {
@@ -9526,6 +9976,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.conductivePrisons,
             g.overloadCores,
             g.glacialPlasmaStorms,
+            g.elementalCataclysms,
             g.forestLevel ?? undefined
           );
         }
@@ -9807,6 +10258,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-400 shadow-[0_0_35px_rgba(255,109,0,0.95)] animate-pulse'
                     : activeRecipe.id === 'glacial_plasma_storm'
                     ? 'border-cyan-300 shadow-[0_0_35px_rgba(0,229,255,0.95)] animate-pulse'
+                    : activeRecipe.id === 'elemental_cataclysm'
+                    ? 'border-pink-400 shadow-[0_0_42px_rgba(236,72,153,1.0)] animate-pulse'
                     : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
                 : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
                     ? 'border-red-500 shadow-[0_0_36px_rgba(255,23,68,1.0)] animate-pulse'
@@ -9844,6 +10297,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     ? 'border-amber-500 shadow-[0_0_24px_rgba(255,109,0,0.8)]'
                     : activeRecipe.id === 'glacial_plasma_storm'
                     ? 'border-cyan-400 shadow-[0_0_24px_rgba(0,229,255,0.8)]'
+                    : activeRecipe.id === 'elemental_cataclysm'
+                    ? 'border-pink-500 shadow-[0_0_30px_rgba(236,72,153,0.9)] animate-pulse'
                     : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
             } flex flex-col items-center justify-center text-white transition-all`}
           >
@@ -9895,6 +10350,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 ? (chargeVisualRatio >= 1.0 ? '¡MASA INESTABLE +50%! 💣⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 💣⚡' : 'NÚCLEO 💣⚡🌋')
                 : activeRecipe.id === 'glacial_plasma_storm'
                 ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA TRI-ELEMENTAL +50%! 🌪️❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️❄️⚡' : 'TORMENTA 🌪️❄️⚡')
+                : activeRecipe.id === 'elemental_cataclysm'
+                ? (chargeVisualRatio >= 1.0 ? '¡SINTONÍA PRIMORDIAL +50%! 🪐✨' : isChargingUi && chargeVisualRatio > 0.08 ? 'SINTONIZANDO 🪐' : 'CATACLISMO 🪐✨')
                 : chargeVisualRatio >= 1.0
                 ? '¡CARGADO!'
                 : 'LANZAR'}
@@ -9937,6 +10394,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                       ? 'bg-gradient-to-r from-red-600 via-amber-500 to-yellow-300 shadow-[0_0_8px_#ffd600]'
                       : activeRecipe.id === 'glacial_plasma_storm'
                       ? 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-orange-500 shadow-[0_0_8px_#00e5ff]'
+                      : activeRecipe.id === 'elemental_cataclysm'
+                      ? 'bg-gradient-to-r from-red-600 via-amber-500 via-cyan-400 to-purple-600 shadow-[0_0_12px_#ec4899]'
                       : 'bg-amber-400'
                   }`}
                   style={{ width: `${chargeVisualRatio * 100}%` }}
