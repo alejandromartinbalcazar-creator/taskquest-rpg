@@ -59,6 +59,7 @@ import {
   DUNGEON_RELICS,
 } from './physicsAndTerrain';
 import { EnemyManager } from './enemyAI';
+import { createThresholdCustodian } from './BossCustodian';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
@@ -112,8 +113,8 @@ const DUNGEON_ROOMS: RoomConfig[] = [
   },
   {
     id: 'room-6',
-    title: 'Sala 6: Guardián de Basalto',
-    subtitle: '¡Jefe 1! Hazlo embestir contra los pilares de piedra para aturdirlo.',
+    title: 'Sala 6: El Custodio del Umbral',
+    subtitle: '¡Jefe del Nivel 1! Rompe sus barreras elementales y evade El Juicio del Guardián.',
     roomType: 'boss_basalt',
   },
   {
@@ -641,35 +642,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         isTelegraphing: false,
         hitFlash: 0,
       }))),
-      // Zona 4: Arena - El Guardián de Basalto (Jefe, Y ~ 1600)
-      {
-        id: 'forest-boss-basalt',
-        name: 'Guardián de Basalto',
-        archetype: 'boss' as const,
-        bossType: 'basalt_guardian' as const,
-        x: 1200,
-        y: 1600,
-        vx: 0,
-        vy: 0,
-        radius: 36,
-        hp: 550,
-        maxHp: 550,
-        armorShield: 140,
-        maxArmorShield: 140,
-        attackPower: 26,
-        moveSpeed: 0.6,
-        statuses: [],
-        color: '#475569',
-        avatar: '🗿👑',
-        weakness: 'earth' as ElementType,
-        attackCooldown: 40,
-        attackMaxCooldown: 130,
-        telegraphTimer: 0,
-        telegraphMax: 45,
-        isTelegraphing: false,
-        hitFlash: 0,
-        phase: 1,
-      },
+      // Zona 4: Arena Final - El Custodio del Umbral (Jefe Final del Nivel 1, Y ~ 1500)
+      createThresholdCustodian(1200, 1500),
     ];
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
@@ -4562,10 +4536,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.terrainManager.obstacles.forEach((obs) => {
         resolveCircleObstacleCollision(wizard, obs);
 
-        // INTERACCIÓN CON PUERTA DESBLOQUEADA: Transición a la siguiente sala
+        // INTERACCIÓN CON PUERTA / PORTAL DESBLOQUEADO: Transición o Victoria
         if (obs.obstacleType === 'door_gate' && !obs.doorLocked) {
           const distToDoor = Math.hypot(wizard.x - obs.x, wizard.y - obs.y);
-          if (distToDoor < 40) {
+          if (distToDoor < 45) {
+            if (obs.id === 'forest-exit-portal') {
+              setIsVictorious(true);
+              elementalSound.playVictory();
+              onVictory(floor.floorNumber, floor.enemy.expReward * 2, floor.enemy.goldReward * 2);
+              return;
+            }
             changeToRoom(g.roomIndex + 1);
           }
         }
@@ -5082,6 +5062,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           if (g.currentHp <= 0) {
             setIsDefeated(true);
           }
+        },
+        (shake) => {
+          g.screenShake = Math.max(g.screenShake, shake);
         }
       );
 
@@ -9907,9 +9890,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // 5. Eliminar enemigos derrotados y desbloquear puertas de la sala
+      // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
-        if (enemies[i].hp <= 0) {
+        const deadEnemy = enemies[i];
+        if (deadEnemy.hp <= 0) {
+          // Si es el Custodio del Umbral, esperar que concluya la animación de colapso en escombros (60 frames)
+          if (deadEnemy.bossType === 'threshold_custodian') {
+            const cs = deadEnemy.custodianState;
+            if (cs && cs.defeatTimer < 60) {
+              continue; // Mantener visible mientras los bloques de roca caen al suelo en escombros
+            }
+            // Al finalizar el colapso, abrir el portal del santuario al final del mapa
+            const exitPortal = g.terrainManager.obstacles.find((o) => o.id === 'forest-exit-portal');
+            if (exitPortal) {
+              exitPortal.doorLocked = false;
+              exitPortal.color = '#38bdf8';
+              g.floatingTexts.push({
+                id: `portal-open-${Date.now()}`,
+                x: exitPortal.x,
+                y: exitPortal.y - 30,
+                text: '✨ ¡EL PORTAL DEL SANTUARIO HA SIDO DESBLOQUEADO!',
+                color: '#38bdf8',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.4,
+                life: 50,
+              });
+            }
+          }
           g.enemyManager.totalKills++;
           enemies.splice(i, 1);
         }

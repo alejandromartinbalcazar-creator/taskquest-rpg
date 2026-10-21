@@ -474,7 +474,7 @@ export function createLevel1Forest(): {
     solid: false,
     blocksProjectiles: false,
     meltable: false,
-    doorLocked: false,
+    doorLocked: true,
     doorDirection: 'north',
   });
 

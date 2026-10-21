@@ -1,6 +1,7 @@
 import { GameEnemy, Projectile, FloatingText, StatusEffectType, RoomType } from './types';
 import { checkCircleCollision } from './physicsAndTerrain';
 import { elementalSound } from './soundEngine';
+import { createThresholdCustodian, updateThresholdCustodian } from './BossCustodian';
 
 export class EnemyManager {
   public enemies: GameEnemy[] = [];
@@ -151,36 +152,9 @@ export class EnemyManager {
         this.createPyreGolem(`crossfire-golem-${Date.now()}`, 550, 440)
       );
     }
-    // 4. JEFE 1: GUARDIÁN DE BASALTO
+    // 4. JEFE 1: EL CUSTODIO DEL UMBRAL (BOSS FINAL DEL NIVEL 1)
     else if (roomType === 'boss_basalt') {
-      const boss: GameEnemy = {
-        id: `boss-basalt-${Date.now()}`,
-        name: 'Guardián de Basalto',
-        archetype: 'boss',
-        bossType: 'basalt_guardian',
-        x: 550,
-        y: 260,
-        vx: 0,
-        vy: 0,
-        radius: 36,
-        hp: 480,
-        maxHp: 480,
-        armorShield: 120,
-        maxArmorShield: 120,
-        attackPower: 26,
-        moveSpeed: 0.55,
-        statuses: [],
-        color: '#475569',
-        avatar: '🗿👑',
-        weakness: 'earth',
-        attackCooldown: 40,
-        attackMaxCooldown: 140,
-        telegraphTimer: 0,
-        telegraphMax: 50,
-        isTelegraphing: false,
-        hitFlash: 0,
-        phase: 1,
-      };
+      const boss = createThresholdCustodian(550, 260);
       this.enemies.push(boss);
       this.currentBoss = boss;
       elementalSound.playBossIntro();
@@ -263,7 +237,8 @@ export class EnemyManager {
     projectiles: Projectile[],
     floatingTexts: FloatingText[],
     obstacles: Array<{ x: number; y: number; radius: number; obstacleType: string; solid: boolean }>,
-    onPlayerDamage: (amount: number) => void
+    onPlayerDamage: (amount: number) => void,
+    onScreenShake?: (amount: number) => void
   ) {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
@@ -326,6 +301,12 @@ export class EnemyManager {
       const distToPlayer = Math.hypot(dx, dy);
 
       // 2. IA DE JEFES ESPECÍFICOS
+
+      // JEFE FINAL DEL NIVEL 1: EL CUSTODIO DEL UMBRAL (3 FASES, ROTACIÓN DE BARRERAS Y TELEGRAFIADOS)
+      if (e.bossType === 'threshold_custodian') {
+        updateThresholdCustodian(e, wizard, projectiles, floatingTexts, onPlayerDamage, onScreenShake || (() => {}));
+        continue;
+      }
 
       // JEFE 1: GUARDIÁN DE BASALTO
       if (e.bossType === 'basalt_guardian') {

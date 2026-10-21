@@ -141,6 +141,113 @@ export function calculateElementalDamage(
     }
   }
 
+  // 4. EL CUSTODIO DEL UMBRAL (THRESHOLD CUSTODIAN)
+  else if (enemy.bossType === 'threshold_custodian' && enemy.custodianState) {
+    const cs = enemy.custodianState;
+    const isVulnerable = cs.isShieldBroken && cs.shieldVulnerableTimer > 0;
+
+    if (isVulnerable) {
+      // Estado de vulnerabilidad activa: daño crítico x2.0 en cualquier ataque
+      multiplier = 2.0;
+      isCritical = true;
+    } else if (cs.currentPhase === 1) {
+      // FASE 1: ESCUDO DE MAGMA
+      if (elementType === 'fire' || elementType === 'earth') {
+        return {
+          finalDamage: 0,
+          multiplier: 0,
+          isCritical: false,
+          isImmune: true,
+          isAbsorbed: false,
+          isBlocked: false,
+          floatingText: '🛡️🔥 ¡ESCUDO DE MAGMA INMUNE!',
+          textColor: '#f97316',
+        };
+      } else if (elementType === 'ice') {
+        multiplier = 1.5;
+        cs.shieldHp = Math.max(0, cs.shieldHp - rawDamage * 1.5);
+        if (cs.shieldHp <= 0) {
+          cs.isShieldBroken = true;
+          cs.shieldVulnerableTimer = 180; // 3.0s aturdido
+          enemy.stunnedTimer = 180;
+          return {
+            finalDamage: Math.round(rawDamage * 1.5),
+            multiplier: 1.5,
+            isCritical: true,
+            isImmune: false,
+            isAbsorbed: false,
+            isBlocked: false,
+            floatingText: '💥❄️ ¡ESCUDO DE MAGMA QUEBRADO! ¡VULNERABLE!',
+            textColor: '#00e5ff',
+            specialReaction: 'shield_broken',
+          };
+        }
+      } else {
+        multiplier = 0.7;
+      }
+    } else if (cs.currentPhase === 2) {
+      // FASE 2: LA CORAZA GLACIAL
+      if (elementType === 'ice' || elementType === 'lightning') {
+        return {
+          finalDamage: 0,
+          multiplier: 0,
+          isCritical: false,
+          isImmune: true,
+          isAbsorbed: false,
+          isBlocked: false,
+          floatingText: '🛡️❄️ ¡CORAZA GLACIAL INMUNE!',
+          textColor: '#38bdf8',
+        };
+      } else if (elementType === 'fire') {
+        multiplier = 1.5;
+        cs.shieldHp = Math.max(0, cs.shieldHp - rawDamage * 1.5);
+        if (cs.shieldHp <= 0) {
+          cs.isShieldBroken = true;
+          cs.shieldVulnerableTimer = 180; // 3.0s noqueado
+          enemy.stunnedTimer = 180;
+          return {
+            finalDamage: Math.round(rawDamage * 1.5),
+            multiplier: 1.5,
+            isCritical: true,
+            isImmune: false,
+            isAbsorbed: false,
+            isBlocked: false,
+            floatingText: '🔥💥 ¡CORAZA GLACIAL DERRETIDA! ¡VULNERABLE!',
+            textColor: '#f59e0b',
+            specialReaction: 'shield_broken',
+          };
+        }
+      } else {
+        multiplier = 0.7;
+      }
+    } else if (cs.currentPhase === 3) {
+      // FASE 3: SOBRECARGA DE VACÍO / MODO FURIA
+      if (elementType === 'earth') {
+        multiplier = 1.8;
+        isCritical = true;
+        // Si el jefe está canalizando El Juicio del Guardián, un golpe de Tierra lo interrumpe
+        if (cs.activeAttack === 'judgment_ultimate' && cs.judgmentTelegraph) {
+          cs.activeAttack = 'none';
+          cs.judgmentTelegraph = undefined;
+          enemy.stunnedTimer = 120; // 2.0s de aturdimiento por interrupción
+          return {
+            finalDamage: Math.round(rawDamage * 1.8),
+            multiplier: 1.8,
+            isCritical: true,
+            isImmune: false,
+            isAbsorbed: false,
+            isBlocked: false,
+            floatingText: '🌍⚡ ¡JUICIO INTERRUMPIDO! ¡ATURDIDO!',
+            textColor: '#facc15',
+            specialReaction: 'grounded',
+          };
+        }
+      } else {
+        multiplier = 1.2;
+      }
+    }
+  }
+
   // JEFES (Resistencias y debilidades elementales existentes)
   else if (enemy.archetype === 'boss') {
     if (enemy.weakness && enemy.weakness === elementType) {
@@ -194,6 +301,42 @@ export function calculateElementalDamage(
  */
 export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementType | 'physical' {
   if (!spellType) return 'physical';
+
+  // Si se evalúa contra el Custodio del Umbral, resolver con el contra-elemento de la fase activa
+  if (enemy?.bossType === 'threshold_custodian') {
+    const phase = enemy.custodianState?.currentPhase || 1;
+    if (phase === 1) {
+      if (
+        spellType.includes('ice') ||
+        spellType.includes('cryo') ||
+        spellType === 'devastating_glacier' ||
+        spellType === 'thermal_shock' ||
+        spellType === 'glacial_plasma_storm'
+      ) {
+        return 'ice';
+      }
+    } else if (phase === 2) {
+      if (
+        spellType.includes('fire') ||
+        spellType.includes('inferno') ||
+        spellType === 'hell_rain' ||
+        spellType === 'thermal_shock' ||
+        spellType === 'magma_eruption'
+      ) {
+        return 'fire';
+      }
+    } else if (phase === 3) {
+      if (
+        spellType.includes('earth') ||
+        spellType.includes('tectonic') ||
+        spellType === 'telluric_barrier' ||
+        spellType === 'magma_eruption' ||
+        spellType === 'obsidian_volcano'
+      ) {
+        return 'earth';
+      }
+    }
+  }
 
   // Si se evalúa contra un enemigo del Bestiario, hechizos combinados pueden activar la afinidad prioritaria
   if (enemy?.bestiaryType) {

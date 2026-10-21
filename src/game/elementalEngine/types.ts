@@ -228,9 +228,79 @@ export interface LightningBoltEffect {
 
 export type EnemyArchetype = 'chaser' | 'ranged' | 'brute' | 'boss';
 
-export type BossType = 'basalt_guardian' | 'storm_wraith' | 'obsidian_dragon';
+export type BossType = 'basalt_guardian' | 'storm_wraith' | 'obsidian_dragon' | 'threshold_custodian';
 
 export type BestiaryEnemyType = 'pyre_golem' | 'storm_stalker' | 'frost_lurker';
+
+export interface CustodianFissureTelegraph {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  timer: number;
+  maxTimer: number; // 800ms / ~48 frames
+  hasErupted?: boolean;
+}
+
+export interface CustodianStalagmiteTelegraph {
+  x: number;
+  y: number;
+  radius: number;
+  timer: number;
+  maxTimer: number; // 700ms / ~42 frames
+  detonated?: boolean;
+}
+
+export interface CustodianNovaTelegraph {
+  x: number;
+  y: number;
+  currentRadius: number;
+  maxRadius: number;
+  timer: number;
+  maxTimer: number; // 900ms / ~54 frames
+  detonated?: boolean;
+}
+
+export interface CustodianJudgmentTelegraph {
+  bossX: number;
+  bossY: number;
+  timer: number;
+  maxTimer: number; // 2.5s / 150 frames
+  safeZones: Array<{ x: number; y: number; radius: number }>;
+  dangerRadius: number;
+  detonated?: boolean;
+}
+
+export interface CustodianGauntlet {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  angle: number;
+  slamProgress: number; // 0..1
+}
+
+export interface CustodianState {
+  currentPhase: 1 | 2 | 3;
+  shieldHp: number;
+  maxShieldHp: number;
+  isShieldBroken: boolean;
+  shieldVulnerableTimer: number; // frames aturdido / x2.0 daño
+  activeAttack: 'none' | 'magma_sweep' | 'telegraphed_fissure' | 'stalagmite_rain' | 'ice_nova' | 'judgment_ultimate';
+  attackTimer: number;
+  nextAttackCooldown: number;
+  fissureTelegraph?: CustodianFissureTelegraph;
+  stalagmitesTelegraph?: CustodianStalagmiteTelegraph[];
+  novaTelegraph?: CustodianNovaTelegraph;
+  judgmentTelegraph?: CustodianJudgmentTelegraph;
+  leftGauntlet: CustodianGauntlet;
+  rightGauntlet: CustodianGauntlet;
+  isDefeated: boolean;
+  defeatTimer: number;
+  shockwaveActive?: boolean;
+  shockwaveRadius?: number;
+}
 
 export interface GameEnemy {
   id: string;
@@ -282,6 +352,7 @@ export interface GameEnemy {
   breathAngle?: number;
   breathActive?: boolean;
   teleportTimer?: number;
+  custodianState?: CustodianState;
 }
 
 export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';

@@ -59,6 +59,11 @@ import {
   drawEnemyHealthBar,
   drawBossVector,
 } from './bestiaryRenderer';
+import {
+  drawThresholdCustodian,
+  drawCustodianTelegraphs,
+  drawCustodianHUD,
+} from './custodianRenderer';
 
 export class IsometricRenderer {
   // Renderiza el frame completo del juego con CÁMARA CERCANA (Zoom 1.32x) y siluetas físicas únicas
@@ -199,6 +204,11 @@ export class IsometricRenderer {
 
     // 3.88 Dibujar Suelo, Runa Primordial Tetra-Elemental, Fisuras Tectónicas y Escarcha de Cataclismo Elemental (Fuego + Rayo + Hielo + Tierra)
     this.drawElementalCataclysmGround(ctx, elementalCataclysms);
+
+    // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
+    if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
+      drawCustodianTelegraphs(ctx, currentBoss, performance.now());
+    }
 
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
@@ -2158,7 +2168,9 @@ export class IsometricRenderer {
     }
 
     // 2. Renderizado Vectorial Procedural según afinidad y tipo del Bestiario
-    if (enemy.bestiaryType === 'pyre_golem') {
+    if (enemy.bossType === 'threshold_custodian') {
+      drawThresholdCustodian(ctx, enemy, now);
+    } else if (enemy.bestiaryType === 'pyre_golem') {
       drawPyreGolem(ctx, enemy, now);
     } else if (enemy.bestiaryType === 'storm_stalker') {
       drawStormStalker(ctx, enemy, now);
@@ -2990,6 +3002,10 @@ export class IsometricRenderer {
 
   // BARRA DE SALUD SUPERIOR DEL JEFE (HUD)
   private static drawBossHUD(ctx: CanvasRenderingContext2D, width: number, boss: GameEnemy) {
+    if (boss.bossType === 'threshold_custodian') {
+      drawCustodianHUD(ctx, width, boss);
+      return;
+    }
     ctx.save();
     const barW = Math.min(width * 0.55, 340);
     const barH = 14;
