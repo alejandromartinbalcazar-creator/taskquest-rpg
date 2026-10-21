@@ -39,6 +39,7 @@ import {
   ConductivePrisonEntity,
   ConductivePrisonPillarNode,
   OverloadCoreEntity,
+  GlacialPlasmaStormEntity,
   ForestLevelData,
   ForestTreeEntity,
   PuzzleWheelEntity,
@@ -99,6 +100,7 @@ export class IsometricRenderer {
     obsidianVolcanoes: ObsidianVolcanoEntity[] = [],
     conductivePrisons: ConductivePrisonEntity[] = [],
     overloadCores: OverloadCoreEntity[] = [],
+    glacialPlasmaStorms: GlacialPlasmaStormEntity[] = [],
     forestLevel?: ForestLevelData
   ) {
     ctx.save();
@@ -179,6 +181,9 @@ export class IsometricRenderer {
     // 3.86 Dibujar Suelo, Glifos de Imán Telúrico y Ondas de Pulso de Núcleo de Sobrecarga (Fuego + Rayo + Tierra)
     this.drawOverloadCoreFloor(ctx, overloadCores);
 
+    // 3.87 Dibujar Suelo, Halo de Escarcha, Estela Térmica e Implosión de Tormenta de Plasma Glacial (Fuego + Rayo + Hielo)
+    this.drawGlacialPlasmaStormGround(ctx, glacialPlasmaStorms);
+
     // 3.8 Líneas de trayectoria y retículas tácticas al cargar o apuntar
     if (wizard.isCharging && wizard.chargeType === 'ice') {
       this.drawGlacialAimTrajectory(ctx, wizard);
@@ -210,6 +215,8 @@ export class IsometricRenderer {
       this.drawConductivePrisonAimIndicator(ctx, wizard);
     } else if (wizard.isCharging && wizard.chargeType === 'overload_core') {
       this.drawOverloadCoreAimIndicator(ctx, wizard);
+    } else if (wizard.isCharging && wizard.chargeType === 'glacial_plasma') {
+      this.drawGlacialPlasmaStormAimIndicator(ctx, wizard);
     }
 
     // 4. Dibujar Arcos Eléctricos entre Cristales
@@ -425,6 +432,16 @@ export class IsometricRenderer {
         renderList.push({
           y: core.currentY,
           draw: () => this.drawOverloadCoreEntity(ctx, core),
+        });
+      }
+    });
+
+    // Tormentas de Plasma Glacial (Fuego + Rayo + Hielo) integradas en Depth Sorting
+    glacialPlasmaStorms.forEach((storm) => {
+      if (storm.phase !== 'finished') {
+        renderList.push({
+          y: storm.y,
+          draw: () => this.drawGlacialPlasmaStormBody(ctx, storm),
         });
       }
     });
@@ -1899,6 +1916,62 @@ export class IsometricRenderer {
         ctx.fillStyle = ocGrad;
         ctx.beginPath();
         ctx.arc(staffX, staffY, pulseR * 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Vórtice tri-elemental y orbes entrelazados para Tormenta de Plasma Glacial (Fuego + Rayo + Hielo)
+      const isGlacialPlasma = wizard.chargeType === 'glacial_plasma';
+      if (isGlacialPlasma) {
+        ctx.shadowBlur = 0;
+        const triadCount = 3;
+        const orbitPhase = Date.now() * 0.008;
+        const orbColors = ['#00e5ff', '#ff6d00', '#b388ff'];
+        const orbGlows = ['#80d8ff', '#ffab00', '#7c4dff'];
+
+        const staffX = Math.cos(wizard.facingAngle) * 16;
+        const staffY = -12 + Math.sin(wizard.facingAngle) * 10;
+
+        for (let tc = 0; tc < triadCount; tc++) {
+          const tAng = orbitPhase + (tc * Math.PI * 2) / triadCount;
+          const tDist = 20 + ratio * 16;
+          const tx = Math.cos(tAng) * tDist;
+          const ty = 4 + Math.sin(tAng) * (tDist * 0.58);
+
+          ctx.save();
+          ctx.translate(tx, ty);
+          ctx.fillStyle = orbColors[tc];
+          ctx.shadowColor = orbGlows[tc];
+          ctx.shadowBlur = isReady ? 10 : 5;
+          ctx.beginPath();
+          ctx.arc(0, 0, isReady ? 5.5 : 3.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Arco de plasma saltando al báculo
+          if (Math.random() < 0.45) {
+            ctx.strokeStyle = tc === 0 ? '#80d8ff' : (tc === 1 ? '#ffd54f' : '#ffffff');
+            ctx.lineWidth = isReady ? 1.4 : 0.9;
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            const midX = (tx + staffX) * 0.5 + (Math.random() - 0.5) * 5;
+            const midY = (ty + staffY) * 0.5 + (Math.random() - 0.5) * 5;
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(staffX, staffY);
+            ctx.stroke();
+          }
+        }
+
+        // Foco de energía tri-elemental en la punta del báculo
+        const pulseR = (isReady ? 14 : 7.5 + ratio * 4.5) + Math.sin(Date.now() * 0.035) * 1.8;
+        const gpsGrad = ctx.createRadialGradient(staffX, staffY, 1, staffX, staffY, pulseR * 2.7);
+        gpsGrad.addColorStop(0, '#ffffff');
+        gpsGrad.addColorStop(0.25, isReady ? '#e0f7fa' : '#80d8ff');
+        gpsGrad.addColorStop(0.55, isReady ? '#ff6d00' : '#ff9100');
+        gpsGrad.addColorStop(0.85, '#7c4dff');
+        gpsGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+        ctx.fillStyle = gpsGrad;
+        ctx.beginPath();
+        ctx.arc(staffX, staffY, pulseR * 2.7, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -8445,6 +8518,395 @@ export class IsometricRenderer {
         : 'NÚCLEO DE SOBRECARGA (NIVEL 1) 💣⚡',
       tx,
       ty - ry - 14
+    );
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // TORMENTA DE PLASMA GLACIAL (FUEGO + RAYO + HIELO)
+  // =========================================================================
+
+  // 1. Suelo, sombras, estela térmica y ondas de implosión/detonación
+  private static drawGlacialPlasmaStormGround(
+    ctx: CanvasRenderingContext2D,
+    glacialPlasmaStorms: GlacialPlasmaStormEntity[]
+  ) {
+    if (!glacialPlasmaStorms || glacialPlasmaStorms.length === 0) return;
+
+    const squish = 0.58;
+    const now = Date.now();
+
+    glacialPlasmaStorms.forEach((storm) => {
+      if (storm.phase === 'finished') return;
+
+      const cx = storm.x;
+      const cy = storm.y;
+      const r = storm.radius;
+      const isCharged = storm.isCharged;
+
+      ctx.save();
+
+      // Sombra gélida y térmica en el suelo
+      const shadowR = r * 1.1;
+      const shadowGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, shadowR);
+      shadowGrad.addColorStop(0, isCharged ? 'rgba(0, 0, 0, 0.65)' : 'rgba(0, 0, 0, 0.5)');
+      shadowGrad.addColorStop(0.5, 'rgba(0, 229, 255, 0.18)');
+      shadowGrad.addColorStop(0.85, 'rgba(255, 109, 0, 0.12)');
+      shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = shadowGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, shadowR, shadowR * squish, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Anillo de advertencia de succión / influencia gravitatoria
+      const suctionR = storm.implosionRadius;
+      ctx.strokeStyle = isCharged ? 'rgba(0, 229, 255, 0.45)' : 'rgba(124, 77, 255, 0.35)';
+      ctx.lineWidth = isCharged ? 1.8 : 1.2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, suctionR, suctionR * squish, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Si está en fase de IMPLOSIÓN: espirales de succión centrípeta hacia el núcleo
+      if (storm.phase === 'imploding') {
+        const suckProg = Math.min(1.0, storm.phaseTimer / storm.implosionDurationMs);
+        const spiralCount = 8;
+        for (let s = 0; s < spiralCount; s++) {
+          const baseAng = (s * Math.PI * 2) / spiralCount + (now * 0.008);
+          const startDist = suctionR * (1.0 - suckProg * 0.85);
+
+          ctx.strokeStyle = s % 2 === 0 ? 'rgba(0, 229, 255, 0.7)' : 'rgba(255, 109, 0, 0.7)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(baseAng) * startDist, cy + Math.sin(baseAng) * (startDist * squish));
+          const midDist = startDist * 0.5;
+          const midAng = baseAng + 0.6;
+          ctx.quadraticCurveTo(
+            cx + Math.cos(midAng) * midDist,
+            cy + Math.sin(midAng) * (midDist * squish),
+            cx,
+            cy
+          );
+          ctx.stroke();
+        }
+      }
+
+      // Si está en fase de DETONACIÓN: onda de choque expansiva en el suelo
+      if (storm.phase === 'detonating') {
+        const detProg = Math.min(1.0, storm.phaseTimer / storm.detonationDurationMs);
+        const shockR = suctionR * (0.3 + detProg * 0.85);
+        const shockAlpha = (1.0 - detProg) * 0.9;
+
+        // Anillo de fuego interior
+        ctx.strokeStyle = `rgba(255, 109, 0, ${shockAlpha})`;
+        ctx.lineWidth = 3.5 * (1.0 - detProg);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, shockR * 0.7, shockR * 0.7 * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Anillo de hielo exterior
+        ctx.strokeStyle = `rgba(0, 229, 255, ${shockAlpha})`;
+        ctx.lineWidth = 4.5 * (1.0 - detProg);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, shockR, shockR * squish, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // 2. Dibuja el cuerpo tridimensional del vórtice tri-elemental
+  private static drawGlacialPlasmaStormBody(
+    ctx: CanvasRenderingContext2D,
+    storm: GlacialPlasmaStormEntity
+  ) {
+    if (storm.phase === 'finished') return;
+
+    const squish = 0.58;
+    const now = Date.now();
+    const isCharged = storm.isCharged;
+
+    // Altura de levitación con balanceo
+    const hoverH = 14 + Math.sin(now * 0.007) * 2.5;
+    const vx = storm.x;
+    const vy = storm.y - hoverH;
+
+    ctx.save();
+
+    // =========================================================================
+    // FASE B: IMPLOSIÓN DE VACÍO (El vórtice colapsa bruscamente hacia el centro)
+    // =========================================================================
+    if (storm.phase === 'imploding') {
+      const suckProg = Math.min(1.0, storm.phaseTimer / storm.implosionDurationMs);
+      const curR = Math.max(4, storm.radius * (1.0 - suckProg * 0.88));
+
+      // Singularidad púrpura-negra en el centro
+      const singGrad = ctx.createRadialGradient(vx, vy, 1, vx, vy, curR * 2.0);
+      singGrad.addColorStop(0, '#ffffff');
+      singGrad.addColorStop(0.35, '#311b92');
+      singGrad.addColorStop(0.7, '#12005e');
+      singGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.fillStyle = singGrad;
+      ctx.beginPath();
+      ctx.arc(vx, vy, curR * 2.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Destello agudo central
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(vx, vy, 3 + (1.0 - suckProg) * 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+      return;
+    }
+
+    // =========================================================================
+    // FASE C: DETONACIÓN EXPANSIVA Y REMATE CENTRÍFUGO
+    // =========================================================================
+    if (storm.phase === 'detonating') {
+      const detProg = Math.min(1.0, storm.phaseTimer / storm.detonationDurationMs);
+      const burstR = storm.implosionRadius * (0.2 + detProg * 0.9);
+      const alpha = (1.0 - detProg);
+
+      // Flash esférico de plasma gélido y fuego
+      const burstGrad = ctx.createRadialGradient(vx, vy, 2, vx, vy, burstR);
+      burstGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+      burstGrad.addColorStop(0.3, `rgba(255, 214, 0, ${alpha * 0.8})`);
+      burstGrad.addColorStop(0.6, `rgba(255, 109, 0, ${alpha * 0.7})`);
+      burstGrad.addColorStop(0.85, `rgba(0, 229, 255, ${alpha * 0.6})`);
+      burstGrad.addColorStop(1, 'rgba(124, 77, 255, 0)');
+
+      ctx.fillStyle = burstGrad;
+      ctx.beginPath();
+      ctx.arc(vx, vy, burstR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chispas de alta tensión radiando
+      const rayCount = 10;
+      for (let r = 0; r < rayCount; r++) {
+        const rAng = (r * Math.PI * 2) / rayCount + storm.swirlAngle;
+        const rLen = burstR * (0.8 + Math.random() * 0.35);
+        ctx.strokeStyle = r % 2 === 0 ? '#00e5ff' : '#ffd600';
+        ctx.lineWidth = 2.0 * alpha;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(vx + Math.cos(rAng) * rLen, vy + Math.sin(rAng) * rLen);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    // =========================================================================
+    // FASE A: VÓRTICE EN DESPLAZAMIENTO (3 CAPAS ELEMENTALES VIVAS)
+    // =========================================================================
+    const baseR = storm.radius;
+
+    // 1. CAPA GÉLIDA (Base y halo exterior: Cian #00E5FF y blanco escarcha)
+    const frostR = baseR * 1.1;
+    ctx.save();
+    ctx.translate(vx, vy);
+    ctx.rotate(storm.frostLayerAngle);
+
+    const frostGrad = ctx.createRadialGradient(0, 0, frostR * 0.3, 0, 0, frostR);
+    frostGrad.addColorStop(0, 'rgba(224, 247, 250, 0.4)');
+    frostGrad.addColorStop(0.5, 'rgba(0, 229, 255, 0.32)');
+    frostGrad.addColorStop(0.85, 'rgba(128, 216, 255, 0.18)');
+    frostGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+
+    ctx.fillStyle = frostGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, frostR, frostR * 0.75, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillo giratorio de espirales de escarcha
+    ctx.strokeStyle = isCharged ? 'rgba(0, 229, 255, 0.75)' : 'rgba(128, 216, 255, 0.55)';
+    ctx.lineWidth = isCharged ? 2.2 : 1.5;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, frostR * 0.9, frostR * 0.65, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 2. NÚCLEO DE FUEGO Y PLASMA (Rotación contracorriente: Naranja #FF6D00 y Sol #FFD600)
+    const coreR = baseR * 0.65;
+    ctx.save();
+    ctx.translate(vx, vy);
+    ctx.rotate(storm.plasmaCoreAngle);
+
+    // Variación turbulenta del radio para dar sensación viva
+    const turbulence = Math.sin(now * 0.02) * 2.5;
+    const finalCoreR = coreR + turbulence;
+
+    const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, finalCoreR);
+    coreGrad.addColorStop(0, '#ffffff');
+    coreGrad.addColorStop(0.3, '#ffd600');
+    coreGrad.addColorStop(0.7, '#ff6d00');
+    coreGrad.addColorStop(0.92, '#d50000');
+    coreGrad.addColorStop(1, 'rgba(213, 0, 0, 0)');
+
+    ctx.fillStyle = coreGrad;
+    ctx.shadowColor = '#ff6d00';
+    ctx.shadowBlur = isCharged ? 18 : 10;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, finalCoreR, finalCoreR * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Espiral ígnea interna
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let theta = 0; theta < Math.PI * 3; theta += 0.3) {
+      const spR = (theta / (Math.PI * 3)) * (finalCoreR * 0.75);
+      const sx = Math.cos(theta) * spR;
+      const sy = Math.sin(theta) * (spR * 0.75);
+      if (theta === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. FILAMENTOS ELÉCTRICOS (Rayo violeta #7C4DFF y blanco neón orbitando)
+    const arcCount = isCharged ? 5 : 3;
+    for (let a = 0; a < arcCount; a++) {
+      const aAng = storm.swirlAngle * 2.5 + (a * Math.PI * 2) / arcCount;
+      const aDist = baseR * (0.6 + ((a * 19) % 10) * 0.04);
+      const ax = vx + Math.cos(aAng) * aDist;
+      const ay = vy + Math.sin(aAng) * (aDist * squish);
+
+      ctx.strokeStyle = a % 2 === 0 ? '#ffffff' : '#b388ff';
+      ctx.lineWidth = 1.4;
+      ctx.shadowColor = '#7c4dff';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(vx, vy);
+      const midX = (vx + ax) * 0.5 + (Math.random() - 0.5) * 8;
+      const midY = (vy + ay) * 0.5 + (Math.random() - 0.5) * 6;
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(ax, ay);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Dibujar arcos activos que saltan hacia enemigos
+    if (storm.arcs && storm.arcs.length > 0) {
+      storm.arcs.forEach((arc) => {
+        ctx.strokeStyle = arc.color || '#00e5ff';
+        ctx.lineWidth = 1.8;
+        ctx.shadowColor = '#7c4dff';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(arc.x1, arc.y1);
+        const midX = (arc.x1 + arc.x2) * 0.5 + (Math.random() - 0.5) * 6;
+        const midY = (arc.y1 + arc.y2) * 0.5 + (Math.random() - 0.5) * 6;
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(arc.x2, arc.y2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+    }
+
+    // 4. BADGE HUD DE TORMENTA
+    const badgeY = vy - baseR - 12;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isCharged ? '#ffd600' : '#80d8ff';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(
+      isCharged ? '🌪️⚡ SOBRECARGA TRI-ELEMENTAL (+50%)' : '🌪️❄️⚡ TORMENTA DE PLASMA GLACIAL',
+      vx,
+      badgeY
+    );
+
+    ctx.restore();
+  }
+
+  // 3. Previsualización de retícula táctica para Tormenta de Plasma Glacial
+  private static drawGlacialPlasmaStormAimIndicator(
+    ctx: CanvasRenderingContext2D,
+    wizard: { x: number; y: number; facingAngle: number; isCharging?: boolean; chargeRatio?: number }
+  ) {
+    const ratio = wizard.chargeRatio || 0;
+    const isReady = ratio >= 1.0;
+    const squish = 0.58;
+
+    // Tap = alcance estándar ~280px, radio de succión ~125px; Cargado = radio +35% (~170px)
+    const aimDist = 280;
+    const tx = wizard.x + Math.cos(wizard.facingAngle) * aimDist;
+    const ty = wizard.y + Math.sin(wizard.facingAngle) * aimDist;
+    const suctionR = isReady ? 170 : Math.floor(125 + ratio * 45);
+    const vortexR = isReady ? 95 : Math.floor(70 + ratio * 25);
+    const now = Date.now();
+
+    ctx.save();
+
+    // Línea de trayectoria recta proyectada
+    ctx.strokeStyle = isReady ? 'rgba(0, 229, 255, 0.65)' : 'rgba(255, 109, 0, 0.5)';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(wizard.x, wizard.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Relleno elíptico en el epicentro final de implosión
+    const aimGrad = ctx.createRadialGradient(tx, ty, 6, tx, ty, suctionR);
+    aimGrad.addColorStop(0, isReady ? 'rgba(0, 229, 255, 0.3)' : 'rgba(255, 109, 0, 0.22)');
+    aimGrad.addColorStop(0.55, isReady ? 'rgba(124, 77, 255, 0.18)' : 'rgba(0, 229, 255, 0.14)');
+    aimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = aimGrad;
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, suctionR, suctionR * squish, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Anillo exterior de succión
+    ctx.strokeStyle = isReady ? '#00e5ff' : '#ff9100';
+    ctx.lineWidth = isReady ? 2.2 : 1.6;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, suctionR, suctionR * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Silueta holográfica del vórtice rotando en el destino
+    const ghostY = ty - 14;
+    ctx.save();
+    ctx.translate(tx, ghostY);
+    ctx.rotate(now * 0.003);
+    ctx.strokeStyle = isReady ? '#ffffff' : '#80d8ff';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, vortexR * 0.6, vortexR * 0.6 * squish, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Texto de HUD táctico
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isReady ? '#00e5ff' : '#ffd54f';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(
+      isReady
+        ? '¡SOBRECARGA TRI-ELEMENTAL (+35% ÁREA · +50% DAÑO · CONGELACIÓN)! 🌪️❄️⚡'
+        : 'TORMENTA DE PLASMA GLACIAL 🌪️❄️⚡',
+      tx,
+      ty - (suctionR * squish) - 14
     );
 
     ctx.restore();

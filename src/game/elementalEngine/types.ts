@@ -55,6 +55,7 @@ export type SpellCastType =
   | 'obsidian_volcano'    // Fuego + Hielo + Tierra
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
+  | 'glacial_plasma_storm' // Fuego + Rayo + Hielo
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -874,6 +875,52 @@ export interface OverloadCoreEntity {
   rockFragments: OverloadCoreRockFragment[];
   finished: boolean;
   criticalAlarmPlayed?: boolean;
+}
+
+// TORMENTA DE PLASMA GLACIAL (FUEGO + RAYO + HIELO: VÓRTICE MÓVIL TRI-ELEMENTAL, CONGELACIÓN, ENCADENAMIENTO VOLTAICO E IMPLOSIÓN CENTRÍFUGA)
+export type GlacialPlasmaStormPhase = 'moving' | 'imploding' | 'detonating' | 'finished';
+
+export interface GlacialPlasmaArc {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  life: number;
+}
+
+export interface GlacialPlasmaStormEntity {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  moveAngle: number;
+  startX: number;
+  startY: number;
+  travelDistance: number;
+  maxDistance: number;
+  isCharged: boolean;
+  scale: number;
+  radius: number;
+  implosionRadius: number;
+  phase: GlacialPlasmaStormPhase;
+  phaseTimer: number;
+  elapsedMs: number;
+  movingDurationMs: number;
+  implosionDurationMs: number;
+  detonationDurationMs: number;
+  tickIntervalMs: number;
+  lastTickPerEnemy: Record<string, number>;
+  lastArcTime: number;
+  transitDamagePerTick: number;
+  finisherDamage: number;
+  hasDetonated: boolean;
+  swirlAngle: number;
+  frostLayerAngle: number;
+  plasmaCoreAngle: number;
+  arcs: GlacialPlasmaArc[];
+  finished: boolean;
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas

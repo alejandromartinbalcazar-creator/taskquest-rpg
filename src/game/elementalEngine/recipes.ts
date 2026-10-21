@@ -278,6 +278,19 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     knockback: 8.5,
     cooldownMs: 650,
   },
+  glacial_plasma_storm: {
+    id: 'glacial_plasma_storm',
+    name: 'Tormenta de Plasma Glacial',
+    elements: ['fire', 'lightning', 'ice'],
+    description: 'Vórtice móvil que combina escarcha ralentizante, filamentos voltaicos encadenados y una colosal implosión térmica con remate centrífugo.',
+    icon: '🌪️❄️⚡',
+    color: '#00e5ff',
+    secondaryColor: '#ff6d00',
+    damage: 88,
+    knockback: 9.0,
+    cooldownMs: 650,
+    selfDamageRisk: 0,
+  },
 
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS
   elemental_cataclysm: {
@@ -339,9 +352,9 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (hasFire && hasLightning && hasEarth) {
     return RECIPES.overload_core;
   }
-  // Si tiene Fuego + Rayo + Hielo (variante de Choque Sobrecargado)
+  // Si tiene Fuego + Rayo + Hielo (Tormenta de Plasma Glacial)
   if (hasFire && hasLightning && hasIce) {
-    return RECIPES.explosive_overload;
+    return RECIPES.glacial_plasma_storm;
   }
 
   // 3. Las 6 Combinaciones Prioritarias de 2 Elementos

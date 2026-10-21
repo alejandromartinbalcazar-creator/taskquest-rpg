@@ -3241,6 +3241,159 @@ class ElementalSoundEngine {
     snapSource.start(boomStart);
     snapSource.stop(boomStart + snapLen);
   }
+
+  // =========================================================================
+  // SONIDOS DE TORMENTA DE PLASMA GLACIAL (FUEGO + RAYO + HIELO - 🌪️❄️⚡)
+  // =========================================================================
+
+  // 1. Lanzamiento del vórtice tri-elemental (Fuego, Hielo y Rayo entrelazados)
+  public playGlacialPlasmaStormLaunch(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // A. Silbido gélido de viento polar
+    const noiseLen = isCharged ? 0.35 : 0.25;
+    const noiseBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * noiseLen), this.ctx.sampleRate);
+    const nd = noiseBuff.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) {
+      nd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.12));
+    }
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuff;
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(isCharged ? 1900 : 1600, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(750, now + noiseLen);
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(isCharged ? 0.32 : 0.24, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noiseSource.start(now);
+    noiseSource.stop(now + noiseLen);
+
+    // B. Vórtice de plasma ígneo ardiente
+    const fireOsc = this.ctx.createOscillator();
+    const fireGain = this.ctx.createGain();
+    fireOsc.type = 'sawtooth';
+    fireOsc.frequency.setValueAtTime(isCharged ? 320 : 260, now);
+    fireOsc.frequency.exponentialRampToValueAtTime(140, now + 0.3);
+    const fireFilter = this.ctx.createBiquadFilter();
+    fireFilter.type = 'lowpass';
+    fireFilter.frequency.setValueAtTime(650, now);
+    fireGain.gain.setValueAtTime(isCharged ? 0.28 : 0.2, now);
+    fireGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    fireOsc.connect(fireFilter);
+    fireFilter.connect(fireGain);
+    fireGain.connect(this.ctx.destination);
+    fireOsc.start(now);
+    fireOsc.stop(now + 0.3);
+
+    // C. Arco eléctrico inicial de ignición
+    const zapOsc = this.ctx.createOscillator();
+    const zapGain = this.ctx.createGain();
+    zapOsc.type = 'square';
+    zapOsc.frequency.setValueAtTime(isCharged ? 980 : 820, now);
+    zapOsc.frequency.exponentialRampToValueAtTime(340, now + 0.15);
+    zapGain.gain.setValueAtTime(isCharged ? 0.22 : 0.16, now);
+    zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    zapOsc.connect(zapGain);
+    zapGain.connect(this.ctx.destination);
+    zapOsc.start(now);
+    zapOsc.stop(now + 0.15);
+  }
+
+  // 2. Chispazo / arco eléctrico entre objetivos encadenados en tránsito
+  public playGlacialPlasmaArcZap() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const zap = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(1200 + Math.random() * 300, now);
+    zap.frequency.exponentialRampToValueAtTime(450, now + 0.05);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    zap.connect(gain);
+    gain.connect(this.ctx.destination);
+    zap.start(now);
+    zap.stop(now + 0.05);
+  }
+
+  // 3. Implosión de vacío gravitatorio (succión violenta hacia el centro)
+  public playGlacialPlasmaImplosion(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Descenso gravitatorio inverso
+    const suck = this.ctx.createOscillator();
+    const suckGain = this.ctx.createGain();
+    suck.type = 'sine';
+    suck.frequency.setValueAtTime(isCharged ? 580 : 480, now);
+    suck.frequency.exponentialRampToValueAtTime(60, now + 0.18);
+
+    suckGain.gain.setValueAtTime(0.08, now);
+    suckGain.gain.linearRampToValueAtTime(isCharged ? 0.45 : 0.35, now + 0.15);
+    suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+
+    suck.connect(suckGain);
+    suckGain.connect(this.ctx.destination);
+    suck.start(now);
+    suck.stop(now + 0.19);
+  }
+
+  // 4. Detonación expansiva y remate centrífugo (estallido térmico + dispersión gélida)
+  public playGlacialPlasmaDetonation(isCharged: boolean = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // A. Sub-bass térmico masivo
+    const boom = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boom.type = 'triangle';
+    boom.frequency.setValueAtTime(isCharged ? 180 : 150, now);
+    boom.frequency.exponentialRampToValueAtTime(32, now + 0.38);
+
+    boomGain.gain.setValueAtTime(isCharged ? 0.65 : 0.48, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+    boom.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boom.start(now);
+    boom.stop(now + 0.38);
+
+    // B. Crujido de estallido de hielo y escarcha
+    const shatter = this.ctx.createOscillator();
+    const shatterGain = this.ctx.createGain();
+    shatter.type = 'sawtooth';
+    shatter.frequency.setValueAtTime(isCharged ? 2800 : 2300, now);
+    shatter.frequency.exponentialRampToValueAtTime(520, now + 0.26);
+
+    const shatterFilter = this.ctx.createBiquadFilter();
+    shatterFilter.type = 'bandpass';
+    shatterFilter.frequency.setValueAtTime(2200, now);
+
+    shatterGain.gain.setValueAtTime(isCharged ? 0.35 : 0.25, now);
+    shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+
+    shatter.connect(shatterFilter);
+    shatterFilter.connect(shatterGain);
+    shatterGain.connect(this.ctx.destination);
+    shatter.start(now);
+    shatter.stop(now + 0.26);
+  }
 }
 
 export const elementalSound = new ElementalSoundEngine();
