@@ -59,6 +59,7 @@ import {
   DUNGEON_RELICS,
 } from './physicsAndTerrain';
 import { EnemyManager } from './enemyAI';
+import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
 
@@ -305,60 +306,25 @@ function triggerAoEExplosion(
     });
   }
 
-  // 3. Daño y estados a enemigos en radio
+  // 3. Daño elemental y estados a enemigos en radio según la matriz del Bestiario
   enemies.forEach((enemy) => {
     const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
     if (dist <= aoeRadius + enemy.radius) {
-      let dmg = p.damage;
+      const spellElem = p.element || getSpellElement(p.spellType, enemy);
+      const res = applyDamageToEnemy(enemy, p.damage, spellElem, floatingTexts, p.x, p.y);
 
-      // Reacción Choque Térmico (Fuego a enemigos congelados)
-      const isFrozen = enemyManager.hasStatus(enemy, 'frozen');
-      if (
-        isFrozen &&
-        (p.spellType === 'thermal_shock' || p.spellType === 'fire_shot' || p.spellType === 'fire_inferno')
-      ) {
-        dmg *= 2.5;
-        enemyManager.removeStatus(enemy, 'frozen');
-        floatingTexts.push({
-          id: `shatter-${Date.now()}-${enemy.id}`,
-          x: enemy.x,
-          y: enemy.y - 25,
-          text: '💥 ¡CHOQUE TÉRMICO! x2.5',
-          color: '#f43f5e',
-          fontSize: 14,
-          opacity: 1,
-          vy: -1.6,
-          life: 40,
-        });
-      }
-
-      enemy.hp -= dmg;
-      enemy.hitFlash = 8;
-
-      if (dist > 0) {
+      if (dist > 0 && !res.isBlocked) {
         const pushAng = Math.atan2(enemy.y - p.y, enemy.x - p.x);
         enemy.x += Math.cos(pushAng) * (p.knockback || 3.5);
         enemy.y += Math.sin(pushAng) * (p.knockback || 3.5);
       }
 
-      if (p.statusToApply) {
+      if (p.statusToApply && !res.isImmune && !res.isAbsorbed) {
         enemyManager.applyStatus(enemy, p.statusToApply, 140);
       }
       if (p.spellType === 'explosive_overload') {
         enemy.stunnedTimer = 45;
       }
-
-      floatingTexts.push({
-        id: `aoedmg-${Date.now()}-${enemy.id}`,
-        x: enemy.x,
-        y: enemy.y - 12,
-        text: `-${Math.round(dmg)}`,
-        color: p.color,
-        fontSize: 12,
-        opacity: 1,
-        vy: -1.2,
-        life: 28,
-      });
     }
   });
 
@@ -5343,38 +5309,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 break;
               }
 
-              let finalDamage = p.damage;
+              // Resolver elemento del proyectil según su tipo y afinidad
+              const spellElem = p.element || getSpellElement(p.spellType, enemy);
 
-              // REACCIÓN CHOQUE TÉRMICO (Fuego + Hielo):
-              const isFrozen = g.enemyManager.hasStatus(enemy, 'frozen');
-              if (
-                isFrozen &&
-                (p.spellType === 'thermal_shock' || p.spellType === 'fire_shot' || p.spellType === 'fire_inferno')
-              ) {
-                finalDamage *= 2.5; // Multiplicador demoledor x2.5
-                g.enemyManager.removeStatus(enemy, 'frozen');
-                g.floatingTexts.push({
-                  id: `shatter-${Date.now()}`,
-                  x: enemy.x,
-                  y: enemy.y - 25,
-                  text: '💥 ¡CHOQUE TÉRMICO! x2.5',
-                  color: '#f43f5e',
-                  fontSize: 14,
-                  opacity: 1,
-                  vy: -1.6,
-                  life: 40,
-                });
+              let initialDmg = p.damage;
+              // Reducción si el Guardián de Basalto tiene armadura frontal activa
+              if (enemy.bossType === 'basalt_guardian' && enemy.stunnedTimer === 0) {
+                initialDmg *= 0.35;
+              }
+
+              // Aplicar daño elemental con matriz estricta del Bestiario
+              const res = applyDamageToEnemy(enemy, initialDmg, spellElem, g.floatingTexts, p.x, p.y);
+
+              if (res.isCritical) {
+                elementalSound.playThermalShatterCrit();
               } else {
                 elementalSound.playEnemyHit();
               }
-
-              // Reducción si el Guardián de Basalto tiene armadura frontal activa
-              if (enemy.bossType === 'basalt_guardian' && enemy.stunnedTimer === 0) {
-                finalDamage *= 0.35;
-              }
-
-              enemy.hp -= finalDamage;
-              enemy.hitFlash = 6;
 
               // Partículas de impacto según el elemento del proyectil
               if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
@@ -5427,24 +5378,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 }
               }
 
-              // Empuje físico
-              const hitAng = Math.atan2(p.vy, p.vx);
-              enemy.x += Math.cos(hitAng) * p.knockback;
-              enemy.y += Math.sin(hitAng) * p.knockback;
+              // Empuje físico (mitigado si el escudo frontal bloqueó el impacto)
+              if (!res.isBlocked) {
+                const hitAng = Math.atan2(p.vy, p.vx);
+                enemy.x += Math.cos(hitAng) * (p.knockback || 3.5);
+                enemy.y += Math.sin(hitAng) * (p.knockback || 3.5);
+              }
 
-              g.floatingTexts.push({
-                id: `dmg-${Date.now()}-${eIdx}`,
-                x: enemy.x,
-                y: enemy.y - 12,
-                text: `-${Math.round(finalDamage)}`,
-                color: p.color,
-                fontSize: 12,
-                opacity: 1,
-                vy: -1.2,
-                life: 30,
-              });
-
-              if (p.statusToApply) {
+              if (p.statusToApply && !res.isImmune && !res.isAbsorbed) {
                 g.enemyManager.applyStatus(enemy, p.statusToApply, 130);
               }
 

@@ -52,6 +52,13 @@ import {
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
+import {
+  drawPyreGolem,
+  drawStormStalker,
+  drawFrostLurker,
+  drawEnemyHealthBar,
+  drawBossVector,
+} from './bestiaryRenderer';
 
 export class IsometricRenderer {
   // Renderiza el frame completo del juego con CÁMARA CERCANA (Zoom 1.32x) y siluetas físicas únicas
@@ -2131,12 +2138,13 @@ export class IsometricRenderer {
     ctx.restore();
   }
 
-  // Dibuja Enemigos y Jefes con siluetas, indicadores de estado y telégrafos
+  // Dibuja Enemigos y Jefes con renderizado vectorial procedural del Bestiario (cero emojis)
   private static drawEnemy(ctx: CanvasRenderingContext2D, enemy: GameEnemy) {
+    const now = performance.now();
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
 
-    // 1. Telégrafo de Ataque Rojo
+    // 1. Telégrafo de Ataque Rojo (para ataques en carga o melé)
     if (enemy.isTelegraphing) {
       ctx.save();
       ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
@@ -2149,11 +2157,30 @@ export class IsometricRenderer {
       ctx.restore();
     }
 
-    // 2. Sombra en el suelo
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(0, enemy.radius * 0.7, enemy.radius, enemy.radius * 0.4, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // 2. Renderizado Vectorial Procedural según afinidad y tipo del Bestiario
+    if (enemy.bestiaryType === 'pyre_golem') {
+      drawPyreGolem(ctx, enemy, now);
+    } else if (enemy.bestiaryType === 'storm_stalker') {
+      drawStormStalker(ctx, enemy, now);
+    } else if (enemy.bestiaryType === 'frost_lurker') {
+      drawFrostLurker(ctx, enemy, now);
+    } else if (enemy.archetype === 'boss') {
+      drawBossVector(ctx, enemy, now);
+    } else {
+      // Fallback vectorial sin emojis para entidades genéricas
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(0, enemy.radius * 0.7, enemy.radius, enemy.radius * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : enemy.color;
+      ctx.beginPath();
+      ctx.arc(0, -enemy.radius * 0.6, enemy.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
 
     // 3. Si está congelado: Cubo de hielo 3D traslúcido
     const isFrozen = enemy.statuses.some((s) => s.type === 'frozen');
@@ -2165,52 +2192,28 @@ export class IsometricRenderer {
       ctx.fillRect(-enemy.radius - 5, -enemy.radius * 2 - 5, (enemy.radius + 5) * 2, (enemy.radius + 5) * 2);
     }
 
-    // 4. Si está aturdido (Stunned)
+    // 4. Si está aturdido (Stunned): Estrellas doradas vectoriales orbitando
     if (enemy.stunnedTimer && enemy.stunnedTimer > 0) {
-      ctx.font = '14px sans-serif';
-      ctx.fillText('💫💫', 0, -enemy.radius * 2 - 25);
+      const starAng = (now * 0.008) % (Math.PI * 2);
+      ctx.save();
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 1;
+      for (let s = 0; s < 3; s++) {
+        const a = starAng + (s * Math.PI * 2) / 3;
+        const sx = Math.cos(a) * (enemy.radius * 1.1);
+        const sy = -enemy.radius * 2 - 20 + Math.sin(a) * (enemy.radius * 0.35);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
-    // 5. Cuerpo del enemigo
-    if (enemy.hitFlash > 0) {
-      ctx.fillStyle = '#ffffff';
-    } else {
-      ctx.fillStyle = enemy.color;
-    }
-
-    ctx.beginPath();
-    ctx.arc(0, -enemy.radius * 0.6, enemy.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Avatar / Cara del enemigo
-    ctx.font = `${Math.floor(enemy.radius * 1.3)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(enemy.avatar, 0, -enemy.radius * 0.7);
-
-    // 6. Barra de Vida para enemigos normales (los jefes usan la gran barra superior)
+    // 5. Barra de vida segmentada con icono de debilidad elemental
     if (enemy.archetype !== 'boss') {
-      const barW = Math.max(32, enemy.radius * 2.2);
-      const barH = 4;
-      const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
-
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-barW / 2, -enemy.radius * 2 - 12, barW, barH);
-      ctx.fillStyle = hpPct > 0.4 ? '#22c55e' : '#ef4444';
-      ctx.fillRect(-barW / 2, -enemy.radius * 2 - 12, barW * hpPct, barH);
-    }
-
-    // 7. Iconos de Estados Activos
-    let stateIcons = '';
-    enemy.statuses.forEach((s) => {
-      if (s.type === 'burning') stateIcons += '🔥';
-      if (s.type === 'frozen') stateIcons += '🧊';
-      if (s.type === 'slowed') stateIcons += '❄️';
-      if (s.type === 'shocked') stateIcons += '⚡';
-    });
-    if (stateIcons) {
-      ctx.font = '11px sans-serif';
-      ctx.fillText(stateIcons, 0, -enemy.radius * 2 - 18);
+      drawEnemyHealthBar(ctx, enemy);
     }
 
     ctx.restore();

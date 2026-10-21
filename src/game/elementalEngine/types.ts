@@ -131,6 +131,7 @@ export interface Projectile {
   piercedIds: string[];
   isHostile: boolean;
   spellType: SpellCastType;
+  element?: ElementType | 'physical';
   visualShape?: ProjectileShape;
   rotation?: number;
   vRot?: number;
@@ -229,11 +230,14 @@ export type EnemyArchetype = 'chaser' | 'ranged' | 'brute' | 'boss';
 
 export type BossType = 'basalt_guardian' | 'storm_wraith' | 'obsidian_dragon';
 
+export type BestiaryEnemyType = 'pyre_golem' | 'storm_stalker' | 'frost_lurker';
+
 export interface GameEnemy {
   id: string;
   name: string;
   archetype: EnemyArchetype;
   bossType?: BossType;
+  bestiaryType?: BestiaryEnemyType;
   x: number;
   y: number;
   vx: number;
@@ -254,8 +258,21 @@ export interface GameEnemy {
   telegraphMax: number;
   isTelegraphing: boolean;
   aimAngle?: number;
+  facingAngle?: number;
   phase?: number;
   hitFlash: number;
+  // Mecánicas especiales del Gólem de Escoria (Pyre Golem)
+  cooledDownTimer?: number;    // Magma enfriado por Hielo (3s) -> grietas grises/ceniza, -50% vel, Tierra hace crítico contundente
+  frenzyTimer?: number;        // Frenesí al recibir Fuego -> aumento temporal de velocidad
+  // Mecánicas especiales del Espectro de Tormenta (Storm Stalker)
+  orbitAngle?: number;          // Ángulo de órbita alrededor del mago
+  teleportCooldown?: number;    // Enfriamiento de micro-dash evasivo lateral
+  sparkTimer?: number;          // Temporizador de canalización de orbe de chispa eléctrica (cada 3.5s)
+  // Mecánicas especiales del Acechador de Escarcha (Frost Lurker)
+  shieldBrokenTimer?: number;   // Coraza frontal derretida por Fuego
+  snipeTimer?: number;          // Temporizador de canalización de aguja de hielo rápida
+  isSniping?: boolean;          // Indica si está canalizando la aguja de hielo telegrafiada
+  snipeAngle?: number;          // Ángulo telegrafiado para el disparo recto
   // Mecánicas de jefes
   isCharging?: boolean;
   chargeTarget?: { x: number; y: number };

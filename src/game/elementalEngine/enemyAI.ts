@@ -11,6 +11,105 @@ export class EnemyManager {
     this.spawnRoomEnemies('entrance');
   }
 
+  public createPyreGolem(id: string, x: number, y: number): GameEnemy {
+    return {
+      id,
+      name: 'Gólem de Escoria Ígnea',
+      archetype: 'brute',
+      bestiaryType: 'pyre_golem',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      radius: 24,
+      hp: 220,
+      maxHp: 220,
+      attackPower: 24,
+      moveSpeed: 0.72,
+      statuses: [],
+      color: '#ea580c',
+      avatar: '',
+      weakness: 'ice',
+      resistance: 'fire',
+      attackCooldown: 0,
+      attackMaxCooldown: 110,
+      telegraphTimer: 0,
+      telegraphMax: 35,
+      isTelegraphing: false,
+      hitFlash: 0,
+      facingAngle: 0,
+      cooledDownTimer: 0,
+      frenzyTimer: 0,
+    };
+  }
+
+  public createStormStalker(id: string, x: number, y: number): GameEnemy {
+    return {
+      id,
+      name: 'Espectro de Tormenta',
+      archetype: 'ranged',
+      bestiaryType: 'storm_stalker',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      radius: 18,
+      hp: 130,
+      maxHp: 130,
+      attackPower: 16,
+      moveSpeed: 1.05,
+      statuses: [],
+      color: '#06b6d4',
+      avatar: '',
+      weakness: 'earth',
+      resistance: 'lightning',
+      attackCooldown: 0,
+      attackMaxCooldown: 140,
+      telegraphTimer: 0,
+      telegraphMax: 30,
+      isTelegraphing: false,
+      hitFlash: 0,
+      facingAngle: 0,
+      orbitAngle: Math.random() * Math.PI * 2,
+      teleportCooldown: 0,
+      sparkTimer: 0,
+    };
+  }
+
+  public createFrostLurker(id: string, x: number, y: number): GameEnemy {
+    return {
+      id,
+      name: 'Acechador de Escarcha',
+      archetype: 'ranged',
+      bestiaryType: 'frost_lurker',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      radius: 20,
+      hp: 160,
+      maxHp: 160,
+      attackPower: 22,
+      moveSpeed: 0.85,
+      statuses: [],
+      color: '#38bdf8',
+      avatar: '',
+      weakness: 'fire',
+      resistance: 'ice',
+      attackCooldown: 0,
+      attackMaxCooldown: 160,
+      telegraphTimer: 0,
+      telegraphMax: 35,
+      isTelegraphing: false,
+      hitFlash: 0,
+      facingAngle: 0,
+      shieldBrokenTimer: 0,
+      snipeTimer: 0,
+      isSniping: false,
+      snipeAngle: 0,
+    };
+  }
+
   // Genera enemigos según la sala actual de la mazmorra
   public spawnRoomEnemies(roomType: RoomType) {
     this.enemies = [];
@@ -21,169 +120,36 @@ export class EnemyManager {
       return;
     }
 
-    // 1. SALA DE ENJAMBRE (SWARM)
+    // 1. SALA DE ENJAMBRE (SWARM) - Gólems de Escoria Ígnea y Espectros de Tormenta
     if (roomType === 'combat_swarm') {
-      for (let i = 0; i < 5; i++) {
-        const ang = (Math.PI * 2 / 5) * i;
-        this.enemies.push({
-          id: `swarm-${Date.now()}-${i}`,
-          name: 'Duende de la Pereza',
-          archetype: 'chaser',
-          x: 550 + Math.cos(ang) * 220,
-          y: 360 + Math.sin(ang) * 160,
-          vx: 0,
-          vy: 0,
-          radius: 15,
-          hp: 70,
-          maxHp: 70,
-          attackPower: 8,
-          moveSpeed: 0.95,
-          statuses: [],
-          color: '#ef4444',
-          avatar: '👺',
-          weakness: 'fire',
-          attackCooldown: 0,
-          attackMaxCooldown: 55,
-          telegraphTimer: 0,
-          telegraphMax: 25,
-          isTelegraphing: false,
-          hitFlash: 0,
-        });
-      }
-    }
-    // 2. SALA DE TRAMPAS Y RIESGOS ELEMENTALES
-    else if (roomType === 'hazard_traps') {
-      for (let i = 0; i < 3; i++) {
-        this.enemies.push({
-          id: `hazard-creep-${Date.now()}-${i}`,
-          name: 'Duende Glacial',
-          archetype: 'chaser',
-          x: 420 + i * 130,
-          y: 280,
-          vx: 0,
-          vy: 0,
-          radius: 15,
-          hp: 85,
-          maxHp: 85,
-          attackPower: 10,
-          moveSpeed: 0.9,
-          statuses: [],
-          color: '#06b6d4',
-          avatar: '🥶',
-          weakness: 'fire',
-          attackCooldown: 0,
-          attackMaxCooldown: 50,
-          telegraphTimer: 0,
-          telegraphMax: 25,
-          isTelegraphing: false,
-          hitFlash: 0,
-        });
-      }
-
-      this.enemies.push({
-        id: `shooter-${Date.now()}`,
-        name: 'Espectro del Scroll',
-        archetype: 'ranged',
-        x: 550,
-        y: 190,
-        vx: 0,
-        vy: 0,
-        radius: 18,
-        hp: 110,
-        maxHp: 110,
-        attackPower: 14,
-        moveSpeed: 0.65,
-        statuses: [],
-        color: '#a855f7',
-        avatar: '👻',
-        weakness: 'lightning',
-        attackCooldown: 40,
-        attackMaxCooldown: 120,
-        telegraphTimer: 0,
-        telegraphMax: 40,
-        isTelegraphing: false,
-        hitFlash: 0,
-      });
-    }
-    // 3. SALA DE FUEGO CRUZADO (CROSSFIRE)
-    else if (roomType === 'crossfire') {
-      // 2 Espectros a distancia detrás de coberturas
+      // 2 Gólems de Escoria avanzando de frente
       this.enemies.push(
-        {
-          id: `shooter-1-${Date.now()}`,
-          name: 'Espectro del Foco Roto',
-          archetype: 'ranged',
-          x: 320,
-          y: 220,
-          vx: 0,
-          vy: 0,
-          radius: 18,
-          hp: 105,
-          maxHp: 105,
-          attackPower: 15,
-          moveSpeed: 0.65,
-          statuses: [],
-          color: '#a855f7',
-          avatar: '👻',
-          weakness: 'lightning',
-          attackCooldown: 30,
-          attackMaxCooldown: 110,
-          telegraphTimer: 0,
-          telegraphMax: 40,
-          isTelegraphing: false,
-          hitFlash: 0,
-        },
-        {
-          id: `shooter-2-${Date.now()}`,
-          name: 'Espectro de la Indecisión',
-          archetype: 'ranged',
-          x: 780,
-          y: 220,
-          vx: 0,
-          vy: 0,
-          radius: 18,
-          hp: 105,
-          maxHp: 105,
-          attackPower: 15,
-          moveSpeed: 0.65,
-          statuses: [],
-          color: '#a855f7',
-          avatar: '👻',
-          weakness: 'fire',
-          attackCooldown: 60,
-          attackMaxCooldown: 110,
-          telegraphTimer: 0,
-          telegraphMax: 40,
-          isTelegraphing: false,
-          hitFlash: 0,
-        }
+        this.createPyreGolem(`swarm-golem-1-${Date.now()}`, 480, 260),
+        this.createPyreGolem(`swarm-golem-2-${Date.now()}`, 640, 260),
+        // 2 Espectros de Tormenta hostigando desde los flancos
+        this.createStormStalker(`swarm-storm-1-${Date.now()}`, 380, 420),
+        this.createStormStalker(`swarm-storm-2-${Date.now()}`, 720, 420)
       );
-
-      // 1 Golem pesado de avanzada
-      this.enemies.push({
-        id: `golem-crossfire-${Date.now()}`,
-        name: 'Golem Pesado',
-        archetype: 'brute',
-        x: 550,
-        y: 450,
-        vx: 0,
-        vy: 0,
-        radius: 26,
-        hp: 200,
-        maxHp: 200,
-        attackPower: 22,
-        moveSpeed: 0.5,
-        statuses: [],
-        color: '#64748b',
-        avatar: '🗿',
-        weakness: 'earth',
-        attackCooldown: 50,
-        attackMaxCooldown: 140,
-        telegraphTimer: 0,
-        telegraphMax: 45,
-        isTelegraphing: false,
-        hitFlash: 0,
-      });
+    }
+    // 2. SALA DE TRAMPAS Y RIESGOS ELEMENTALES - Acechadores de Escarcha y Gólem
+    else if (roomType === 'hazard_traps') {
+      this.enemies.push(
+        this.createFrostLurker(`hazard-lurker-1-${Date.now()}`, 400, 220),
+        this.createFrostLurker(`hazard-lurker-2-${Date.now()}`, 700, 220),
+        this.createPyreGolem(`hazard-golem-${Date.now()}`, 550, 360)
+      );
+    }
+    // 3. SALA DE FUEGO CRUZADO (CROSSFIRE) - Triada Táctica Completa del Bestiario
+    else if (roomType === 'crossfire') {
+      this.enemies.push(
+        // 2 Acechadores francotiradores protegiéndose tras coberturas
+        this.createFrostLurker(`crossfire-lurker-1-${Date.now()}`, 340, 210),
+        this.createFrostLurker(`crossfire-lurker-2-${Date.now()}`, 760, 210),
+        // 1 Espectro orbital hostigador
+        this.createStormStalker(`crossfire-storm-${Date.now()}`, 550, 180),
+        // 1 Gólem pesado de primera línea
+        this.createPyreGolem(`crossfire-golem-${Date.now()}`, 550, 440)
+      );
     }
     // 4. JEFE 1: GUARDIÁN DE BASALTO
     else if (roomType === 'boss_basalt') {
@@ -332,6 +298,20 @@ export class EnemyManager {
         if (s.duration <= 0) {
           e.statuses.splice(sIdx, 1);
         }
+      }
+
+      // Temporizadores mecánicos del Bestiario
+      if (e.cooledDownTimer && e.cooledDownTimer > 0) e.cooledDownTimer--;
+      if (e.frenzyTimer && e.frenzyTimer > 0) e.frenzyTimer--;
+      if (e.shieldBrokenTimer && e.shieldBrokenTimer > 0) e.shieldBrokenTimer--;
+      if (e.teleportCooldown && e.teleportCooldown > 0) e.teleportCooldown--;
+
+      // Modificadores de velocidad por reacciones del Bestiario
+      if (e.frenzyTimer && e.frenzyTimer > 0) {
+        speedMult *= 1.75; // Frenesí de velocidad por fuego en Gólem de Escoria
+      }
+      if (e.cooledDownTimer && e.cooledDownTimer > 0) {
+        speedMult *= 0.5; // -50% velocidad por enfriamiento de magma
       }
 
       // Si está aturdido o congelado, no se mueve
@@ -555,8 +535,178 @@ export class EnemyManager {
         continue;
       }
 
-      // 3. IA DE ENEMIGOS ESTÁNDAR (Chaser, Ranged, Brute)
-      if (e.archetype === 'chaser') {
+      // 3. IA TÁCTICA DEL BESTIARIO ELEMENTAL
+      if (e.bestiaryType === 'pyre_golem') {
+        e.facingAngle = Math.atan2(dy, dx);
+
+        // Si está en rango de melé o ya telegrafiando el puñetazo pesado
+        if (distToPlayer <= 75 || e.isTelegraphing) {
+          e.attackCooldown++;
+          if (e.attackCooldown >= e.attackMaxCooldown - e.telegraphMax) {
+            e.isTelegraphing = true;
+          }
+
+          if (e.attackCooldown >= e.attackMaxCooldown) {
+            e.attackCooldown = 0;
+            e.isTelegraphing = false;
+            // Al terminar la telegrafía en zona roja, si el jugador sigue en rango
+            if (distToPlayer <= 90) {
+              onPlayerDamage(e.attackPower);
+              elementalSound.playBasaltCrash();
+              floatingTexts.push({
+                id: `pyre-slam-${Date.now()}`,
+                x: wizard.x,
+                y: wizard.y - 20,
+                text: `💥 ¡PUÑETAZO ÍGNEO! -${e.attackPower} HP`,
+                color: '#ea580c',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.6,
+                life: 40,
+              });
+            }
+          }
+        } else {
+          // Persecución implacable directa hacia el héroe
+          e.vx = (dx / distToPlayer) * e.moveSpeed * speedMult;
+          e.vy = (dy / distToPlayer) * e.moveSpeed * speedMult;
+          e.x += e.vx;
+          e.y += e.vy;
+        }
+      } else if (e.bestiaryType === 'storm_stalker') {
+        e.facingAngle = Math.atan2(dy, dx);
+
+        // A. Micro-dash lateral evasivo si detecta proyectiles frontales entrantes del jugador
+        if ((!e.teleportCooldown || e.teleportCooldown <= 0) && (!e.stunnedTimer || e.stunnedTimer <= 0)) {
+          const incoming = projectiles.find((p) => {
+            if (p.isHostile) return false;
+            const pdx = e.x - p.x;
+            const pdy = e.y - p.y;
+            const pdist = Math.hypot(pdx, pdy);
+            if (pdist < 130) {
+              const dot = p.vx * pdx + p.vy * pdy;
+              return dot > 0;
+            }
+            return false;
+          });
+
+          if (incoming) {
+            const pAngle = Math.atan2(incoming.vy, incoming.vx);
+            const side = Math.random() > 0.5 ? 1 : -1;
+            const dashAngle = pAngle + (Math.PI / 2) * side;
+            e.x += Math.cos(dashAngle) * 60;
+            e.y += Math.sin(dashAngle) * 35;
+            e.teleportCooldown = 150; // 2.5s cooldown
+            elementalSound.playBasicSpark();
+            floatingTexts.push({
+              id: `evade-${Date.now()}`,
+              x: e.x,
+              y: e.y - 20,
+              text: '⚡ ¡DASH EVASIVO!',
+              color: '#38bdf8',
+              fontSize: 12,
+              opacity: 1,
+              vy: -1.4,
+              life: 30,
+            });
+          }
+        }
+
+        // B. Posicionamiento orbital a media distancia (180–210px)
+        e.orbitAngle = (e.orbitAngle ?? 0) + 0.022;
+        const targetOrbitX = wizard.x + Math.cos(e.orbitAngle) * 195;
+        const targetOrbitY = wizard.y + Math.sin(e.orbitAngle) * 195 * 0.58;
+        const odx = targetOrbitX - e.x;
+        const ody = targetOrbitY - e.y;
+        const odist = Math.hypot(odx, ody);
+
+        if (odist > 12) {
+          e.vx = (odx / odist) * (e.moveSpeed * 1.3 * speedMult);
+          e.vy = (ody / odist) * (e.moveSpeed * 1.3 * speedMult);
+          e.x += e.vx;
+          e.y += e.vy;
+        }
+
+        // C. Canaliza orbe de chispa eléctrica cada 3.5s (210 frames)
+        e.sparkTimer = (e.sparkTimer ?? 0) + 1;
+        if (e.sparkTimer >= 210) {
+          e.sparkTimer = 0;
+          const aimAngle = Math.atan2(dy, dx);
+          elementalSound.playBasicSpark();
+          projectiles.push({
+            id: `storm-spark-${Date.now()}-${Math.random()}`,
+            x: e.x,
+            y: e.y,
+            vx: Math.cos(aimAngle) * 4.8,
+            vy: Math.sin(aimAngle) * 4.8,
+            radius: 9,
+            color: '#00f0ff',
+            secondaryColor: '#7c4dff',
+            damage: e.attackPower,
+            knockback: 2.2,
+            life: 160,
+            maxLife: 160,
+            pierce: 1,
+            piercedIds: [],
+            isHostile: true,
+            spellType: 'basic_spark',
+            visualShape: 'plasma_sphere',
+            element: 'lightning',
+          });
+        }
+      } else if (e.bestiaryType === 'frost_lurker') {
+        // Siempre orienta la coraza frontal hacia el jugador para mitigar ataques frontales
+        e.facingAngle = Math.atan2(dy, dx);
+
+        // Kiting: Si el jugador se aproxima a menos de 160px, retrocede manteniendo el frente
+        if (distToPlayer < 160) {
+          e.vx = (-dx / distToPlayer) * (e.moveSpeed * 1.1 * speedMult);
+          e.vy = (-dy / distToPlayer) * (e.moveSpeed * 1.1 * speedMult);
+          e.x += e.vx;
+          e.y += e.vy;
+          e.isSniping = false;
+          e.snipeTimer = 0;
+        } else {
+          // A distancia segura, se detiene y canaliza la aguja de hielo rápida
+          e.vx *= 0.6;
+          e.vy *= 0.6;
+          e.snipeTimer = (e.snipeTimer ?? 0) + 1;
+
+          // Telegrafía con haz láser azul en el suelo
+          if (e.snipeTimer >= 35) {
+            e.isSniping = true;
+            e.snipeAngle = Math.atan2(dy, dx);
+          }
+
+          // Disparo de aguja de hielo de alta velocidad
+          if (e.snipeTimer >= 95) {
+            e.snipeTimer = 0;
+            e.isSniping = false;
+            const snipeAng = e.snipeAngle ?? Math.atan2(dy, dx);
+            elementalSound.playIceShard();
+            projectiles.push({
+              id: `frost-snipe-${Date.now()}-${Math.random()}`,
+              x: e.x,
+              y: e.y,
+              vx: Math.cos(snipeAng) * 7.5,
+              vy: Math.sin(snipeAng) * 7.5,
+              radius: 6,
+              color: '#38bdf8',
+              secondaryColor: '#0284c7',
+              damage: Math.round(e.attackPower * 1.25),
+              knockback: 3.5,
+              life: 140,
+              maxLife: 140,
+              pierce: 1,
+              piercedIds: [],
+              isHostile: true,
+              spellType: 'ice_lance',
+              visualShape: 'ice_lance',
+              element: 'ice',
+            });
+          }
+        }
+      } else if (e.archetype === 'chaser') {
         if (distToPlayer > wizard.radius + e.radius + 2) {
           e.vx = (dx / distToPlayer) * e.moveSpeed * speedMult;
           e.vy = (dy / distToPlayer) * e.moveSpeed * speedMult;
@@ -655,6 +805,21 @@ export class EnemyManager {
               life: 40,
             });
           }
+        }
+      }
+
+      // Respetar colisiones con obstáculos físicos del mapa (rocas, portón, pilares)
+      for (let oIdx = 0; oIdx < obstacles.length; oIdx++) {
+        const obs = obstacles[oIdx];
+        if (!obs.solid) continue;
+        const obDx = e.x - obs.x;
+        const obDy = e.y - obs.y;
+        const obDist = Math.hypot(obDx, obDy);
+        const minObsDist = e.radius + obs.radius;
+        if (obDist > 0 && obDist < minObsDist) {
+          const push = minObsDist - obDist;
+          e.x += (obDx / obDist) * push;
+          e.y += (obDy / obDist) * push;
         }
       }
 
