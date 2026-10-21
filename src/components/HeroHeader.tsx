@@ -7,6 +7,7 @@ interface HeroHeaderProps {
   player: Player;
   tasks: Task[];
   onOpenApkModal: () => void;
+  onOpenChangelogModal?: () => void;
   isDamagedAnimation: boolean;
 }
 
@@ -14,10 +15,34 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   player,
   tasks,
   onOpenApkModal,
+  onOpenChangelogModal,
   isDamagedAnimation,
 }) => {
   const [soundOn, setSoundOn] = React.useState(sound.isEnabled());
   const [now, setNow] = React.useState(() => Date.now());
+
+  // Contador de toques secretos para abrir Changelog
+  const tapCountRef = React.useRef(0);
+  const lastTapTimeRef = React.useRef(0);
+
+  const handleLogoTap = () => {
+    const nowTap = Date.now();
+    if (nowTap - lastTapTimeRef.current < 600) {
+      tapCountRef.current += 1;
+    } else {
+      tapCountRef.current = 1;
+    }
+    lastTapTimeRef.current = nowTap;
+
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      sound.playMicroStepDing();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([40, 30, 40]);
+      }
+      onOpenChangelogModal?.();
+    }
+  };
 
   React.useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 10000);
@@ -51,9 +76,14 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
         {/* Fila Principal: Título, Recursos y Controles */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-base font-black text-amber-400 tracking-wider flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleLogoTap}
+              className="text-base font-black text-amber-400 tracking-wider flex items-center gap-1.5 focus:outline-none select-none active:scale-95 transition-transform"
+              title="TaskQuest RPG (5 toques para Dev Changelog)"
+            >
               ⚔️ TASKQUEST
-            </span>
+            </button>
             {isAgony && (
               <span className="text-[10px] font-bold text-red-300 bg-red-950 px-2 py-0.5 rounded-full border border-red-500/70 animate-pulse flex items-center gap-1">
                 <ShieldAlert className="w-3 h-3 text-red-400" />

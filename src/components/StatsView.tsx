@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Player, Task } from '../types';
 import { StorageService } from '../services/storageService';
+import { sound } from '../services/soundService';
 import {
   BarChart3,
   Download,
@@ -18,14 +19,39 @@ interface StatsViewProps {
   player: Player;
   tasks: Task[];
   onDataImported: () => void;
+  onOpenChangelogModal?: () => void;
 }
 
 export const StatsView: React.FC<StatsViewProps> = ({
   player,
   tasks,
   onDataImported,
+  onOpenChangelogModal,
 }) => {
   const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  // Contador de toques secretos para abrir Changelog
+  const tapCountRef = useRef(0);
+  const lastTapTimeRef = useRef(0);
+
+  const handleVersionTap = () => {
+    const nowTap = Date.now();
+    if (nowTap - lastTapTimeRef.current < 600) {
+      tapCountRef.current += 1;
+    } else {
+      tapCountRef.current = 1;
+    }
+    lastTapTimeRef.current = nowTap;
+
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      sound.playMicroStepDing();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([40, 30, 40]);
+      }
+      onOpenChangelogModal?.();
+    }
+  };
 
   // Estadísticas reales por Afinidad de Atributo del Personaje
   const attackTasks = tasks.filter((t) => t.statAffinity === 'attack');
@@ -243,6 +269,18 @@ export const StatsView: React.FC<StatsViewProps> = ({
         {importStatus && (
           <p className="text-xs text-center text-cyan-300 font-medium">{importStatus}</p>
         )}
+      </div>
+
+      {/* Pie discreto con versión y activador easter egg */}
+      <div className="pt-3 pb-1 text-center">
+        <button
+          type="button"
+          onClick={handleVersionTap}
+          className="text-[11px] text-stone-600 hover:text-stone-400 transition font-mono select-none px-3 py-1 rounded-lg hover:bg-stone-900/60"
+          title="Toca 5 veces para ver el registro de versiones (Changelog)"
+        >
+          TaskQuest RPG v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0'} • Build {typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '2026-10-21'}
+        </button>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { CharacterView } from './components/CharacterView';
 import { StatsView } from './components/StatsView';
 import { ApkExportModal } from './components/ApkExportModal';
 import { DelevelModal } from './components/DelevelModal';
+import { ChangelogModal } from './components/ChangelogModal';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isDamagedAnimation, setIsDamagedAnimation] = useState(false);
   const [delevelModalEvent, setDelevelModalEvent] = useState<DelevelEvent | null>(null);
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
 
   // Guardar en Storage al cambiar estados
   useEffect(() => {
@@ -327,6 +329,7 @@ export function App() {
         player={player}
         tasks={tasks}
         onOpenApkModal={() => setIsApkModalOpen(true)}
+        onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
         isDamagedAnimation={isDamagedAnimation}
       />
 
@@ -376,6 +379,7 @@ export function App() {
             player={player}
             tasks={tasks}
             onDataImported={handleDataImported}
+            onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
           />
         )}
       </main>
@@ -392,6 +396,12 @@ export function App() {
       <ApkExportModal
         isOpen={isApkModalOpen}
         onClose={() => setIsApkModalOpen(false)}
+      />
+
+      {/* Modal de Changelog y Notas de Versión (Activado por Easter Egg) */}
+      <ChangelogModal
+        isOpen={isChangelogModalOpen}
+        onClose={() => setIsChangelogModalOpen(false)}
       />
 
       {/* Modal Dramático de Deleveling y Fractura de Poder */}
