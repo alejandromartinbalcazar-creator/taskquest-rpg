@@ -1,6 +1,6 @@
 import React from 'react';
 import { Player, Task } from '../types';
-import { Coins, Key, Volume2, VolumeX, AlertTriangle, Download, Skull, ShieldAlert } from 'lucide-react';
+import { Coins, Key, Volume2, VolumeX, AlertTriangle, Download, Skull, ShieldAlert, Trophy } from 'lucide-react';
 import { sound } from '../services/soundService';
 
 interface HeroHeaderProps {
@@ -8,6 +8,7 @@ interface HeroHeaderProps {
   tasks: Task[];
   onOpenApkModal: () => void;
   onOpenChangelogModal?: () => void;
+  onOpenProgressModal?: () => void;
   isDamagedAnimation: boolean;
 }
 
@@ -16,6 +17,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   tasks,
   onOpenApkModal,
   onOpenChangelogModal,
+  onOpenProgressModal,
   isDamagedAnimation,
 }) => {
   const [soundOn, setSoundOn] = React.useState(sound.isEnabled());
@@ -96,6 +98,17 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
                 -15% EXP
               </span>
             )}
+            {/* Botón de Progreso & Hitos */}
+            <button
+              type="button"
+              onClick={onOpenProgressModal}
+              className="flex items-center gap-1 bg-[#1a1d2e] hover:bg-[#23283f] px-2 py-0.5 rounded-lg border border-amber-500/50 text-[11px] font-bold text-amber-300 transition shadow-sm active:scale-95"
+              title="Ver Progresión Directa e Hitos del Héroe"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Nv.{player.level}</span>
+              <span className="text-orange-400 font-mono text-[10px]">🔥{player.cleanStreakDays || 0}d</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5">

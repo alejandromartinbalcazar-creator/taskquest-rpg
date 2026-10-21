@@ -13,7 +13,17 @@ export class StorageService {
   public static getPlayer(): Player {
     try {
       const data = localStorage.getItem(KEYS.PLAYER);
-      if (data) return JSON.parse(data);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return {
+          ...DEFAULT_PLAYER,
+          ...parsed,
+          unlockedMilestones: parsed.unlockedMilestones || [],
+          graceShieldCharges: parsed.graceShieldCharges ?? 0,
+          highPriorityTasksCompleted: parsed.highPriorityTasksCompleted ?? 0,
+          totalTasksCompleted: parsed.totalTasksCompleted ?? 0,
+        };
+      }
     } catch (e) {
       console.error('Error loading player data', e);
     }
@@ -79,10 +89,36 @@ export class StorageService {
     player: Player,
     task: Task
   ): { updatedPlayer: Player; updatedTask: Task; event: DelevelEvent } {
-    const isCritical = task.difficulty === 'epica' || task.difficulty === 'dificil';
-    const levelsToLose = isCritical ? 2 : 1;
     const prevLevel = player.level;
     const nowIso = new Date().toISOString();
+
+    // ESCUDO DE GRACIA (Hito "Constancia de Hierro"): Absorbe 1 fallo de tarea sin deleveling
+    if ((player.graceShieldCharges || 0) > 0) {
+      const updatedTask: Task = {
+        ...task,
+        isFailed: true,
+        failedAt: nowIso,
+        penalizedCount: (task.penalizedCount || 0) + 1,
+      };
+      const updatedPlayer: Player = {
+        ...player,
+        graceShieldCharges: Math.max(0, (player.graceShieldCharges || 1) - 1),
+      };
+      const event: DelevelEvent = {
+        task: updatedTask,
+        previousLevel: prevLevel,
+        newLevel: prevLevel,
+        levelsLost: 0,
+        hpLost: 0,
+        statsLost: { attack: 0, speed: 0, defense: 0, knowledge: 0 },
+        isAgony: false,
+        isGraceShieldAbsorbed: true,
+      };
+      return { updatedPlayer, updatedTask, event };
+    }
+
+    const isCritical = task.difficulty === 'epica' || task.difficulty === 'dificil';
+    const levelsToLose = isCritical ? 2 : 1;
     const curseEndIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     const honorDebtEndIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
 

@@ -89,6 +89,7 @@ export class IsometricRenderer {
       channelLockTimer?: number;
       channeledStream?: ChanneledStreamState | null;
       isCursed?: boolean;
+      hasLightningAura?: boolean;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -1134,6 +1135,7 @@ export class IsometricRenderer {
       channelLockTimer?: number;
       channeledStream?: ChanneledStreamState | null;
       isCursed?: boolean;
+      hasLightningAura?: boolean;
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -2135,6 +2137,37 @@ export class IsometricRenderer {
 
     const isLevitating = !!(wizard.channelLockTimer && wizard.channelLockTimer > 0);
     const levY = isLevitating ? -9 : 0;
+
+    // Aura de relámpago sutil del Hito: Mente Inquebrantable
+    if (wizard.hasLightningAura) {
+      ctx.save();
+      const t = Date.now() * 0.005;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 1.3;
+
+      for (let i = 0; i < 3; i++) {
+        const a = t * 1.5 + (i * Math.PI * 2) / 3;
+        const rad = 18 + Math.sin(t * 3 + i) * 4;
+        const sx = Math.cos(a) * rad;
+        const sy = levY - 8 + Math.sin(a) * rad * 0.6;
+        const ex = sx + Math.sin(t * 7 + i * 2) * 8;
+        const ey = sy + Math.cos(t * 7 + i * 2) * 8;
+
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo((sx + ex) / 2 + Math.sin(t * 9 + i) * 3, (sy + ey) / 2 + Math.cos(t * 9 + i) * 3);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     drawWizardSprite({
       ctx,

@@ -1,3 +1,5 @@
+export * from './progress';
+
 export type StatType = 'attack' | 'speed' | 'defense' | 'knowledge';
 
 export type TaskDifficulty = 'facil' | 'media' | 'dificil' | 'epica';
@@ -123,6 +125,11 @@ export interface Player {
   isCursed?: boolean;
   totalDelevelsSuffered?: number;
   delevelHistory?: DelevelRecord[];
+  // Sistema de Progresión Directa e Hitos del Héroe
+  unlockedMilestones?: string[];
+  graceShieldCharges?: number;
+  highPriorityTasksCompleted?: number;
+  lastCompletedDate?: string;
 }
 
 export interface DelevelRecord {
@@ -157,6 +164,7 @@ export interface DelevelEvent {
     knowledge: number;
   };
   isAgony: boolean;
+  isGraceShieldAbsorbed?: boolean;
 }
 
 export interface Enemy {

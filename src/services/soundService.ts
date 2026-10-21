@@ -256,6 +256,33 @@ class SoundService {
     });
   }
 
+  // Sonido de Desbloqueo de Hito del Héroe
+  public playMilestoneUnlock() {
+    if (!this.soundEnabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const chords = [392.0, 493.88, 587.33, 783.99]; // G4, B4, D5, G5 (Tríada dorada)
+    chords.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const startTime = this.ctx.currentTime + idx * 0.08;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.25, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.45);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.45);
+    });
+  }
+
   // Sonido de Latido de Urgencia (Peligro de vencimiento próximo)
   public playUrgencyWarning() {
     if (!this.soundEnabled) return;

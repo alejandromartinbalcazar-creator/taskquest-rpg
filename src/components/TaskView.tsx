@@ -93,17 +93,14 @@ export const TaskView: React.FC<TaskViewProps> = ({
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    let expReward = 35;
-    let goldReward = 20;
+    let expReward = 120;
+    let goldReward = 50;
     if (newDifficulty === 'facil') {
-      expReward = 25;
-      goldReward = 15;
-    } else if (newDifficulty === 'dificil') {
-      expReward = 70;
-      goldReward = 45;
-    } else if (newDifficulty === 'epica') {
-      expReward = 150;
-      goldReward = 90;
+      expReward = 60;
+      goldReward = 25;
+    } else if (newDifficulty === 'dificil' || newDifficulty === 'epica') {
+      expReward = 250;
+      goldReward = 100;
     }
 
     onAddTask({

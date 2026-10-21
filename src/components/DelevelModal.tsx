@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { DelevelEvent } from '../types';
 import { sound } from '../services/soundService';
-import { Skull, AlertOctagon, HeartCrack, ZapOff, ShieldAlert, Award, Clock } from 'lucide-react';
+import { Skull, AlertOctagon, HeartCrack, ZapOff, ShieldAlert, Award, Clock, ShieldCheck } from 'lucide-react';
 
 interface DelevelModalProps {
   event: DelevelEvent | null;
@@ -11,11 +11,58 @@ interface DelevelModalProps {
 export const DelevelModal: React.FC<DelevelModalProps> = ({ event, onClose }) => {
   useEffect(() => {
     if (event) {
-      sound.playDelevelCrackSound();
+      if (event.isGraceShieldAbsorbed) {
+        sound.playHonorRedeemedSound();
+      } else {
+        sound.playDelevelCrackSound();
+      }
     }
   }, [event]);
 
   if (!event) return null;
+
+  if (event.isGraceShieldAbsorbed) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
+        <div className="bg-gradient-to-b from-[#061f14] via-[#04140d] to-[#020a06] border-2 border-emerald-500 max-w-md w-full rounded-3xl p-6 shadow-[0_0_50px_rgba(16,185,129,0.4)] space-y-5 text-stone-100 relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Encabezado Heroico */}
+          <div className="text-center space-y-1">
+            <div className="inline-flex p-3 bg-emerald-950/80 border border-emerald-500/70 rounded-2xl mb-1 text-emerald-400 shadow-lg shadow-emerald-950">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-emerald-400 tracking-wider uppercase drop-shadow-md">
+              ¡Escudo de Gracia Activado!
+            </h2>
+            <p className="text-xs text-emerald-200 font-semibold tracking-wide">
+              Tu constancia forjó una protección impenetrable.
+            </p>
+          </div>
+
+          {/* Detalle de la absorción */}
+          <div className="bg-black/60 border border-emerald-800/80 rounded-2xl p-4 text-center">
+            <span className="text-sm font-bold text-stone-200">
+              La penalización por la tarea "{event.task.title}" fue absorbida.
+            </span>
+            <div className="mt-2 text-xs text-emerald-300">
+              ✨ <strong>Sin deleveling:</strong> Tu héroe permanece en <span className="font-bold font-mono">Nv. {event.previousLevel}</span>.
+            </div>
+            <div className="text-xs text-stone-400 mt-1">
+              Se ha consumido 1 carga del Escudo de Gracia. Mantén otra racha de 7 días para recargarlo.
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-sm rounded-2xl shadow-xl active:scale-98 transition flex items-center justify-center gap-2 border border-emerald-400/60"
+          >
+            <span>Continuar con Determinación</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">

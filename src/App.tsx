@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent } from './types';
+import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent, HeroMilestone } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
 import { HeroHeader } from './components/HeroHeader';
@@ -12,6 +12,8 @@ import { StatsView } from './components/StatsView';
 import { ApkExportModal } from './components/ApkExportModal';
 import { DelevelModal } from './components/DelevelModal';
 import { ChangelogModal } from './components/ChangelogModal';
+import { HeroProgressModal } from './components/HeroProgressModal';
+import { checkAndUnlockMilestones } from './data/heroMilestones';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -23,6 +25,24 @@ export function App() {
   const [isDamagedAnimation, setIsDamagedAnimation] = useState(false);
   const [delevelModalEvent, setDelevelModalEvent] = useState<DelevelEvent | null>(null);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
+  const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
+
+  // Auto-cerrar alertas emergentes
+  useEffect(() => {
+    if (levelUpToast) {
+      const timer = setTimeout(() => setLevelUpToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [levelUpToast]);
+
+  useEffect(() => {
+    if (milestoneToast) {
+      const timer = setTimeout(() => setMilestoneToast(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [milestoneToast]);
 
   // Guardar en Storage al cambiar estados
   useEffect(() => {
@@ -66,23 +86,33 @@ export function App() {
       let newLevel = prev.level;
       let newMaxExp = prev.maxExp;
       let newSP = prev.skillPoints;
-      let newHp = Math.min(prev.maxHp, prev.currentHp + 10); // Regenera vida al completar tareas
       let newMaxHp = prev.maxHp;
+      let newHp = Math.min(prev.maxHp, prev.currentHp + 10); // Regenera vida al completar tareas
 
       // Subida de nivel
       if (newExp >= newMaxExp) {
         newExp = newExp - newMaxExp;
         newLevel += 1;
-        newMaxExp = Math.floor(newMaxExp * 1.4);
+        newMaxExp = StorageService.calculateMaxExpForLevel(newLevel);
         newSP += 2; // +2 Puntos de Habilidad por nivel
-        newMaxHp += 15;
-        newHp = newMaxHp; // Curación completa al subir nivel
+
+        // Recalcular Max HP con base en fórmula: base 100 + (nivel - 1) * 15 + bono hito
+        const unlocked = prev.unlockedMilestones || [];
+        const milestoneHpBonus = unlocked.includes('primer_paso') ? 20 : 0;
+        newMaxHp = 100 + (newLevel - 1) * 15 + milestoneHpBonus;
+        newHp = newMaxHp; // Curación completa al subir nivel al 100%
 
         sound.playLevelUp();
         confetti({
           particleCount: 120,
           spread: 90,
           origin: { y: 0.5 },
+        });
+
+        setLevelUpToast({
+          level: newLevel,
+          hpGain: 15,
+          dmgGain: 4,
         });
       }
 
@@ -95,7 +125,6 @@ export function App() {
         maxHp: newMaxHp,
         gold: prev.gold + goldAmount,
         skillPoints: newSP,
-        totalTasksCompleted: prev.totalTasksCompleted + 1,
       };
     });
   };
@@ -108,11 +137,49 @@ export function App() {
     sound.playTaskComplete();
     confetti({ particleCount: 50, spread: 60 });
 
-    // Ganar EXP, Oro y 1 Llave de Mazmorra
-    grantExp(task.expReward, task.goldReward);
+    // Actualizar racha y contadores de progreso
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let streak = player.cleanStreakDays || 1;
+    if (!player.lastCompletedDate) {
+      streak = 1;
+    } else {
+      const lastDateStr = player.lastCompletedDate.slice(0, 10);
+      if (lastDateStr !== todayStr) {
+        const diffDays = Math.round(
+          (new Date(todayStr).getTime() - new Date(lastDateStr).getTime()) / (24 * 3600 * 1000)
+        );
+        if (diffDays === 1) {
+          streak += 1;
+        } else if (diffDays > 1) {
+          streak = 1;
+        }
+      }
+    }
 
-    // Distribución de estadísticas:
-    // "cada que se completa una actividad da puntos a las 4 categorias, pero más del específico"
+    const isHighPriority = task.difficulty === 'dificil' || task.difficulty === 'epica';
+    const nextTotalTasks = (player.totalTasksCompleted || 0) + 1;
+    const nextHighPriorityTasks = (player.highPriorityTasksCompleted || 0) + (isHighPriority ? 1 : 0);
+
+    // Evaluar Hitos del Héroe
+    const milestoneEval = checkAndUnlockMilestones({
+      ...player,
+      cleanStreakDays: streak,
+      totalTasksCompleted: nextTotalTasks,
+      highPriorityTasksCompleted: nextHighPriorityTasks,
+      lastCompletedDate: new Date().toISOString(),
+    });
+
+    if (milestoneEval.newlyUnlocked.length > 0) {
+      sound.playMilestoneUnlock();
+      confetti({
+        particleCount: 80,
+        spread: 100,
+        origin: { y: 0.4 },
+      });
+      setMilestoneToast(milestoneEval.newlyUnlocked[0]);
+    }
+
+    // Actualizar jugador con hitos y progreso
     setPlayer((prev) => {
       const stats = { ...prev.stats };
       const chosen = task.statAffinity;
@@ -131,14 +198,17 @@ export function App() {
       const extraMaxHp = chosen === 'defense' ? 2 : 0;
 
       return {
-        ...prev,
+        ...milestoneEval.updatedPlayer,
         dungeonKeys: prev.dungeonKeys + 1,
-        skillPoints: prev.skillPoints + extraSP,
-        maxHp: prev.maxHp + extraMaxHp,
-        currentHp: Math.min(prev.maxHp + extraMaxHp, prev.currentHp + 10),
+        skillPoints: milestoneEval.updatedPlayer.skillPoints + extraSP,
+        maxHp: milestoneEval.updatedPlayer.maxHp + extraMaxHp,
+        currentHp: Math.min(milestoneEval.updatedPlayer.maxHp + extraMaxHp, milestoneEval.updatedPlayer.currentHp + 10),
         stats,
       };
     });
+
+    // Otorgar EXP y Oro
+    grantExp(task.expReward, task.goldReward);
 
     setTasks((prev) =>
       prev.map((t) => {
@@ -330,8 +400,62 @@ export function App() {
         tasks={tasks}
         onOpenApkModal={() => setIsApkModalOpen(true)}
         onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+        onOpenProgressModal={() => setIsProgressModalOpen(true)}
         isDamagedAnimation={isDamagedAnimation}
       />
+
+      {/* Alerta Ceremonial de Subida de Nivel */}
+      {levelUpToast && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md animate-bounce">
+          <div className="bg-gradient-to-r from-amber-900/95 via-yellow-900/95 to-amber-900/95 border-2 border-yellow-400 p-3.5 rounded-2xl shadow-[0_0_30px_rgba(250,204,21,0.6)] flex items-center justify-between backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl animate-spin">🌟</span>
+              <div>
+                <div className="text-xs font-black text-yellow-300 uppercase tracking-widest">
+                  ¡NIVEL {levelUpToast.level} ALCANZADO!
+                </div>
+                <div className="text-[11px] font-bold text-yellow-100 font-mono">
+                  +{levelUpToast.hpGain} Vida Máxima | +{levelUpToast.dmgGain}% Daño Global
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setLevelUpToast(null)}
+              className="text-yellow-400 hover:text-white p-1 text-sm font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta Emergente de Hito Desbloqueado */}
+      {milestoneToast && (
+        <div className="fixed top-28 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md animate-fade-in">
+          <div className="bg-gradient-to-r from-purple-950/95 via-stone-900/95 to-purple-950/95 border-2 border-amber-400 p-3.5 rounded-2xl shadow-[0_0_25px_rgba(234,179,8,0.5)] flex items-center justify-between backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">{milestoneToast.icon}</span>
+              <div>
+                <div className="text-[10px] font-black text-amber-300 uppercase tracking-widest">
+                  ✨ ¡HITO DEL HÉROE DESBLOQUEADO!
+                </div>
+                <div className="text-xs font-black text-white">
+                  "{milestoneToast.title}"
+                </div>
+                <div className="text-[10px] text-amber-200">
+                  {milestoneToast.rewardDescription}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setMilestoneToast(null)}
+              className="text-stone-400 hover:text-white p-1 text-sm font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Vistas Principales */}
       <main>
@@ -371,6 +495,7 @@ export function App() {
             player={player}
             onUpdateName={handleUpdateHeroName}
             onAllocateStat={handleAllocateStat}
+            onOpenProgressModal={() => setIsProgressModalOpen(true)}
           />
         )}
 
@@ -409,6 +534,14 @@ export function App() {
         <DelevelModal
           event={delevelModalEvent}
           onClose={() => setDelevelModalEvent(null)}
+        />
+      )}
+
+      {/* Modal de Progresión Directa e Hitos del Héroe */}
+      {isProgressModalOpen && (
+        <HeroProgressModal
+          player={player}
+          onClose={() => setIsProgressModalOpen(false)}
         />
       )}
     </div>

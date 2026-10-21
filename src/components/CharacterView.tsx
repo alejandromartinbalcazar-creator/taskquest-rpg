@@ -11,19 +11,22 @@ import {
   Check,
   ShieldAlert,
   Skull,
-  TrendingDown
+  TrendingDown,
+  Trophy,
 } from 'lucide-react';
 
 interface CharacterViewProps {
   player: Player;
   onUpdateName: (newName: string) => void;
   onAllocateStat: (stat: StatType) => void;
+  onOpenProgressModal?: () => void;
 }
 
 export const CharacterView: React.FC<CharacterViewProps> = ({
   player,
   onUpdateName,
   onAllocateStat,
+  onOpenProgressModal,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [nameInput, setNameInput] = useState(player.name);
@@ -164,6 +167,19 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* BOTÓN PROGRESIÓN DIRECTA E HITOS */}
+        {onOpenProgressModal && (
+          <div className="mt-3">
+            <button
+              onClick={onOpenProgressModal}
+              className="w-full py-2 px-3 rounded-2xl bg-gradient-to-r from-amber-950/70 via-stone-900 to-amber-950/70 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition shadow-md active:scale-98"
+            >
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>Ver Hitos del Héroe & Progresión Directa</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ATRIBUTOS DEL MAGO (LIMPIO Y FÁCIL DE ENTENDER) */}

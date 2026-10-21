@@ -385,6 +385,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
   const lastAttackCdRatioRef = useRef(0);
+
+  // Reducción de enfriamiento por progresión de nivel: -5% cada 3 niveles
+  const getEffectiveCooldown = useCallback(
+    (cooldownMs: number) => {
+      const cooldownReduction = Math.floor(Math.max(0, (player.level || 1) - 1) / 3) * 0.05;
+      return Math.round(cooldownMs * (1 - cooldownReduction));
+    },
+    [player.level]
+  );
   const keysPressedRef = useRef<Record<string, boolean>>({});
   const attackAimRef = useRef<{
     active: boolean;
@@ -426,6 +435,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       hitFlash: 0,
       staffOrbColor: '#94a3b8',
       isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
+      hasLightningAura: (player.unlockedMilestones || []).includes('mente_inquebrantable'),
       isDashing: false,
       dashTimer: 0,
       dashCooldown: 0,
@@ -834,7 +844,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     elementalSound.playDash();
     wizard.isDashing = true;
     wizard.dashTimer = 11;
-    wizard.dashCooldown = wizard.dashCooldownMax;
+    const cooldownReduction = Math.floor(Math.max(0, (player.level || 1) - 1) / 3) * 0.05;
+    wizard.dashCooldown = Math.round(wizard.dashCooldownMax * (1 - cooldownReduction));
 
     // Si se está moviendo con el joystick, dashea en esa dirección; si no, hacia facingAngle
     let dashAngle = wizard.facingAngle;
@@ -869,19 +880,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (isDefeated || isVictorious) return;
       const now = Date.now();
       const g = gameStateRef.current;
-      const recipe = activeRecipe;
+      const rawRecipe = activeRecipe;
 
-      // Cooldown individual por receta/hechizo
-      const lastCast = g.recipeCooldowns[recipe.id] || 0;
-      const recipeCdRemaining = Math.max(0, recipe.cooldownMs - (now - lastCast));
+      // Cooldown individual por receta/hechizo con reducción por nivel
+      const lastCast = g.recipeCooldowns[rawRecipe.id] || 0;
+      const effectiveCooldownMs = getEffectiveCooldown(rawRecipe.cooldownMs);
+      const recipeCdRemaining = Math.max(0, effectiveCooldownMs - (now - lastCast));
       if (recipeCdRemaining > 0) {
         const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
         elementalSound.playCooldownWarning();
         g.floatingTexts.push({
-          id: `cd_${now}_${recipe.id}`,
+          id: `cd_${now}_${rawRecipe.id}`,
           x: g.wizard.x,
           y: g.wizard.y - 32,
-          text: `⏳ ${recipe.name}: ${secsRemaining}s`,
+          text: `⏳ ${rawRecipe.name}: ${secsRemaining}s`,
           color: '#f472b6',
           fontSize: 13,
           opacity: 1,
@@ -890,6 +902,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         });
         return;
       }
+
+      // PROGRESIÓN DIRECTA POR TAREAS & HITOS:
+      // +4% de daño global a todos los ataques por nivel del personaje
+      const globalDmgMult = 1.0 + Math.max(0, (player.level || 1) - 1) * 0.04;
+      // Bono Ígneo (+10% si desbloqueó el Hito "Disciplina de Fuego" y el hechizo usa Fuego)
+      const isFireSpell = rawRecipe.elements.includes('fire') || rawRecipe.id === 'fire_shot' || rawRecipe.id === 'fire_inferno' || rawRecipe.id === 'magma_eruption' || rawRecipe.id === 'hell_rain' || rawRecipe.id === 'thermal_shock' || rawRecipe.id === 'obsidian_volcano' || rawRecipe.id === 'elemental_cataclysm';
+      const fireBonus = (isFireSpell && (player.unlockedMilestones || []).includes('disciplina_fuego')) ? 1.10 : 1.0;
+      const heroDamageMultiplier = globalDmgMult * fireBonus;
+
+      const recipe = {
+        ...rawRecipe,
+        damage: Math.round(rawRecipe.damage * heroDamageMultiplier),
+      };
 
       // Intervalo mínimo de seguridad global entre lanzamientos (120 ms)
       if (now - g.lastAttackTime < 120) return;
@@ -1065,7 +1090,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       wizard.staffOrbColor = recipe.color;
 
       const chargeMultiplier = isCharged ? 1.65 : 1.0;
-      const statBonus = Math.floor(player.stats.attack * 0.45 + player.stats.knowledge * 0.45);
+      const statBonus = Math.floor((player.stats.attack * 0.45 + player.stats.knowledge * 0.45) * heroDamageMultiplier);
 
       if (isCharged) {
         g.screenShake = Math.max(g.screenShake, 8);
@@ -3214,7 +3239,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       setElementQueue([]);
     },
-    [activeRecipe, isDefeated, isVictorious, player.stats, startChanneledAttack, stopChanneledAttack]
+    [activeRecipe, getEffectiveCooldown, isDefeated, isVictorious, player.level, player.stats, player.unlockedMilestones, startChanneledAttack, stopChanneledAttack]
   );
 
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
@@ -3237,7 +3262,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     const g = gameStateRef.current;
     const now = Date.now();
     const lastCast = g.recipeCooldowns[activeRecipe.id] || 0;
-    const recipeCdRemaining = Math.max(0, activeRecipe.cooldownMs - (now - lastCast));
+    const effectiveCooldownMs = getEffectiveCooldown(activeRecipe.cooldownMs);
+    const recipeCdRemaining = Math.max(0, effectiveCooldownMs - (now - lastCast));
     if (recipeCdRemaining > 0) {
       const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
       elementalSound.playCooldownWarning();
@@ -3285,7 +3311,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (activeRecipe.id !== 'lightning_storm') {
       elementalSound.playChargeStart();
     }
-  }, [activeRecipe.elements, activeRecipe.id, handleAttack, isDefeated, isVictorious, startChanneledAttack]);
+  }, [activeRecipe.elements, activeRecipe.id, getEffectiveCooldown, handleAttack, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
     const wizard = gameStateRef.current.wizard;
@@ -3295,8 +3321,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
     if (!wizard.isCharging) return;
     const elapsed = Date.now() - (wizard.chargeStartTime || 0);
+    const hasFocusMilestone = (player.unlockedMilestones || []).includes('maestro_enfoque');
+    const holdThreshold = hasFocusMilestone ? 370 : 550;
     const wasCharged = (activeRecipe.id === 'elemental_cataclysm' || activeRecipe.id === 'glacial_plasma_storm' || activeRecipe.id === 'overload_core' || activeRecipe.id === 'conductive_prison' || activeRecipe.id === 'obsidian_volcano' || activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
-      ? (elapsed >= 550 || wizard.chargeRatio >= 0.95)
+      ? (elapsed >= holdThreshold || wizard.chargeRatio >= 0.95)
       : (wizard.chargeRatio >= 1.0);
     const finalRatio = wizard.chargeRatio;
     wizard.isCharging = false;
@@ -3304,7 +3332,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setIsChargingUi(false);
     setChargeVisualRatio(0);
     handleAttack(wasCharged, finalRatio);
-  }, [activeRecipe.id, handleAttack, stopChanneledAttack]);
+  }, [activeRecipe.id, handleAttack, player.unlockedMilestones, stopChanneledAttack]);
 
   // Manejo de puntería manual y arrastre táctil en el botón de Ataque
   const handleAttackPointerDown = useCallback(
@@ -3487,7 +3515,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (dist > 5) {
       const normalizedDist = Math.min(dist, maxRadius) / maxRadius;
       const angle = Math.atan2(dy, dx);
-      const speed = (2.7 + player.stats.speed * 0.08) * normalizedDist;
+      const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
+      const speed = (2.7 + player.stats.speed * 0.08) * normalizedDist * moveMultiplier;
       g.joystick.vx = Math.cos(angle) * speed;
       g.joystick.vy = Math.sin(angle) * speed;
       g.wizard.facingAngle = angle;
@@ -3545,12 +3574,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       }
 
       // 1.05 Actualizar Cooldown en tiempo real del Ataque / Habilidad Activa
+      wizard.hasLightningAura = (player.unlockedMilestones || []).includes('mente_inquebrantable');
       const currentRecipe = activeRecipeRef.current;
       const nowTs = Date.now();
       const lastCast = g.recipeCooldowns[currentRecipe.id] || 0;
-      const attackCdRemaining = Math.max(0, currentRecipe.cooldownMs - (nowTs - lastCast));
-      const attackCdRatio = (currentRecipe.cooldownMs > 0 && attackCdRemaining > 0)
-        ? attackCdRemaining / currentRecipe.cooldownMs
+      const effectiveCooldownMs = getEffectiveCooldown(currentRecipe.cooldownMs);
+      const attackCdRemaining = Math.max(0, effectiveCooldownMs - (nowTs - lastCast));
+      const attackCdRatio = (effectiveCooldownMs > 0 && attackCdRemaining > 0)
+        ? attackCdRemaining / effectiveCooldownMs
         : 0;
 
       if (Math.abs(attackCdRatio - lastAttackCdRatioRef.current) > 0.015 || (attackCdRatio === 0 && lastAttackCdRatioRef.current > 0)) {
@@ -3582,7 +3613,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         wizard.isMoving = false;
       } else if (keyVx !== 0 || keyVy !== 0) {
         const len = Math.hypot(keyVx, keyVy);
-        const speed = 3.2 + player.stats.speed * 0.08;
+        const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
+        const speed = (3.2 + player.stats.speed * 0.08) * moveMultiplier;
         wizard.x += (keyVx / len) * speed;
         wizard.y += (keyVy / len) * speed;
         wizard.facingAngle = Math.atan2(keyVy, keyVx);
@@ -3624,7 +3656,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const isOverloadCore = activeRecipe.id === 'overload_core';
         const isGlacialPlasma = activeRecipe.id === 'glacial_plasma_storm';
         const isCataclysm = activeRecipe.id === 'elemental_cataclysm';
-        const maxChargeTime = (isCataclysm || isGlacialPlasma || isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const hasFocusMilestone = (player.unlockedMilestones || []).includes('maestro_enfoque');
+        const chargeSpeedMult = hasFocusMilestone ? (0.4 / 0.6) : 1.0;
+        const baseChargeTime = (isCataclysm || isGlacialPlasma || isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
+        const maxChargeTime = baseChargeTime * chargeSpeedMult;
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
 
