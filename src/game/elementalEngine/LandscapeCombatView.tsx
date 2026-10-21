@@ -3105,6 +3105,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           shockwaveMaxRadius: catRadius,
           shockwaveAlpha: 1,
           finished: false,
+          hasDetonated: false,
         });
 
         // Partículas sutiles de conjuración tetra-elemental
@@ -3525,9 +3526,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     let lastFrameTimestamp = performance.now();
 
     const gameLoop = () => {
-      const frameNow = performance.now();
-      const dt = Math.min(50, Math.max(1, frameNow - lastFrameTimestamp));
-      lastFrameTimestamp = frameNow;
+      try {
+        const frameNow = performance.now();
+        const dt = Math.min(50, Math.max(1, frameNow - lastFrameTimestamp));
+        lastFrameTimestamp = frameNow;
 
       const g = gameStateRef.current;
       const wizard = g.wizard;
@@ -9788,8 +9790,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             cataclysm.phaseTimer = 0;
           }
 
-          // A los 1900 ms (100 ms tras el relámpago inicial): Gran detonación terminal con shatter
-          if (elapsed >= 1900 && cataclysm.lightningHitIds.size === 0) {
+          // A los 1900 ms (100 ms tras el relámpago inicial): Gran detonación terminal con shatter (ejecución única garantizada)
+          if (elapsed >= 1900 && !cataclysm.hasDetonated) {
+            cataclysm.hasDetonated = true;
             elementalSound.playCataclysmPhase4Lightning(isCharged);
             g.screenShake = isCharged ? 24 : 18;
 
@@ -9805,7 +9808,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 enemy.hitFlash = 18;
 
                 // Consumir congelación en Shatter reactivo masivo
-                enemy.statuses = enemy.statuses.filter((s) => s.type !== 'frozen');
+                enemy.statuses = (enemy.statuses || []).filter((s) => s.type !== 'frozen');
 
                 // Fuerte empuje radial centrífugo hacia afuera
                 const dx = enemy.x - cx;
@@ -9983,11 +9986,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           );
         }
       }
-
+    } catch (err) {
+      console.error('TaskQuest gameLoop error caught:', err);
+    } finally {
       if (!isDefeated && !isVictorious) {
         animId = requestAnimationFrame(gameLoop);
       }
-    };
+    }
+  };
 
     animId = requestAnimationFrame(gameLoop);
     return () => {

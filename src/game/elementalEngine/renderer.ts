@@ -484,8 +484,14 @@ export class IsometricRenderer {
     // Ordenar por coordenada Y ascendente
     renderList.sort((a, b) => a.y - b.y);
 
-    // Ejecutar dibujo ordenado
-    renderList.forEach((item) => item.draw());
+    // Ejecutar dibujo ordenado de entidades con aislamiento seguro
+    renderList.forEach((item) => {
+      try {
+        item.draw();
+      } catch (err) {
+        console.error('TaskQuest renderer: error drawing entity in renderList:', err);
+      }
+    });
 
     // 5.5 Dibujar Chorro Elemental Continuo (Flujo de Llamas / Chorro Criogénico)
     if (wizard.channeledStream && wizard.channeledStream.active) {
@@ -9056,145 +9062,150 @@ export class IsometricRenderer {
     cataclysms.forEach((cataclysm) => {
       if (cataclysm.phase === 'finished') return;
 
-      const elapsed = cataclysm.elapsedMs;
-      const alpha = elapsed > 2400 ? Math.max(0, 1 - (elapsed - 2400) / 400) : 1;
-      const cx = cataclysm.x;
-      const cy = cataclysm.y;
-      const rad = cataclysm.radius;
-      const isCharged = cataclysm.isCharged;
+      try {
+        const elapsed = cataclysm.elapsedMs;
+        const alpha = elapsed > 2400 ? Math.max(0, 1 - (elapsed - 2400) / 400) : 1;
+        const cx = cataclysm.x;
+        const cy = cataclysm.y;
+        const safeRad = Math.max(1, cataclysm.radius);
+        const isCharged = cataclysm.isCharged;
 
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      // A. RESPLANDOR DE FONDO TETRA-ELEMENTAL EN EL SUELO
-      const bgGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, rad);
-      if (cataclysm.phase === 'earth_fissure') {
-        bgGrad.addColorStop(0, 'rgba(255, 179, 0, 0.28)');
-        bgGrad.addColorStop(0.65, 'rgba(62, 39, 35, 0.18)');
-        bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (cataclysm.phase === 'fire_eruption') {
-        bgGrad.addColorStop(0, 'rgba(255, 109, 0, 0.35)');
-        bgGrad.addColorStop(0.55, 'rgba(213, 0, 0, 0.22)');
-        bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (cataclysm.phase === 'ice_wave') {
-        bgGrad.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
-        bgGrad.addColorStop(0.6, 'rgba(0, 145, 234, 0.2)');
-        bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else {
-        bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        bgGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.3)');
-        bgGrad.addColorStop(0.85, 'rgba(0, 229, 255, 0.15)');
-        bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      }
-
-      ctx.fillStyle = bgGrad;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rad, rad * squish, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // B. RUNA PRIMORDIAL TETRA-ELEMENTAL (ANILLOS CONCÉNTRICOS Y GLIFOS)
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(1, squish);
-
-      // Anillo perimetral punteado exterior
-      ctx.strokeStyle = isCharged ? '#ec4899' : '#fbbf24';
-      ctx.lineWidth = 2.2;
-      ctx.setLineDash([8, 6]);
-      ctx.beginPath();
-      ctx.arc(0, 0, rad, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Anillo rúnico intermedio girando
-      ctx.rotate(now * 0.001);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.arc(0, 0, rad * 0.65, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Anillo interior con 4 sectores elementales
-      ctx.rotate(-now * 0.002);
-      ctx.lineWidth = 2.0;
-      ctx.setLineDash([12, 8]);
-      ctx.strokeStyle = '#00e5ff';
-      ctx.beginPath();
-      ctx.arc(0, 0, rad * 0.35, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-
-      // C. 4 FISURAS TECTÓNICAS EN PERSPECTIVA ISOMÉTRICA
-      cataclysm.fissures.forEach((fissure) => {
-        if (!fissure.segments || fissure.segments.length < 2) return;
-
-        // Trazado base de la fractura en roca
         ctx.save();
-        ctx.strokeStyle = '#181824';
-        ctx.lineWidth = isCharged ? 7 : 5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'bevel';
-        ctx.beginPath();
-        ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
-        for (let i = 1; i < fissure.segments.length; i++) {
-          ctx.lineTo(fissure.segments[i].x, fissure.segments[i].y);
+        ctx.globalAlpha = alpha;
+
+        // A. RESPLANDOR DE FONDO TETRA-ELEMENTAL EN EL SUELO
+        const innerG = Math.min(10, safeRad * 0.1);
+        const bgGrad = ctx.createRadialGradient(cx, cy, innerG, cx, cy, safeRad);
+        if (cataclysm.phase === 'earth_fissure') {
+          bgGrad.addColorStop(0, 'rgba(255, 179, 0, 0.28)');
+          bgGrad.addColorStop(0.65, 'rgba(62, 39, 35, 0.18)');
+          bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else if (cataclysm.phase === 'fire_eruption') {
+          bgGrad.addColorStop(0, 'rgba(255, 109, 0, 0.35)');
+          bgGrad.addColorStop(0.55, 'rgba(213, 0, 0, 0.22)');
+          bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else if (cataclysm.phase === 'ice_wave') {
+          bgGrad.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
+          bgGrad.addColorStop(0.6, 'rgba(0, 145, 234, 0.2)');
+          bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+          bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+          bgGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.3)');
+          bgGrad.addColorStop(0.85, 'rgba(0, 229, 255, 0.15)');
+          bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         }
+
+        ctx.fillStyle = bgGrad;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, safeRad, safeRad * squish, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // B. RUNA PRIMORDIAL TETRA-ELEMENTAL (ANILLOS CONCÉNTRICOS Y GLIFOS)
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, squish);
+
+        // Anillo perimetral punteado exterior
+        ctx.strokeStyle = isCharged ? '#ec4899' : '#fbbf24';
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.arc(0, 0, safeRad, 0, Math.PI * 2);
         ctx.stroke();
 
-        // En Fase 2 (Fuego): Brillo de magma en el fondo de las fisuras
-        if (cataclysm.phase === 'fire_eruption' || elapsed >= 600) {
-          ctx.strokeStyle = cataclysm.phase === 'fire_eruption' ? '#ff6d00' : '#d50000';
-          ctx.lineWidth = isCharged ? 4.5 : 3.2;
-          ctx.shadowColor = '#ff3d00';
-          ctx.shadowBlur = 10;
+        // Anillo rúnico intermedio girando
+        ctx.rotate(now * 0.001);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(0.1, safeRad * 0.65), 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Anillo interior con 4 sectores elementales
+        ctx.rotate(-now * 0.002);
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([12, 8]);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(0.1, safeRad * 0.35), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // C. 4 FISURAS TECTÓNICAS EN PERSPECTIVA ISOMÉTRICA
+        cataclysm.fissures.forEach((fissure) => {
+          if (!fissure.segments || fissure.segments.length < 2) return;
+
+          // Trazado base de la fractura en roca
+          ctx.save();
+          ctx.strokeStyle = '#181824';
+          ctx.lineWidth = isCharged ? 7 : 5;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'bevel';
           ctx.beginPath();
           ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
           for (let i = 1; i < fissure.segments.length; i++) {
             ctx.lineTo(fissure.segments[i].x, fissure.segments[i].y);
           }
           ctx.stroke();
-          ctx.shadowBlur = 0;
-        }
 
-        // En Fase 3 (Hielo): Escarcha cristalina que sella el magma expuesto
-        if (cataclysm.phase === 'ice_wave' || elapsed >= 1200) {
-          ctx.strokeStyle = '#80d8ff';
-          ctx.lineWidth = isCharged ? 3.5 : 2.5;
-          ctx.shadowColor = '#00e5ff';
-          ctx.shadowBlur = 8;
-          ctx.beginPath();
-          ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
-          for (let i = 1; i < fissure.segments.length; i++) {
-            ctx.lineTo(fissure.segments[i].x, fissure.segments[i].y);
-          }
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-        }
-
-        // En Fase 4 (Rayo): Sobrecarga eléctrica recorriendo las fisuras congeladas
-        if (cataclysm.phase === 'lightning_detonation' && elapsed >= 1800) {
-          if (Math.random() < 0.8) {
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2.2;
-            ctx.shadowColor = '#7c4dff';
-            ctx.shadowBlur = 12;
+          // En Fase 2 (Fuego): Brillo de magma en el fondo de las fisuras
+          if (cataclysm.phase === 'fire_eruption' || elapsed >= 600) {
+            ctx.strokeStyle = cataclysm.phase === 'fire_eruption' ? '#ff6d00' : '#d50000';
+            ctx.lineWidth = isCharged ? 4.5 : 3.2;
+            ctx.shadowColor = '#ff3d00';
+            ctx.shadowBlur = 10;
             ctx.beginPath();
             ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
             for (let i = 1; i < fissure.segments.length; i++) {
-              const jx = fissure.segments[i].x + (Math.random() - 0.5) * 6;
-              const jy = fissure.segments[i].y + (Math.random() - 0.5) * 4;
-              ctx.lineTo(jx, jy);
+              ctx.lineTo(fissure.segments[i].x, fissure.segments[i].y);
             }
             ctx.stroke();
             ctx.shadowBlur = 0;
           }
-        }
+
+          // En Fase 3 (Hielo): Escarcha cristalina que sella el magma expuesto
+          if (cataclysm.phase === 'ice_wave' || elapsed >= 1200) {
+            ctx.strokeStyle = '#80d8ff';
+            ctx.lineWidth = isCharged ? 3.5 : 2.5;
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
+            for (let i = 1; i < fissure.segments.length; i++) {
+              ctx.lineTo(fissure.segments[i].x, fissure.segments[i].y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          }
+
+          // En Fase 4 (Rayo): Sobrecarga eléctrica recorriendo las fisuras congeladas
+          if (cataclysm.phase === 'lightning_detonation' && elapsed >= 1800) {
+            if (Math.random() < 0.8) {
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 2.2;
+              ctx.shadowColor = '#7c4dff';
+              ctx.shadowBlur = 12;
+              ctx.beginPath();
+              ctx.moveTo(fissure.segments[0].x, fissure.segments[0].y);
+              for (let i = 1; i < fissure.segments.length; i++) {
+                const jx = fissure.segments[i].x + (Math.random() - 0.5) * 6;
+                const jy = fissure.segments[i].y + (Math.random() - 0.5) * 4;
+                ctx.lineTo(jx, jy);
+              }
+              ctx.stroke();
+              ctx.shadowBlur = 0;
+            }
+          }
+
+          ctx.restore();
+        });
 
         ctx.restore();
-      });
-
-      ctx.restore();
+      } catch (err) {
+        console.error('TaskQuest renderer: error in drawElementalCataclysmGround:', err);
+      }
     });
   }
 
@@ -9205,212 +9216,223 @@ export class IsometricRenderer {
   ) {
     if (cataclysm.phase === 'finished') return;
 
-    const elapsed = cataclysm.elapsedMs;
-    const alpha = elapsed > 2400 ? Math.max(0, 1 - (elapsed - 2400) / 400) : 1;
-    const cx = cataclysm.x;
-    const cy = cataclysm.y;
-    const isCharged = cataclysm.isCharged;
+    try {
+      const elapsed = cataclysm.elapsedMs;
+      const alpha = elapsed > 2400 ? Math.max(0, 1 - (elapsed - 2400) / 400) : 1;
+      const cx = cataclysm.x;
+      const cy = cataclysm.y;
+      const isCharged = cataclysm.isCharged;
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    // FASE 1: TIERRA — PLACAS DE ROCA TECTÓNICAS QUE EMERGEN
-    cataclysm.fissures.forEach((fissure) => {
-      fissure.slabs.forEach((slab) => {
-        const sx = cx + slab.relX;
-        const sy = cy + slab.relY;
-        const currentH = slab.elevation;
-        if (currentH <= 0.5) return;
-
-        ctx.save();
-        ctx.translate(sx, sy);
-
-        // Cara lateral oscura sombreada (marrón arcilla / pizarra)
-        ctx.fillStyle = '#263238';
-        ctx.beginPath();
-        ctx.moveTo(-slab.width / 2, 0);
-        ctx.lineTo(slab.width / 2, 0);
-        ctx.lineTo(slab.width / 2, -currentH);
-        ctx.lineTo(-slab.width / 2, -currentH);
-        ctx.closePath();
-        ctx.fill();
-
-        // Cara superior de la placa (ámbar arcilla con vetas)
-        ctx.fillStyle = slab.color;
-        ctx.beginPath();
-        ctx.ellipse(0, -currentH, slab.width / 2, (slab.height / 2) * 0.58, slab.tilt, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Borde superior iluminado
-        ctx.strokeStyle = '#ffd54f';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        ctx.restore();
-      });
-    });
-
-    // FASE 2: FUEGO — COLUMNAS DE MAGMA ARDIENTE VERTICALES
-    if (elapsed >= 500 && elapsed < 1850) {
-      const fireProg = Math.sin(Math.min(1.0, Math.max(0, (elapsed - 600) / 600)) * Math.PI);
-      const magmaMaxH = (isCharged ? 95 : 70) * fireProg;
-
-      cataclysm.magmaColumns.forEach((col, cIdx) => {
-        const colH = magmaMaxH * (0.8 + 0.4 * Math.sin(cIdx + Date.now() * 0.015));
-        if (colH <= 2) return;
-
-        ctx.save();
-        ctx.translate(col.x, col.y);
-
-        const colGrad = ctx.createLinearGradient(0, 0, 0, -colH);
-        colGrad.addColorStop(0, '#d50000');
-        colGrad.addColorStop(0.35, '#ff6d00');
-        colGrad.addColorStop(0.75, '#ffd600');
-        colGrad.addColorStop(1, '#ffffff');
-
-        ctx.fillStyle = colGrad;
-        ctx.shadowColor = '#ff6d00';
-        ctx.shadowBlur = 14;
-
-        ctx.beginPath();
-        ctx.moveTo(-col.width / 2, 0);
-        ctx.quadraticCurveTo(-col.width * 0.7, -colH * 0.5, 0, -colH);
-        ctx.quadraticCurveTo(col.width * 0.7, -colH * 0.5, col.width / 2, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.restore();
-      });
-    }
-
-    // FASE 3: HIELO — CRISTALES DE HIELO Y ONDA DE CERO ABSOLUTO
-    if (elapsed >= 1150 && elapsed < 2600) {
-      const iceWaveProg = Math.min(1.0, (elapsed - 1200) / 600);
-      const waveR = cataclysm.radius * iceWaveProg;
-
-      // Anillo expansivo de vapor polar y escarcha
       ctx.save();
-      ctx.strokeStyle = '#00e5ff';
-      ctx.lineWidth = isCharged ? 3.5 : 2.2;
-      ctx.shadowColor = '#80d8ff';
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, waveR, waveR * 0.58, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.globalAlpha = alpha;
 
-      // Espículas de cristal gélido en las columnas congeladas
-      cataclysm.magmaColumns.forEach((col) => {
-        const spikeH = (isCharged ? 75 : 55) * Math.min(1.0, (elapsed - 1200) / 350);
-        ctx.save();
-        ctx.translate(col.x, col.y);
+      // FASE 1: TIERRA — PLACAS DE ROCA TECTÓNICAS QUE EMERGEN
+      cataclysm.fissures.forEach((fissure) => {
+        fissure.slabs.forEach((slab) => {
+          const sx = cx + slab.relX;
+          const sy = cy + slab.relY;
+          const currentH = slab.elevation;
+          if (currentH <= 0.5) return;
 
-        const iceGrad = ctx.createLinearGradient(0, 0, 0, -spikeH);
-        iceGrad.addColorStop(0, '#0091ea');
-        iceGrad.addColorStop(0.5, '#00e5ff');
-        iceGrad.addColorStop(1, '#ffffff');
+          ctx.save();
+          ctx.translate(sx, sy);
 
-        ctx.fillStyle = iceGrad;
-        ctx.beginPath();
-        ctx.moveTo(-col.width * 0.4, 0);
-        ctx.lineTo(0, -spikeH);
-        ctx.lineTo(col.width * 0.4, 0);
-        ctx.closePath();
-        ctx.fill();
+          // Cara lateral oscura sombreada (marrón arcilla / pizarra)
+          ctx.fillStyle = '#263238';
+          ctx.beginPath();
+          ctx.moveTo(-slab.width / 2, 0);
+          ctx.lineTo(slab.width / 2, 0);
+          ctx.lineTo(slab.width / 2, -currentH);
+          ctx.lineTo(-slab.width / 2, -currentH);
+          ctx.closePath();
+          ctx.fill();
 
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.restore();
+          // Cara superior de la placa (ámbar arcilla con vetas)
+          ctx.fillStyle = slab.color;
+          ctx.beginPath();
+          const slabW = Math.max(0.1, slab.width / 2);
+          const slabH = Math.max(0.1, (slab.height / 2) * 0.58);
+          ctx.ellipse(0, -currentH, slabW, slabH, slab.tilt || 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Borde superior iluminado
+          ctx.strokeStyle = '#ffd54f';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ctx.restore();
+        });
       });
-      ctx.restore();
-    }
 
-    // FASE 4: RAYO — RELÁMPAGO TITÁNICO Y DETONACIÓN RADIAL
-    if (elapsed >= 1800) {
-      // A. Relámpago Titánico que desciende desde el cielo
-      const lightningAlpha = elapsed < 2100 ? 1.0 : Math.max(0, 1.0 - (elapsed - 2100) / 400);
-      if (lightningAlpha > 0.05) {
-        ctx.save();
-        ctx.globalAlpha = alpha * lightningAlpha;
+      // FASE 2: FUEGO — COLUMNAS DE MAGMA ARDIENTE VERTICALES
+      if (elapsed >= 500 && elapsed < 1850) {
+        const fireProg = Math.sin(Math.max(0, Math.min(1.0, (elapsed - 600) / 600)) * Math.PI);
+        const magmaMaxH = Math.max(0, (isCharged ? 95 : 70) * fireProg);
 
-        const boltTopY = cy - 560;
-        const boltMidX1 = cx + (Math.sin(Date.now() * 0.05) * 14);
-        const boltMidY1 = cy - 380;
-        const boltMidX2 = cx - (Math.cos(Date.now() * 0.04) * 16);
-        const boltMidY2 = cy - 180;
+        cataclysm.magmaColumns.forEach((col, cIdx) => {
+          const colH = Math.max(0, magmaMaxH * (0.8 + 0.4 * Math.sin(cIdx + Date.now() * 0.015)));
+          if (colH <= 2) return;
 
-        // Halo exterior violeta/plasma
-        ctx.strokeStyle = 'rgba(124, 77, 255, 0.85)';
-        ctx.lineWidth = isCharged ? 32 : 22;
-        ctx.shadowColor = '#d500f9';
-        ctx.shadowBlur = 24;
-        ctx.beginPath();
-        ctx.moveTo(cx, boltTopY);
-        ctx.lineTo(boltMidX1, boltMidY1);
-        ctx.lineTo(boltMidX2, boltMidY2);
-        ctx.lineTo(cx, cy);
-        ctx.stroke();
+          ctx.save();
+          ctx.translate(col.x, col.y);
 
-        // Tronco central blanco incandescente
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = isCharged ? 16 : 10;
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 18;
-        ctx.beginPath();
-        ctx.moveTo(cx, boltTopY);
-        ctx.lineTo(boltMidX1, boltMidY1);
-        ctx.lineTo(boltMidX2, boltMidY2);
-        ctx.lineTo(cx, cy);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+          const colGrad = ctx.createLinearGradient(0, 0, 0, -colH);
+          colGrad.addColorStop(0, '#d50000');
+          colGrad.addColorStop(0.35, '#ff6d00');
+          colGrad.addColorStop(0.75, '#ffd600');
+          colGrad.addColorStop(1, '#ffffff');
 
-        // Destello cegador en el epicentro del impacto
-        const flashGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, isCharged ? 80 : 55);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.35, '#80d8ff');
-        flashGrad.addColorStop(0.7, '#7c4dff');
-        flashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = flashGrad;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, isCharged ? 80 : 55, (isCharged ? 80 : 55) * 0.58, 0, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.fillStyle = colGrad;
+          ctx.shadowColor = '#ff6d00';
+          ctx.shadowBlur = 14;
 
-        ctx.restore();
+          ctx.beginPath();
+          ctx.moveTo(-col.width / 2, 0);
+          ctx.quadraticCurveTo(-col.width * 0.7, -colH * 0.5, 0, -colH);
+          ctx.quadraticCurveTo(col.width * 0.7, -colH * 0.5, col.width / 2, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.restore();
+        });
       }
 
-      // B. Onda de Choque Radial Expansiva (1900ms a 2800ms)
-      if (elapsed >= 1900) {
-        const shockProg = Math.min(1.0, (elapsed - 1900) / 750);
-        const currR = cataclysm.radius * (0.15 + 0.85 * shockProg);
-        const shockAlpha = Math.max(0, 1.0 - shockProg);
+      // FASE 3: HIELO — CRISTALES DE HIELO Y ONDA DE CERO ABSOLUTO (Protección estricta de radios)
+      if (elapsed >= 1150 && elapsed < 2600) {
+        const iceWaveProg = Math.max(0, Math.min(1.0, (elapsed - 1200) / 600));
+        const waveR = Math.max(0.1, cataclysm.radius * iceWaveProg);
 
+        // Anillo expansivo de vapor polar y escarcha
         ctx.save();
-        ctx.globalAlpha = alpha * shockAlpha;
-        ctx.strokeStyle = isCharged ? '#ffffff' : '#ffd54f';
-        ctx.lineWidth = (isCharged ? 4.5 : 3.0) * (1 - shockProg * 0.5);
-        ctx.shadowColor = '#7c4dff';
-        ctx.shadowBlur = 16;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, currR, currR * 0.58, 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Segundo anillo exterior de dispersión
         ctx.strokeStyle = '#00e5ff';
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([8, 6]);
+        ctx.lineWidth = isCharged ? 3.5 : 2.2;
+        ctx.shadowColor = '#80d8ff';
+        ctx.shadowBlur = 12;
         ctx.beginPath();
-        ctx.ellipse(cx, cy, currR * 0.82, currR * 0.82 * 0.58, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, waveR, waveR * 0.58, 0, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.setLineDash([]);
         ctx.shadowBlur = 0;
 
+        // Espículas de cristal gélido en las columnas congeladas
+        cataclysm.magmaColumns.forEach((col) => {
+          const spikeProg = Math.max(0, Math.min(1.0, (elapsed - 1200) / 350));
+          const spikeH = Math.max(0, (isCharged ? 75 : 55) * spikeProg);
+          if (spikeH <= 1) return;
+
+          ctx.save();
+          ctx.translate(col.x, col.y);
+
+          const iceGrad = ctx.createLinearGradient(0, 0, 0, -spikeH);
+          iceGrad.addColorStop(0, '#0091ea');
+          iceGrad.addColorStop(0.5, '#00e5ff');
+          iceGrad.addColorStop(1, '#ffffff');
+
+          ctx.fillStyle = iceGrad;
+          ctx.beginPath();
+          ctx.moveTo(-col.width * 0.4, 0);
+          ctx.lineTo(0, -spikeH);
+          ctx.lineTo(col.width * 0.4, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.restore();
+        });
         ctx.restore();
       }
-    }
 
-    ctx.restore();
+      // FASE 4: RAYO — RELÁMPAGO TITÁNICO Y DETONACIÓN RADIAL
+      if (elapsed >= 1800) {
+        // A. Relámpago Titánico que desciende desde el cielo
+        const lightningAlpha = elapsed < 2100 ? 1.0 : Math.max(0, 1.0 - (elapsed - 2100) / 400);
+        if (lightningAlpha > 0.05) {
+          ctx.save();
+          ctx.globalAlpha = alpha * lightningAlpha;
+
+          const boltTopY = cy - 560;
+          const boltMidX1 = cx + (Math.sin(Date.now() * 0.05) * 14);
+          const boltMidY1 = cy - 380;
+          const boltMidX2 = cx - (Math.cos(Date.now() * 0.04) * 16);
+          const boltMidY2 = cy - 180;
+
+          // Halo exterior violeta/plasma
+          ctx.strokeStyle = 'rgba(124, 77, 255, 0.85)';
+          ctx.lineWidth = isCharged ? 32 : 22;
+          ctx.shadowColor = '#d500f9';
+          ctx.shadowBlur = 24;
+          ctx.beginPath();
+          ctx.moveTo(cx, boltTopY);
+          ctx.lineTo(boltMidX1, boltMidY1);
+          ctx.lineTo(boltMidX2, boltMidY2);
+          ctx.lineTo(cx, cy);
+          ctx.stroke();
+
+          // Tronco central blanco incandescente
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = isCharged ? 16 : 10;
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.moveTo(cx, boltTopY);
+          ctx.lineTo(boltMidX1, boltMidY1);
+          ctx.lineTo(boltMidX2, boltMidY2);
+          ctx.lineTo(cx, cy);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // Destello cegador en el epicentro del impacto
+          const flashR = Math.max(10, isCharged ? 80 : 55);
+          const flashGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, flashR);
+          flashGrad.addColorStop(0, '#ffffff');
+          flashGrad.addColorStop(0.35, '#80d8ff');
+          flashGrad.addColorStop(0.7, '#7c4dff');
+          flashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = flashGrad;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, flashR, flashR * 0.58, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        // B. Onda de Choque Radial Expansiva (1900ms a 2800ms)
+        if (elapsed >= 1900) {
+          const shockProg = Math.max(0, Math.min(1.0, (elapsed - 1900) / 750));
+          const currR = Math.max(0.1, cataclysm.radius * (0.15 + 0.85 * shockProg));
+          const shockAlpha = Math.max(0, 1.0 - shockProg);
+
+          ctx.save();
+          ctx.globalAlpha = alpha * shockAlpha;
+          ctx.strokeStyle = isCharged ? '#ffffff' : '#ffd54f';
+          ctx.lineWidth = Math.max(0.1, (isCharged ? 4.5 : 3.0) * (1 - shockProg * 0.5));
+          ctx.shadowColor = '#7c4dff';
+          ctx.shadowBlur = 16;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, currR, currR * 0.58, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Segundo anillo exterior de dispersión
+          const subR = Math.max(0.1, currR * 0.82);
+          ctx.strokeStyle = '#00e5ff';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, subR, subR * 0.58, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.shadowBlur = 0;
+
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
+    } catch (err) {
+      console.error('TaskQuest renderer: error in drawElementalCataclysmBody:', err);
+    }
   }
 
   // 3. Indicador de Apuntado Táctico de Cataclismo Elemental
@@ -9423,81 +9445,87 @@ export class IsometricRenderer {
       chargeRatio?: number;
     }
   ) {
-    const ratio = Math.max(0, Math.min(1.0, wizard.chargeRatio || 0));
-    const isReady = ratio >= 0.95;
-    const squish = 0.58;
+    try {
+      const ratio = Math.max(0, Math.min(1.0, wizard.chargeRatio || 0));
+      const isReady = ratio >= 0.95;
+      const squish = 0.58;
 
-    const targetDist = 175;
-    const tx = wizard.x + Math.cos(wizard.facingAngle) * targetDist;
-    const ty = wizard.y + Math.sin(wizard.facingAngle) * targetDist * squish;
+      const targetDist = 175;
+      const tx = wizard.x + Math.cos(wizard.facingAngle) * targetDist;
+      const ty = wizard.y + Math.sin(wizard.facingAngle) * targetDist * squish;
 
-    const rad = isReady ? 340 : Math.floor(240 + ratio * 100);
-    const now = Date.now();
+      const rad = isReady ? 340 : Math.floor(240 + ratio * 100);
+      const safeRad = Math.max(1, rad);
+      const now = Date.now();
 
-    ctx.save();
+      ctx.save();
 
-    // Línea de trayectoria estelar al epicentro
-    ctx.strokeStyle = isReady ? 'rgba(236, 72, 153, 0.75)' : 'rgba(251, 191, 36, 0.55)';
-    ctx.lineWidth = 2.0;
-    ctx.setLineDash([10, 6]);
-    ctx.beginPath();
-    ctx.moveTo(wizard.x, wizard.y);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      // Línea de trayectoria estelar al epicentro
+      ctx.strokeStyle = isReady ? 'rgba(236, 72, 153, 0.75)' : 'rgba(251, 191, 36, 0.55)';
+      ctx.lineWidth = 2.0;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.moveTo(wizard.x, wizard.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-    // Relleno de los 4 cuadrantes elementales
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.scale(1, squish);
+      // Relleno de los 4 cuadrantes elementales
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.scale(1, squish);
 
-    // Fondo global con gradiente radial
-    const catAimGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, rad);
-    catAimGrad.addColorStop(0, isReady ? 'rgba(255, 255, 255, 0.35)' : 'rgba(251, 191, 36, 0.25)');
-    catAimGrad.addColorStop(0.5, isReady ? 'rgba(236, 72, 153, 0.22)' : 'rgba(0, 229, 255, 0.15)');
-    catAimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = catAimGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.fill();
+      // Fondo global con gradiente radial
+      const innerG = Math.min(8, safeRad * 0.1);
+      const catAimGrad = ctx.createRadialGradient(0, 0, innerG, 0, 0, safeRad);
+      catAimGrad.addColorStop(0, isReady ? 'rgba(255, 255, 255, 0.35)' : 'rgba(251, 191, 36, 0.25)');
+      catAimGrad.addColorStop(0.5, isReady ? 'rgba(236, 72, 153, 0.22)' : 'rgba(0, 229, 255, 0.15)');
+      catAimGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = catAimGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, safeRad, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Anillo rúnico tetra-elemental punteado giratorio
-    ctx.rotate(now * 0.001);
-    ctx.strokeStyle = isReady ? '#ec4899' : '#ffd54f';
-    ctx.lineWidth = isReady ? 3.0 : 2.0;
-    ctx.setLineDash([10, 6]);
-    ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.stroke();
+      // Anillo rúnico tetra-elemental punteado giratorio
+      ctx.rotate(now * 0.001);
+      ctx.strokeStyle = isReady ? '#ec4899' : '#ffd54f';
+      ctx.lineWidth = isReady ? 3.0 : 2.0;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, safeRad, 0, Math.PI * 2);
+      ctx.stroke();
 
-    // Cruz primordial de coordenadas
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.lineWidth = 1.2;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(-rad, 0);
-    ctx.lineTo(rad, 0);
-    ctx.moveTo(0, -rad);
-    ctx.lineTo(0, rad);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      // Cruz primordial de coordenadas
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(-safeRad, 0);
+      ctx.lineTo(safeRad, 0);
+      ctx.moveTo(0, -safeRad);
+      ctx.lineTo(0, safeRad);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-    ctx.restore();
+      ctx.restore();
 
-    // Texto de HUD táctico
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = isReady ? '#f472b6' : '#fde047';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 6;
-    ctx.fillText(
-      isReady
-        ? '¡SINTONÍA PRIMORDIAL (ÁREA TOTAL · +50% DAÑO · VAPORIZACIÓN)! 🪐✨'
-        : 'CATACLISMO ELEMENTAL (FUEGO + RAYO + HIELO + TIERRA) 🪐✨',
-      tx,
-      ty - (rad * squish) - 16
-    );
+      // Texto de HUD táctico
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isReady ? '#f472b6' : '#fde047';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 6;
+      ctx.fillText(
+        isReady
+          ? '¡SINTONÍA PRIMORDIAL (ÁREA TOTAL · +50% DAÑO · VAPORIZACIÓN)! 🪐✨'
+          : 'CATACLISMO ELEMENTAL (FUEGO + RAYO + HIELO + TIERRA) 🪐✨',
+        tx,
+        ty - (safeRad * squish) - 16
+      );
 
-    ctx.restore();
+      ctx.restore();
+    } catch (err) {
+      console.error('TaskQuest renderer: error in drawElementalCataclysmAimIndicator:', err);
+    }
   }
 }

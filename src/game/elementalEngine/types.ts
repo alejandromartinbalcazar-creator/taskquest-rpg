@@ -986,6 +986,7 @@ export interface ElementalCataclysmEntity {
   shockwaveMaxRadius: number;
   shockwaveAlpha: number;
   finished: boolean;
+  hasDetonated?: boolean;
 }
 
 // Estructura de Mazmorra con Múltiples Salas Conectadas
