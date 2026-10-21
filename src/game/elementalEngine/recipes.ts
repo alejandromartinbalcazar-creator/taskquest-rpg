@@ -303,7 +303,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#fbbf24',
     damage: 260,
     knockback: 12.0,
-    cooldownMs: 16000,
+    cooldownMs: 14000,
     selfDamageRisk: 0,
   },
 };

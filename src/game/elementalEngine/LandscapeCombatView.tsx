@@ -412,9 +412,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Estados visuales de Esquiva y Carga
   const [dashCooldownRatio, setDashCooldownRatio] = useState(0);
+  const [attackCooldownRatio, setAttackCooldownRatio] = useState(0);
+  const [attackCooldownSec, setAttackCooldownSec] = useState(0);
   const [isChargingUi, setIsChargingUi] = useState(false);
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
+  const lastAttackCdRatioRef = useRef(0);
   const keysPressedRef = useRef<Record<string, boolean>>({});
   const attackAimRef = useRef<{
     active: boolean;
@@ -441,6 +444,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Hechizo activo identificado
   const activeRecipe = identifyRecipe(elementQueue);
+  const activeRecipeRef = useRef(activeRecipe);
+  activeRecipeRef.current = activeRecipe;
 
   // Referencias mutables para el bucle a 60 FPS
   const gameStateRef = useRef({
@@ -522,6 +527,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     terrainManager: new TerrainManager(),
     enemyManager: new EnemyManager(),
     lastAttackTime: 0,
+    recipeCooldowns: {} as Record<string, number>,
     currentHp: player.currentHp,
     maxHp: player.maxHp,
     roomIndex: 0,
@@ -923,12 +929,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (isDefeated || isVictorious) return;
       const now = Date.now();
       const g = gameStateRef.current;
+      const recipe = activeRecipe;
 
-      if (now - g.lastAttackTime < activeRecipe.cooldownMs) return;
+      // Cooldown individual por receta/hechizo
+      const lastCast = g.recipeCooldowns[recipe.id] || 0;
+      const recipeCdRemaining = Math.max(0, recipe.cooldownMs - (now - lastCast));
+      if (recipeCdRemaining > 0) {
+        const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
+        elementalSound.playCooldownWarning();
+        g.floatingTexts.push({
+          id: `cd_${now}_${recipe.id}`,
+          x: g.wizard.x,
+          y: g.wizard.y - 32,
+          text: `⏳ ${recipe.name}: ${secsRemaining}s`,
+          color: '#f472b6',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.3,
+          life: 38,
+        });
+        return;
+      }
+
+      // Intervalo mínimo de seguridad global entre lanzamientos (120 ms)
+      if (now - g.lastAttackTime < 120) return;
       g.lastAttackTime = now;
+      g.recipeCooldowns[recipe.id] = now;
 
       const wizard = g.wizard;
-      const recipe = activeRecipe;
 
       // Reactivación anticipada: si ya hay un Núcleo de Sobrecarga activo en el terreno, detonarlo inmediatamente
       const existingOverloadCore = g.overloadCores.find((c) => !c.finished && c.phase !== 'detonating');
@@ -3265,7 +3293,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       startChanneledAttack('ice', 'attack');
       return;
     }
-    const wizard = gameStateRef.current.wizard;
+
+    const g = gameStateRef.current;
+    const now = Date.now();
+    const lastCast = g.recipeCooldowns[activeRecipe.id] || 0;
+    const recipeCdRemaining = Math.max(0, activeRecipe.cooldownMs - (now - lastCast));
+    if (recipeCdRemaining > 0) {
+      const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
+      elementalSound.playCooldownWarning();
+      g.floatingTexts.push({
+        id: `cd_charge_${now}_${activeRecipe.id}`,
+        x: g.wizard.x,
+        y: g.wizard.y - 32,
+        text: `⏳ ${activeRecipe.name}: ${secsRemaining}s`,
+        color: '#f472b6',
+        fontSize: 13,
+        opacity: 1,
+        vy: -1.3,
+        life: 38,
+      });
+      return;
+    }
+
+    const wizard = g.wizard;
     wizard.isCharging = true;
     wizard.chargeStartTime = Date.now();
     wizard.chargeRatio = 0;
@@ -3552,6 +3602,21 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           lastCdRatioRef.current = cdRatio;
           setDashCooldownRatio(cdRatio);
         }
+      }
+
+      // 1.05 Actualizar Cooldown en tiempo real del Ataque / Habilidad Activa
+      const currentRecipe = activeRecipeRef.current;
+      const nowTs = Date.now();
+      const lastCast = g.recipeCooldowns[currentRecipe.id] || 0;
+      const attackCdRemaining = Math.max(0, currentRecipe.cooldownMs - (nowTs - lastCast));
+      const attackCdRatio = (currentRecipe.cooldownMs > 0 && attackCdRemaining > 0)
+        ? attackCdRemaining / currentRecipe.cooldownMs
+        : 0;
+
+      if (Math.abs(attackCdRatio - lastAttackCdRatioRef.current) > 0.015 || (attackCdRatio === 0 && lastAttackCdRatioRef.current > 0)) {
+        lastAttackCdRatioRef.current = attackCdRatio;
+        setAttackCooldownRatio(attackCdRatio);
+        setAttackCooldownSec(Math.ceil(attackCdRemaining / 100) / 10);
       }
 
       if (wizard.isDashing) {
@@ -10224,147 +10289,161 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             <span className="text-[8px] font-black tracking-wider relative z-10">ESQUIVAR</span>
           </button>
 
-          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA Y APUNTADO TÁCTIL */}
+          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA, APUNTADO TÁCTIL Y FEEDBACK DE COOLDOWN */}
           <button
             onPointerDown={handleAttackPointerDown}
             onPointerMove={handleAttackPointerMove}
             onPointerUp={handleAttackPointerUp}
             onPointerCancel={handleAttackPointerUp}
-            className={`w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 active:scale-95 border-2 ${
-              chargeVisualRatio >= 1.0
-                ? (activeRecipe.id === 'lightning_storm'
-                    ? 'border-cyan-300 shadow-[0_0_28px_rgba(56,189,248,0.95)] animate-pulse'
-                    : activeRecipe.id === 'ice_lance'
-                    ? 'border-cyan-200 shadow-[0_0_28px_rgba(6,182,212,0.95)] animate-pulse'
-                    : activeRecipe.id === 'earth_megalith'
-                    ? 'border-amber-300 shadow-[0_0_28px_rgba(245,158,11,0.95)] animate-pulse'
-                    : activeRecipe.id === 'cryo_storm'
-                    ? 'border-cyan-200 shadow-[0_0_30px_rgba(0,240,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'magma_eruption'
-                    ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
-                    : activeRecipe.id === 'thermal_shock'
-                    ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
-                    : activeRecipe.id === 'crystal_field'
-                    ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
-                    : activeRecipe.id === 'permafrost_prison'
-                    ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'explosive_overload'
-                    ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'hell_rain'
-                    ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
-                    : activeRecipe.id === 'celestial_storm'
-                    ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'devastating_glacier'
-                    ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'telluric_barrier'
-                    ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
-                    : activeRecipe.id === 'obsidian_volcano'
-                    ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
-                    : activeRecipe.id === 'conductive_prison'
-                    ? 'border-indigo-400 shadow-[0_0_32px_rgba(124,77,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'overload_core'
-                    ? 'border-amber-400 shadow-[0_0_35px_rgba(255,109,0,0.95)] animate-pulse'
-                    : activeRecipe.id === 'glacial_plasma_storm'
-                    ? 'border-cyan-300 shadow-[0_0_35px_rgba(0,229,255,0.95)] animate-pulse'
-                    : activeRecipe.id === 'elemental_cataclysm'
-                    ? 'border-pink-400 shadow-[0_0_42px_rgba(236,72,153,1.0)] animate-pulse'
-                    : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
-                : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
-                    ? 'border-red-500 shadow-[0_0_36px_rgba(255,23,68,1.0)] animate-pulse'
-                    : activeRecipe.id === 'lightning_storm'
-                    ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
-                    : activeRecipe.id === 'ice_lance'
-                    ? 'border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
-                    : activeRecipe.id === 'earth_megalith'
-                    ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.6)]'
-                    : activeRecipe.id === 'cryo_storm'
-                    ? 'border-cyan-300 shadow-[0_0_20px_rgba(0,240,255,0.7)]'
-                    : activeRecipe.id === 'magma_eruption'
-                    ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
-                    : activeRecipe.id === 'thermal_shock'
-                    ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
-                    : activeRecipe.id === 'crystal_field'
-                    ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
-                    : activeRecipe.id === 'permafrost_prison'
-                    ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
-                    : activeRecipe.id === 'explosive_overload'
-                    ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
-                    : activeRecipe.id === 'hell_rain'
-                    ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
-                    : activeRecipe.id === 'celestial_storm'
-                    ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
-                    : activeRecipe.id === 'devastating_glacier'
-                    ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
-                    : activeRecipe.id === 'telluric_barrier'
-                    ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
-                    : activeRecipe.id === 'obsidian_volcano'
-                    ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
-                    : activeRecipe.id === 'conductive_prison'
-                    ? 'border-indigo-500 shadow-[0_0_22px_rgba(124,77,255,0.75)]'
-                    : activeRecipe.id === 'overload_core'
-                    ? 'border-amber-500 shadow-[0_0_24px_rgba(255,109,0,0.8)]'
-                    : activeRecipe.id === 'glacial_plasma_storm'
-                    ? 'border-cyan-400 shadow-[0_0_24px_rgba(0,229,255,0.8)]'
-                    : activeRecipe.id === 'elemental_cataclysm'
-                    ? 'border-pink-500 shadow-[0_0_30px_rgba(236,72,153,0.9)] animate-pulse'
-                    : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
+            className={`w-20 h-20 rounded-3xl relative overflow-hidden transition-all active:scale-95 border-2 ${
+              attackCooldownRatio > 0
+                ? 'bg-slate-900/90 border-slate-700/80 text-slate-400 opacity-80 cursor-not-allowed shadow-none'
+                : `bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 ${
+                    chargeVisualRatio >= 1.0
+                      ? (activeRecipe.id === 'lightning_storm'
+                          ? 'border-cyan-300 shadow-[0_0_28px_rgba(56,189,248,0.95)] animate-pulse'
+                          : activeRecipe.id === 'ice_lance'
+                          ? 'border-cyan-200 shadow-[0_0_28px_rgba(6,182,212,0.95)] animate-pulse'
+                          : activeRecipe.id === 'earth_megalith'
+                          ? 'border-amber-300 shadow-[0_0_28px_rgba(245,158,11,0.95)] animate-pulse'
+                          : activeRecipe.id === 'cryo_storm'
+                          ? 'border-cyan-200 shadow-[0_0_30px_rgba(0,240,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'magma_eruption'
+                          ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
+                          : activeRecipe.id === 'thermal_shock'
+                          ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
+                          : activeRecipe.id === 'crystal_field'
+                          ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
+                          : activeRecipe.id === 'permafrost_prison'
+                          ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'explosive_overload'
+                          ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'hell_rain'
+                          ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
+                          : activeRecipe.id === 'celestial_storm'
+                          ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'devastating_glacier'
+                          ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'telluric_barrier'
+                          ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
+                          : activeRecipe.id === 'obsidian_volcano'
+                          ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
+                          : activeRecipe.id === 'conductive_prison'
+                          ? 'border-indigo-400 shadow-[0_0_32px_rgba(124,77,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'overload_core'
+                          ? 'border-amber-400 shadow-[0_0_35px_rgba(255,109,0,0.95)] animate-pulse'
+                          : activeRecipe.id === 'glacial_plasma_storm'
+                          ? 'border-cyan-300 shadow-[0_0_35px_rgba(0,229,255,0.95)] animate-pulse'
+                          : activeRecipe.id === 'elemental_cataclysm'
+                          ? 'border-pink-400 shadow-[0_0_42px_rgba(236,72,153,1.0)] animate-pulse'
+                          : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
+                      : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                          ? 'border-red-500 shadow-[0_0_36px_rgba(255,23,68,1.0)] animate-pulse'
+                          : activeRecipe.id === 'lightning_storm'
+                          ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
+                          : activeRecipe.id === 'ice_lance'
+                          ? 'border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
+                          : activeRecipe.id === 'earth_megalith'
+                          ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.6)]'
+                          : activeRecipe.id === 'cryo_storm'
+                          ? 'border-cyan-300 shadow-[0_0_20px_rgba(0,240,255,0.7)]'
+                          : activeRecipe.id === 'magma_eruption'
+                          ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
+                          : activeRecipe.id === 'thermal_shock'
+                          ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
+                          : activeRecipe.id === 'crystal_field'
+                          ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
+                          : activeRecipe.id === 'permafrost_prison'
+                          ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
+                          : activeRecipe.id === 'explosive_overload'
+                          ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
+                          : activeRecipe.id === 'hell_rain'
+                          ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
+                          : activeRecipe.id === 'celestial_storm'
+                          ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
+                          : activeRecipe.id === 'devastating_glacier'
+                          ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
+                          : activeRecipe.id === 'telluric_barrier'
+                          ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
+                          : activeRecipe.id === 'obsidian_volcano'
+                          ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
+                          : activeRecipe.id === 'conductive_prison'
+                          ? 'border-indigo-500 shadow-[0_0_22px_rgba(124,77,255,0.75)]'
+                          : activeRecipe.id === 'overload_core'
+                          ? 'border-amber-500 shadow-[0_0_24px_rgba(255,109,0,0.8)]'
+                          : activeRecipe.id === 'glacial_plasma_storm'
+                          ? 'border-cyan-400 shadow-[0_0_24px_rgba(0,229,255,0.8)]'
+                          : activeRecipe.id === 'elemental_cataclysm'
+                          ? 'border-pink-500 shadow-[0_0_30px_rgba(236,72,153,0.9)] animate-pulse'
+                          : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
+                  }`
             } flex flex-col items-center justify-center text-white transition-all`}
           >
-            <span className="text-2xl">
+            {/* OVERLAY DE ENFRIAMIENTO (COOLDOWN) */}
+            {attackCooldownRatio > 0 && (
+              <div
+                className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-[1px] transition-all duration-75 pointer-events-none"
+                style={{ height: `${attackCooldownRatio * 100}%` }}
+              />
+            )}
+
+            <span className={`text-2xl relative z-10 transition-transform ${attackCooldownRatio > 0 ? 'opacity-35 scale-90 grayscale' : ''}`}>
               {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
                 ? '💣💥'
                 : activeRecipe.icon}
             </span>
-            <span className="text-[11px] font-black tracking-wider mt-0.5">
-              {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
-                ? '¡DETONAR!'
-                : activeRecipe.id === 'fire_shot'
-                ? 'CANALIZAR'
-                : activeRecipe.id === 'ice_shard'
-                ? 'CANALIZAR'
-                : activeRecipe.id === 'ice_lance'
-                ? (chargeVisualRatio >= 1.0 ? '¡GLACIAL +50%! ❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️' : 'GLACIAL ❄️❄️')
-                : activeRecipe.id === 'earth_megalith'
-                ? (chargeVisualRatio >= 1.0 ? '¡PUÑO +50%! 🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'PUÑO 🌍🌍')
-                : activeRecipe.id === 'fire_inferno'
-                ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
-                : activeRecipe.id === 'lightning_storm'
-                ? (chargeVisualRatio >= 1.0 ? '¡VOLTAICA +50%! ⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'VOLTAICA ⚡⚡')
-                : activeRecipe.id === 'cryo_storm'
-                ? (chargeVisualRatio >= 1.0 ? '¡CRÍO +50%! ❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️⚡' : 'RAYO CRÍO ❄️⚡')
-                : activeRecipe.id === 'magma_eruption'
-                ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
-                : activeRecipe.id === 'thermal_shock'
-                ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
-                : activeRecipe.id === 'crystal_field'
-                ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
-                : activeRecipe.id === 'permafrost_prison'
-                ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
-                : activeRecipe.id === 'explosive_overload'
-                ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
-                : activeRecipe.id === 'hell_rain'
-                ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
-                : activeRecipe.id === 'celestial_storm'
-                ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
-                : activeRecipe.id === 'devastating_glacier'
-                ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
-                : activeRecipe.id === 'telluric_barrier'
-                ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
-                : activeRecipe.id === 'obsidian_volcano'
-                ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
-                : activeRecipe.id === 'conductive_prison'
-                ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA CRIOCONDUCTORA +50%! ⚡❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'PRISIÓN ⚡❄️🏛️')
-                : activeRecipe.id === 'overload_core'
-                ? (chargeVisualRatio >= 1.0 ? '¡MASA INESTABLE +50%! 💣⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 💣⚡' : 'NÚCLEO 💣⚡🌋')
-                : activeRecipe.id === 'glacial_plasma_storm'
-                ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA TRI-ELEMENTAL +50%! 🌪️❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️❄️⚡' : 'TORMENTA 🌪️❄️⚡')
-                : activeRecipe.id === 'elemental_cataclysm'
-                ? (chargeVisualRatio >= 1.0 ? '¡SINTONÍA PRIMORDIAL +50%! 🪐✨' : isChargingUi && chargeVisualRatio > 0.08 ? 'SINTONIZANDO 🪐' : 'CATACLISMO 🪐✨')
-                : chargeVisualRatio >= 1.0
-                ? '¡CARGADO!'
-                : 'LANZAR'}
+            <span className={`text-[11px] font-black tracking-wider mt-0.5 relative z-10 ${attackCooldownRatio > 0 ? 'text-pink-300 animate-pulse font-mono' : ''}`}>
+              {attackCooldownRatio > 0
+                ? `⏳ ${attackCooldownSec.toFixed(1)}s`
+                : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                    ? '¡DETONAR!'
+                    : activeRecipe.id === 'fire_shot'
+                    ? 'CANALIZAR'
+                    : activeRecipe.id === 'ice_shard'
+                    ? 'CANALIZAR'
+                    : activeRecipe.id === 'ice_lance'
+                    ? (chargeVisualRatio >= 1.0 ? '¡GLACIAL +50%! ❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️' : 'GLACIAL ❄️❄️')
+                    : activeRecipe.id === 'earth_megalith'
+                    ? (chargeVisualRatio >= 1.0 ? '¡PUÑO +50%! 🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'PUÑO 🌍🌍')
+                    : activeRecipe.id === 'fire_inferno'
+                    ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
+                    : activeRecipe.id === 'lightning_storm'
+                    ? (chargeVisualRatio >= 1.0 ? '¡VOLTAICA +50%! ⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'VOLTAICA ⚡⚡')
+                    : activeRecipe.id === 'cryo_storm'
+                    ? (chargeVisualRatio >= 1.0 ? '¡CRÍO +50%! ❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️⚡' : 'RAYO CRÍO ❄️⚡')
+                    : activeRecipe.id === 'magma_eruption'
+                    ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
+                    : activeRecipe.id === 'thermal_shock'
+                    ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
+                    : activeRecipe.id === 'crystal_field'
+                    ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
+                    : activeRecipe.id === 'permafrost_prison'
+                    ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
+                    : activeRecipe.id === 'explosive_overload'
+                    ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
+                    : activeRecipe.id === 'hell_rain'
+                    ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
+                    : activeRecipe.id === 'celestial_storm'
+                    ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
+                    : activeRecipe.id === 'devastating_glacier'
+                    ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
+                    : activeRecipe.id === 'telluric_barrier'
+                    ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
+                    : activeRecipe.id === 'obsidian_volcano'
+                    ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
+                    : activeRecipe.id === 'conductive_prison'
+                    ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA CRIOCONDUCTORA +50%! ⚡❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'PRISIÓN ⚡❄️🏛️')
+                    : activeRecipe.id === 'overload_core'
+                    ? (chargeVisualRatio >= 1.0 ? '¡MASA INESTABLE +50%! 💣⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 💣⚡' : 'NÚCLEO 💣⚡🌋')
+                    : activeRecipe.id === 'glacial_plasma_storm'
+                    ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA TRI-ELEMENTAL +50%! 🌪️❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️❄️⚡' : 'TORMENTA 🌪️❄️⚡')
+                    : activeRecipe.id === 'elemental_cataclysm'
+                    ? (chargeVisualRatio >= 1.0 ? '¡SINTONÍA PRIMORDIAL +50%! 🪐✨' : isChargingUi && chargeVisualRatio > 0.08 ? 'SINTONIZANDO 🪐' : 'CATACLISMO 🪐✨')
+                    : chargeVisualRatio >= 1.0
+                    ? '¡CARGADO!'
+                    : 'LANZAR')}
             </span>
-            {isChargingUi && chargeVisualRatio < 1.0 && (
+            {isChargingUi && chargeVisualRatio < 1.0 && attackCooldownRatio === 0 && (
               <div className="w-12 bg-black/50 h-1.5 rounded-full mt-1 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-75 ${
