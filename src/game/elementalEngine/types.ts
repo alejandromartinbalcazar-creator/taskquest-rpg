@@ -740,6 +740,8 @@ export interface TelluricRockInstance {
 
 export interface TelluricBarrierEntity {
   id: string;
+  centerX: number;             // Posición X del jugador (centro de la órbita)
+  centerY: number;             // Posición Y del jugador (centro de la órbita)
   isCharged: boolean;
   rocks: TelluricRockInstance[];
   orbitRadiusX: number;        // ~63px (1.8 unidades)

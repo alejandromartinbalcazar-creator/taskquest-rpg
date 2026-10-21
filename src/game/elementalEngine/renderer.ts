@@ -6715,36 +6715,30 @@ export class IsometricRenderer {
       const activeRocks = barrier.rocks.filter((r) => !r.destroyed);
       if (activeRocks.length === 0) return;
 
-      // Calcular centro gravitatorio promedio entre las rocas activas
-      let avgX = 0;
-      let avgY = 0;
-      activeRocks.forEach((r) => {
-        avgX += r.x;
-        avgY += r.y;
-      });
-      avgX /= activeRocks.length;
-      avgY /= activeRocks.length;
+      // Centro de la órbita anclado al jugador
+      const cx = barrier.centerX ?? (activeRocks[0]?.x || 0);
+      const cy = barrier.centerY ?? (activeRocks[0]?.y || 0);
 
       ctx.save();
 
       // Halo gravitatorio orbital elíptico en el suelo
-      ctx.strokeStyle = barrier.isCharged ? 'rgba(245, 158, 11, 0.38)' : 'rgba(217, 119, 6, 0.22)';
-      ctx.lineWidth = barrier.isCharged ? 1.8 : 1.2;
+      ctx.strokeStyle = barrier.isCharged ? 'rgba(245, 158, 11, 0.42)' : 'rgba(217, 119, 6, 0.28)';
+      ctx.lineWidth = barrier.isCharged ? 2.0 : 1.4;
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
-      ctx.ellipse(avgX, avgY, barrier.orbitRadiusX, barrier.orbitRadiusY, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, barrier.orbitRadiusX, barrier.orbitRadiusY, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Resplandor áureo tenue en el suelo si está reforzado
       if (barrier.isCharged) {
-        const floorGrad = ctx.createRadialGradient(avgX, avgY, 10, avgX, avgY, barrier.orbitRadiusX * 1.1);
-        floorGrad.addColorStop(0, 'rgba(245, 158, 11, 0.12)');
-        floorGrad.addColorStop(0.7, 'rgba(217, 119, 6, 0.05)');
+        const floorGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, barrier.orbitRadiusX * 1.1);
+        floorGrad.addColorStop(0, 'rgba(245, 158, 11, 0.16)');
+        floorGrad.addColorStop(0.7, 'rgba(217, 119, 6, 0.06)');
         floorGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = floorGrad;
         ctx.beginPath();
-        ctx.ellipse(avgX, avgY, barrier.orbitRadiusX * 1.1, barrier.orbitRadiusY * 1.1, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, barrier.orbitRadiusX * 1.1, barrier.orbitRadiusY * 1.1, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -6862,21 +6856,21 @@ export class IsometricRenderer {
       ctx.stroke();
     }
 
-    // C. Borde exterior rocoso
+    // C. Borde exterior rocoso bien definido
     ctx.beginPath();
     ctx.moveTo(verts[0].x, verts[0].y);
     for (let i = 1; i < numVerts; i++) {
       ctx.lineTo(verts[i].x, verts[i].y);
     }
     ctx.closePath();
-    ctx.strokeStyle = isCharged ? '#f59e0b' : '#37474f';
-    ctx.lineWidth = isCharged ? 1.8 : 1.3;
+    ctx.strokeStyle = isCharged ? '#ffd54f' : '#f59e0b';
+    ctx.lineWidth = isCharged ? 2.2 : 1.6;
     ctx.stroke();
 
     // D. Vetas y Runas Doradas Incandescentes
     const runePulse = 0.6 + Math.sin(rock.pulseTimer * 3.5 + rock.facetSeed) * 0.4;
-    ctx.strokeStyle = isCharged ? `rgba(255, 213, 79, ${0.75 + runePulse * 0.25})` : `rgba(245, 158, 11, ${0.5 + runePulse * 0.3})`;
-    ctx.lineWidth = isCharged ? 1.6 : 1.2;
+    ctx.strokeStyle = isCharged ? `rgba(255, 241, 118, ${0.85 + runePulse * 0.15})` : `rgba(255, 213, 79, ${0.7 + runePulse * 0.3})`;
+    ctx.lineWidth = isCharged ? 1.8 : 1.4;
     ctx.beginPath();
     // Glifo geomántico central (rombo / runa de tierra)
     const runeSize = r * (isCharged ? 0.48 : 0.38);

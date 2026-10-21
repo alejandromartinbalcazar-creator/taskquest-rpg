@@ -2523,7 +2523,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'telluric_barrier') {
         const baseDmg = recipe.damage + statBonus;
         const damagePerRock = isCharged ? Math.floor(baseDmg * 1.5) : baseDmg;
-        const rockRadius = isCharged ? 16 : 13;
+        const rockRadius = isCharged ? 18 : 15;
         const hitPointsPerRock = isCharged ? 2 : 1;
 
         const rocks: TelluricRockInstance[] = [0, 1, 2].map((idx) => {
@@ -2533,9 +2533,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             baseAngleOffset: ang,
             currentAngleOffset: ang,
             currentAngle: ang,
-            x: wizard.x + Math.cos(ang) * 63,
-            y: wizard.y + Math.sin(ang) * 38.5,
-            height: 18,
+            x: wizard.x + Math.cos(ang) * 62,
+            y: wizard.y + Math.sin(ang) * 36,
+            height: 19,
             radius: rockRadius,
             hitPoints: hitPointsPerRock,
             maxHitPoints: hitPointsPerRock,
@@ -2550,15 +2550,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         // Reemplaza o renueva cualquier barrera previa limpiamente
         g.telluricBarriers = [{
           id: `telluric_barrier_${now}`,
+          centerX: wizard.x,
+          centerY: wizard.y,
           isCharged,
           rocks,
-          orbitRadiusX: 63,
-          orbitRadiusY: 38.5,
+          orbitRadiusX: 62,
+          orbitRadiusY: 36,
           orbitAngle: 0,
           rotationSpeed: 2.3, // ~2.3 rad/s
           damagePerRock,
           knockback: recipe.knockback || 7.0,
-          durationMs: 20000, // 20.0s
+          durationMs: 20000, // 20.0s completos
           elapsedMs: 0,
           finished: false,
           realignSpeed: 0.12,
@@ -7399,10 +7401,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // 4.14 Actualizar Barrera Telúrica (Tierra + Tierra + Tierra: 3 Rocas Orbitales Consumibles)
       for (let tbIdx = g.telluricBarriers.length - 1; tbIdx >= 0; tbIdx--) {
         const barrier = g.telluricBarriers[tbIdx];
-        barrier.elapsedMs += dt * 1000;
+        const dtSec = dt / 1000;
+        barrier.elapsedMs += dt; // dt ya está en milisegundos (~16.6ms)
 
-        // A. Avanzar ángulo de rotación orbital global (~2.3 rad/s)
-        barrier.orbitAngle += barrier.rotationSpeed * dt;
+        // Anclar el centro de la órbita exactamente al jugador
+        barrier.centerX = wizard.x;
+        barrier.centerY = wizard.y;
+
+        // A. Avanzar ángulo de rotación orbital constante (~2.3 rad/s)
+        barrier.orbitAngle += barrier.rotationSpeed * dtSec;
 
         // B. Rebalancear simétricamente los ángulos de las rocas activas
         const activeRocks = barrier.rocks.filter((r) => !r.destroyed);
@@ -7464,7 +7471,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           rock.x = wizard.x + Math.cos(rock.currentAngle) * barrier.orbitRadiusX;
           rock.y = wizard.y + Math.sin(rock.currentAngle) * barrier.orbitRadiusY;
           rock.rotationAngle += 0.035;
-          rock.pulseTimer += dt;
+          rock.pulseTimer += dtSec;
           if (rock.hitFlash > 0) rock.hitFlash--;
         });
 
