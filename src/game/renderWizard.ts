@@ -7,7 +7,12 @@ export interface WizardRenderOptions {
   scale?: number;
   facingAngle?: number; // en radianes
   isMoving?: boolean;
+  vx?: number; // velocidad horizontal para balanceo e inclinación lateral
+  vy?: number;
   castAnimProgress?: number; // 0 a 1 si está lanzando hechizo
+  recoilX?: number; // desplazamiento por retroceso de ataque
+  recoilY?: number;
+  castFlashColor?: string; // tinte o destello elemental al castear
   activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
   time?: number; // para animaciones de flotación y brillo
 }
@@ -19,16 +24,36 @@ export function drawWizardSprite({
   scale = 1,
   facingAngle = 0,
   isMoving = false,
+  vx = 0,
+  vy = 0,
   castAnimProgress = 0,
+  recoilX = 0,
+  recoilY = 0,
+  castFlashColor,
   activeElement = 'fire',
   time = Date.now() / 1000,
 }: WizardRenderOptions) {
   ctx.save();
   ctx.translate(x, y);
 
-  // Animación de flotar / caminar
-  const bob = isMoving ? Math.sin(time * 12) * 3 : Math.sin(time * 3) * 2;
-  const shadowScale = isMoving ? 1 + Math.sin(time * 12) * 0.1 : 1 - (bob / 20);
+  // 1. Cinemática Procedimental: Run Bobbing, Respiración Idle y Sombra Dinámica
+  let bob = 0;
+  let shadowScale = 1;
+  let breatheX = 1;
+  let breatheY = 1;
+
+  if (isMoving) {
+    // Bobbing vertical procedimental al correr (rebote de pisadas de 0 a -4px)
+    bob = -Math.abs(Math.sin(time * 12)) * 4;
+    // La sombra se contrae en el punto más alto del paso y se expande al pisar el suelo
+    shadowScale = Math.max(0.7, 1 - (Math.abs(bob) / 16));
+  } else {
+    // Flotación suave y respiración senoidal en reposo
+    bob = Math.sin(time * 3) * 1.5;
+    shadowScale = 1 + Math.sin(time * 3) * 0.04;
+    breatheY = 1 + Math.sin(time * 3) * 0.03;
+    breatheX = 1 - Math.sin(time * 3) * 0.02;
+  }
 
   // 1. Sombra en el suelo de la mazmorra
   ctx.beginPath();
@@ -36,7 +61,24 @@ export function drawWizardSprite({
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
   ctx.fill();
 
+  // Aplicar retroceso de ataque (Recoil)
+  if (recoilX !== 0 || recoilY !== 0) {
+    ctx.translate(recoilX, recoilY);
+  }
+
+  // Aplicar desplazamiento vertical de pisada / flotación
   ctx.translate(0, bob);
+
+  // Inclinación lateral procedimental por inercia en el eje Z (Tilt proporcional a vx, máx ±6° o ~0.10 rad)
+  const leanAngle = isMoving ? Math.max(-0.10, Math.min(0.10, vx * 0.025)) : 0;
+  if (leanAngle !== 0) {
+    ctx.rotate(leanAngle);
+  }
+
+  // Respiración Idle del torso
+  if (!isMoving) {
+    ctx.scale(breatheX, breatheY);
+  }
 
   // 2. Aura de Hechizo / Elemento
   const elementColors: Record<string, { orb: string; glow: string }> = {
@@ -174,6 +216,15 @@ export function drawWizardSprite({
   }
 
   ctx.restore();
+
+  // Destello / Tinte elemental al castear (60ms Elemental Flash)
+  if (castFlashColor) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = castFlashColor;
+    ctx.fillRect(-25 * scale, -35 * scale, 50 * scale, 55 * scale);
+    ctx.restore();
+  }
 
   ctx.restore();
 }

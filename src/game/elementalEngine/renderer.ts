@@ -1303,6 +1303,12 @@ export class IsometricRenderer {
       invulnerableTimer?: number;
       isRespawning?: boolean;
       respawnFadeTimer?: number;
+      vx?: number;
+      vy?: number;
+      recoilX?: number;
+      recoilY?: number;
+      castFlashColor?: string;
+      activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -2351,6 +2357,12 @@ export class IsometricRenderer {
       scale: 1.15, // Mago con presencia visual mejorada
       facingAngle: wizard.facingAngle,
       isMoving: wizard.isMoving,
+      vx: wizard.vx,
+      vy: wizard.vy,
+      recoilX: wizard.recoilX,
+      recoilY: wizard.recoilY,
+      castFlashColor: wizard.castFlashColor,
+      activeElement: wizard.activeElement,
     });
 
     ctx.globalAlpha = 1.0;

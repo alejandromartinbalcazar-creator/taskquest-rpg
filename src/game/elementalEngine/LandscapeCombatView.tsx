@@ -53,6 +53,7 @@ import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
+import { haptics } from '../../services/haptics';
 import { CameraSystem } from './Camera';
 import {
   TerrainManager,
@@ -478,6 +479,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       invulnerableTimer: 0,
       isRespawning: false,
       respawnFadeTimer: 0,
+      vx: 0,
+      vy: 0,
+      recoilX: 0,
+      recoilY: 0,
+      recoilTimer: 0,
+      castFlashColor: undefined as string | undefined,
+      castFlashTimer: 0,
+      activeElement: 'fire' as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma',
       staffOrbColor: '#94a3b8',
       isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
       hasLightningAura: (player.unlockedMilestones || []).includes('mente_inquebrantable'),
@@ -516,10 +525,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       touchId: null as number | null,
       startX: 0,
       startY: 0,
+      baseX: 0,
+      baseY: 0,
       currX: 0,
       currY: 0,
+      knobX: 0,
+      knobY: 0,
       vx: 0,
       vy: 0,
+      opacity: 0,
+      isPressing: false,
     },
     projectiles: [] as Projectile[],
     lightningBolts: [] as LightningBoltEffect[],
@@ -715,6 +730,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       wizard.hitFlash = 10;
       g.screenShake = 6;
       elementalSound.playPlayerHurt();
+      haptics.heavy();
 
       // 4. Micro-empuje sutil (knockback de 0.2 unidades / ~12px) en dirección opuesta al daño
       if (sourceX !== undefined && sourceY !== undefined) {
@@ -755,6 +771,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         stopChanneledAttack();
       }
       elementalSound.playElementSelect(el);
+      haptics.light();
 
       setElementQueue((prev) => {
         if (prev.length >= 4) {
@@ -810,6 +827,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const handleClearQueue = useCallback(() => {
     stopChanneledAttack();
     setElementQueue([]);
+    haptics.selection();
   }, [stopChanneledAttack]);
 
   // Transición a la siguiente sala
@@ -952,6 +970,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       audioManager.stopCharge();
     }
     elementalSound.playDash();
+    haptics.medium();
     wizard.isDashing = true;
     wizard.dashTimer = 11;
     const cooldownReduction = Math.floor(Math.max(0, (player.level || 1) - 1) / 3) * 0.05;
@@ -1032,6 +1051,30 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.recipeCooldowns[recipe.id] = now;
 
       const wizard = g.wizard;
+
+      // Retroceso de Ataque (Attack Recoil: 4px en dirección opuesta a facingAngle por 80ms)
+      wizard.recoilX = -Math.cos(wizard.facingAngle) * 4;
+      wizard.recoilY = -Math.sin(wizard.facingAngle) * 4;
+      wizard.recoilTimer = 80;
+
+      // Destello Elemental al Castear (60ms)
+      const primaryElem = recipe.elements[0] || 'fire';
+      const flashMap: Record<string, string> = {
+        fire: 'rgba(249, 115, 22, 0.45)',
+        lightning: 'rgba(250, 204, 21, 0.45)',
+        ice: 'rgba(56, 189, 248, 0.45)',
+        earth: 'rgba(34, 197, 94, 0.45)',
+      };
+      wizard.castFlashColor = flashMap[primaryElem] || 'rgba(255, 255, 255, 0.4)';
+      wizard.castFlashTimer = 60;
+      wizard.activeElement = (recipe.elements[0] || 'fire') as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
+
+      // Feedback Háptico
+      if (recipe.id === 'elemental_cataclysm') {
+        haptics.heavy();
+      } else {
+        haptics.medium();
+      }
 
       // Reactivación anticipada: si ya hay un Núcleo de Sobrecarga activo en el terreno, detonarlo inmediatamente
       const existingOverloadCore = g.overloadCores.find((c) => !c.finished && c.phase !== 'detonating');
@@ -3441,6 +3484,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setChargeVisualRatio(0);
     if (wasCharged) {
       audioManager.playChargeRelease();
+      haptics.medium();
     } else {
       audioManager.stopCharge();
     }
@@ -3593,51 +3637,106 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     stopChanneledAttack,
   ]);
 
-  // Controles de Joystick Táctil
+  // Referencias para el renderizado vectorial del Joystick Dinámico Flotante y Swipe Casting
+  const joystickDOMRef = useRef<HTMLDivElement | null>(null);
+  const joystickKnobDOMRef = useRef<HTMLDivElement | null>(null);
+  const joystickRayDOMRef = useRef<SVGLineElement | null>(null);
+  const swipeActiveRef = useRef(false);
+  const lastSwipedElementRef = useRef<ElementType | null>(null);
+
+  const updateJoystickVisual = (baseX: number, baseY: number, knobX: number, knobY: number, opacity: number, pressing: boolean) => {
+    const el = joystickDOMRef.current;
+    if (el) {
+      el.style.transform = `translate3d(${baseX - 55}px, ${baseY - 55}px, 0)`;
+      el.style.opacity = `${opacity}`;
+    }
+    const knobEl = joystickKnobDOMRef.current;
+    if (knobEl) {
+      const kx = knobX - baseX;
+      const ky = knobY - baseY;
+      knobEl.style.transform = `translate3d(${kx}px, ${ky}px, 0) scale(${pressing ? 0.92 : 1.0})`;
+    }
+    const rayEl = joystickRayDOMRef.current;
+    if (rayEl) {
+      const kx = 55 + (knobX - baseX);
+      const ky = 55 + (knobY - baseY);
+      rayEl.setAttribute('x2', `${kx}`);
+      rayEl.setAttribute('y2', `${ky}`);
+      rayEl.setAttribute('opacity', `${Math.hypot(knobX - baseX, knobY - baseY) > 8 ? 0.85 : 0}`);
+    }
+  };
+
+  // Controles de Joystick Flotante Dinámico (Mano Izquierda)
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const g = gameStateRef.current;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const touchX = e.clientX - rect.left;
-    const touchY = e.clientY - rect.top;
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Ignorar si no está soportado en el entorno
+    }
 
     g.joystick.active = true;
     g.joystick.touchId = e.pointerId;
-    g.joystick.startX = touchX;
-    g.joystick.startY = touchY;
-    g.joystick.currX = touchX;
-    g.joystick.currY = touchY;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    g.joystick.baseX = e.clientX;
+    g.joystick.baseY = e.clientY;
+    g.joystick.currX = e.clientX;
+    g.joystick.currY = e.clientY;
+    g.joystick.knobX = e.clientX;
+    g.joystick.knobY = e.clientY;
+    g.joystick.opacity = 1;
+    g.joystick.isPressing = true;
+
+    const el = joystickDOMRef.current;
+    if (el) {
+      el.style.transition = 'none';
+    }
+    updateJoystickVisual(e.clientX, e.clientY, e.clientX, e.clientY, 1, true);
   };
 
   const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gameStateRef.current;
     if (!g.joystick.active || g.joystick.touchId !== e.pointerId) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const touchX = e.clientX - rect.left;
-    const touchY = e.clientY - rect.top;
 
-    g.joystick.currX = touchX;
-    g.joystick.currY = touchY;
-
-    const dx = touchX - g.joystick.startX;
-    const dy = touchY - g.joystick.startY;
+    const dx = e.clientX - g.joystick.baseX;
+    const dy = e.clientY - g.joystick.baseY;
     const dist = Math.hypot(dx, dy);
-    const maxRadius = 45;
+    const maxRadius = 55;
 
-    if (dist > 5) {
-      const normalizedDist = Math.min(dist, maxRadius) / maxRadius;
-      const angle = Math.atan2(dy, dx);
+    if (dist > maxRadius) {
+      const dirX = dx / dist;
+      const dirY = dy / dist;
+      g.joystick.knobX = g.joystick.baseX + dirX * maxRadius;
+      g.joystick.knobY = g.joystick.baseY + dirY * maxRadius;
+      // Arrastre suave de la base (Follow-thumb drag) para no perder tracción
+      const overflow = dist - maxRadius;
+      g.joystick.baseX += dirX * overflow * 0.45;
+      g.joystick.baseY += dirY * overflow * 0.45;
+    } else {
+      g.joystick.knobX = e.clientX;
+      g.joystick.knobY = e.clientY;
+    }
+
+    updateJoystickVisual(g.joystick.baseX, g.joystick.baseY, g.joystick.knobX, g.joystick.knobY, 1, true);
+
+    const effDx = g.joystick.knobX - g.joystick.baseX;
+    const effDy = g.joystick.knobY - g.joystick.baseY;
+    const effDist = Math.hypot(effDx, effDy);
+
+    // Zona muerta de 8px
+    if (effDist < 8) {
+      g.joystick.vx = 0;
+      g.joystick.vy = 0;
+      g.wizard.isMoving = false;
+    } else {
+      const normalizedDist = (Math.min(effDist, maxRadius) - 8) / (maxRadius - 8);
+      const angle = Math.atan2(effDy, effDx);
       const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
       const speed = (2.7 + player.stats.speed * 0.08) * normalizedDist * moveMultiplier;
       g.joystick.vx = Math.cos(angle) * speed;
       g.joystick.vy = Math.sin(angle) * speed;
       g.wizard.facingAngle = angle;
       g.wizard.isMoving = true;
-    } else {
-      g.joystick.vx = 0;
-      g.joystick.vy = 0;
-      g.wizard.isMoving = false;
     }
   };
 
@@ -3646,10 +3745,41 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (g.joystick.touchId === e.pointerId) {
       g.joystick.active = false;
       g.joystick.touchId = null;
-      g.joystick.vx = 0;
-      g.joystick.vy = 0;
-      g.wizard.isMoving = false;
+      g.joystick.isPressing = false;
+      const el = joystickDOMRef.current;
+      if (el) {
+        el.style.transition = 'opacity 150ms ease-out';
+        el.style.opacity = '0';
+      }
     }
+  };
+
+  // Manejo de Swipe-Casting (Barrido táctil continuo entre runas elementales)
+  const handleElementTouchStart = (el: ElementType, e: React.PointerEvent) => {
+    e.stopPropagation();
+    swipeActiveRef.current = true;
+    lastSwipedElementRef.current = el;
+    handleSelectElement(el);
+  };
+
+  const handleArcPadPointerMove = (e: React.PointerEvent) => {
+    if (!swipeActiveRef.current) return;
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if (!target) return;
+    const btn = target.closest('[data-element]');
+    if (btn) {
+      const el = btn.getAttribute('data-element') as ElementType;
+      if (el && el !== lastSwipedElementRef.current) {
+        lastSwipedElementRef.current = el;
+        handleSelectElement(el);
+        haptics.selection();
+      }
+    }
+  };
+
+  const handleArcPadPointerUp = () => {
+    swipeActiveRef.current = false;
+    lastSwipedElementRef.current = null;
   };
 
   // LOOP PRINCIPAL DE COMBATE (60 FPS)
@@ -3812,21 +3942,62 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       } else if (wizard.channelLockTimer && wizard.channelLockTimer > 0) {
         wizard.channelLockTimer--;
         wizard.isMoving = false;
+        wizard.vx = 0;
+        wizard.vy = 0;
       } else if (keyVx !== 0 || keyVy !== 0) {
         const len = Math.hypot(keyVx, keyVy);
         const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
         const speed = (3.2 + player.stats.speed * 0.08) * moveMultiplier;
-        wizard.x += (keyVx / len) * speed;
-        wizard.y += (keyVy / len) * speed;
+        const curVx = (keyVx / len) * speed;
+        const curVy = (keyVy / len) * speed;
+        wizard.x += curVx;
+        wizard.y += curVy;
+        wizard.vx = curVx;
+        wizard.vy = curVy;
         wizard.facingAngle = Math.atan2(keyVy, keyVx);
         wizard.isMoving = true;
         wizard.animFrame += 0.2;
-      } else if (g.joystick.active && (g.joystick.vx !== 0 || g.joystick.vy !== 0)) {
-        wizard.x += g.joystick.vx;
-        wizard.y += g.joystick.vy;
-        wizard.animFrame += 0.2;
+      } else if (g.joystick.vx !== 0 || g.joystick.vy !== 0) {
+        // Desaceleración suave del joystick cuando no está presionado
+        if (!g.joystick.active) {
+          g.joystick.vx *= 0.82;
+          g.joystick.vy *= 0.82;
+          if (Math.hypot(g.joystick.vx, g.joystick.vy) < 0.06) {
+            g.joystick.vx = 0;
+            g.joystick.vy = 0;
+          }
+        }
+        if (g.joystick.vx !== 0 || g.joystick.vy !== 0) {
+          wizard.x += g.joystick.vx;
+          wizard.y += g.joystick.vy;
+          wizard.vx = g.joystick.vx;
+          wizard.vy = g.joystick.vy;
+          wizard.isMoving = true;
+          wizard.animFrame += 0.2;
+        } else {
+          wizard.vx = 0;
+          wizard.vy = 0;
+          wizard.isMoving = false;
+        }
       } else {
+        wizard.vx = 0;
+        wizard.vy = 0;
         wizard.isMoving = false;
+      }
+
+      // Temporizadores de Retroceso de Ataque (Recoil) y Destello Elemental (Flash)
+      if (wizard.recoilTimer > 0) {
+        wizard.recoilTimer -= 16.6;
+        if (wizard.recoilTimer <= 0) {
+          wizard.recoilX = 0;
+          wizard.recoilY = 0;
+        }
+      }
+      if (wizard.castFlashTimer > 0) {
+        wizard.castFlashTimer -= 16.6;
+        if (wizard.castFlashTimer <= 0) {
+          wizard.castFlashColor = undefined;
+        }
       }
 
       // Desvanecer estela fantasmal del dash
@@ -10432,26 +10603,68 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       {/* CONTROLES TÁCTILES HORIZONTALES (DOBLE PULGAR) */}
 
-      {/* 1. LADO IZQUIERDO: JOYSTICK VIRTUAL */}
+      {/* 1. LADO IZQUIERDO: SUPERFICIE TÁCTIL INVISIBLE PARA JOYSTICK DINÁMICO FLOTANTE (45vw x 60vh) */}
       <div
-        className="absolute bottom-4 left-4 z-40 w-36 h-36 flex items-center justify-center pointer-events-auto"
+        className="absolute bottom-0 left-0 w-[45vw] h-[60vh] z-30 touch-none pointer-events-auto"
         onPointerDown={handleJoystickPointerDown}
         onPointerMove={handleJoystickPointerMove}
         onPointerUp={handleJoystickPointerUp}
         onPointerCancel={handleJoystickPointerUp}
+      />
+
+      {/* RENDERIZADO VECTORIAL DEL JOYSTICK FLOTANTE DINÁMICO */}
+      <div
+        ref={joystickDOMRef}
+        className="fixed top-0 left-0 z-40 pointer-events-none opacity-0 select-none will-change-transform"
+        style={{ width: 110, height: 110 }}
       >
-        <div className="w-32 h-32 rounded-full bg-slate-900/60 backdrop-blur-md border-2 border-slate-600/60 flex items-center justify-center relative shadow-2xl">
-          <div className="w-12 h-12 rounded-full bg-cyan-500/80 border-2 border-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.8)] pointer-events-none" />
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] font-bold text-slate-400">
-            MOVER
+        <div className="w-[110px] h-[110px] rounded-full bg-slate-900/65 backdrop-blur-md border-2 border-slate-500/50 shadow-[0_0_24px_rgba(0,0,0,0.7)] relative flex items-center justify-center">
+          {/* Ticks rúnicos a 90 grados */}
+          <div className="absolute top-1 w-1 h-2 bg-slate-400/60 rounded-full pointer-events-none" />
+          <div className="absolute bottom-1 w-1 h-2 bg-slate-400/60 rounded-full pointer-events-none" />
+          <div className="absolute left-1 w-2 h-1 bg-slate-400/60 rounded-full pointer-events-none" />
+          <div className="absolute right-1 w-2 h-1 bg-slate-400/60 rounded-full pointer-events-none" />
+
+          {/* Vector de dirección de luz tenue */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+            <defs>
+              <linearGradient id="joystickRayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.25" />
+              </linearGradient>
+            </defs>
+            <line
+              ref={joystickRayDOMRef}
+              x1="55"
+              y1="55"
+              x2="55"
+              y2="55"
+              stroke="url(#joystickRayGrad)"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              opacity="0"
+            />
+          </svg>
+
+          {/* Pomo interior brillante con escala al presionar */}
+          <div
+            ref={joystickKnobDOMRef}
+            className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 border-2 border-cyan-200 shadow-[0_0_18px_rgba(56,189,248,0.9)] flex items-center justify-center will-change-transform pointer-events-none"
+          >
+            <div className="w-4 h-4 rounded-full bg-white/40 shadow-inner" />
           </div>
         </div>
       </div>
 
-      {/* 2. LADO DERECHO: 4 BOTONES ELEMENTALES + BOTÓN DE ATAQUE */}
-      <div className="absolute bottom-3 right-3 z-40 flex flex-col items-end gap-2 pointer-events-auto">
-        {/* Vista previa de los elementos seleccionados y receta reconocida */}
-        <div className="flex items-center gap-1.5 bg-[#121422]/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-700 shadow-xl">
+      {/* 2. LADO DERECHO: PAD RADIAL ERGONÓMICO EN ABANICO + BOTÓN DE ATAQUE Y DASH */}
+      <div
+        className="absolute bottom-2 right-2 z-40 pointer-events-auto select-none touch-none w-[275px] h-[265px]"
+        onPointerMove={handleArcPadPointerMove}
+        onPointerUp={handleArcPadPointerUp}
+        onPointerCancel={handleArcPadPointerUp}
+      >
+        {/* Barra superior de Cola de Elementos y Receta Activa */}
+        <div className="absolute -top-10 right-0 flex items-center gap-1.5 bg-[#121422]/95 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-700/80 shadow-xl pointer-events-auto">
           <div className="flex items-center gap-1">
             {[0, 1, 2, 3].map((slot) => {
               const el = elementQueue[slot];
@@ -10482,7 +10695,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           {elementQueue.length > 0 && (
             <button
               onClick={handleClearQueue}
-              className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 bg-slate-800 rounded-md border border-slate-700"
+              className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 bg-slate-800 rounded-md border border-slate-700 active:scale-95"
             >
               Borrar
             </button>
@@ -10496,61 +10709,113 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           </div>
         </div>
 
-        {/* Panel de Controles Táctiles */}
-        <div className="flex items-center gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            {/* FUEGO */}
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                handleSelectElement('fire');
-              }}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-br from-rose-600 to-red-800 active:scale-95 border-2 border-rose-400 shadow-[0_0_12px_rgba(239,68,68,0.4)] flex flex-col items-center justify-center text-white"
-            >
-              <span className="text-xl">🔥</span>
-              <span className="text-[9px] font-black tracking-wider">FUEGO</span>
-            </button>
+        {/* FUEGO (🔥) — Posición superior-izquierda del arco */}
+        <div
+          className="absolute p-2.5 -m-2.5 z-10"
+          style={{ right: '160px', bottom: '92px' }}
+        >
+          <button
+            data-element="fire"
+            onPointerDown={(e) => handleElementTouchStart('fire', e)}
+            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-600 to-red-800 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
+              elementQueue.includes('fire')
+                ? 'border-rose-400 ring-2 ring-rose-400/80 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
+                : 'border-rose-500/70 shadow-[0_0_12px_rgba(239,68,68,0.4)]'
+            }`}
+          >
+            <span className="text-2xl pointer-events-none">🔥</span>
+            <span className="text-[9px] font-black tracking-wider pointer-events-none">FUEGO</span>
+            {elementQueue.filter((e) => e === 'fire').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full border border-rose-300 shadow">
+                x{elementQueue.filter((e) => e === 'fire').length}
+              </span>
+            )}
+          </button>
+        </div>
 
-            {/* RAYO */}
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack();
-                handleSelectElement('lightning');
-              }}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-700 active:scale-95 border-2 border-amber-300 shadow-[0_0_12px_rgba(234,179,8,0.4)] flex flex-col items-center justify-center text-white"
-            >
-              <span className="text-xl">⚡</span>
-              <span className="text-[9px] font-black tracking-wider">RAYO</span>
-            </button>
+        {/* RAYO (⚡) — Posición superior-central del arco */}
+        <div
+          className="absolute p-2.5 -m-2.5 z-10"
+          style={{ right: '110px', bottom: '156px' }}
+        >
+          <button
+            data-element="lightning"
+            onPointerDown={(e) => {
+              stopChanneledAttack();
+              handleElementTouchStart('lightning', e);
+            }}
+            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-700 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
+              elementQueue.includes('lightning')
+                ? 'border-amber-300 ring-2 ring-amber-300/80 shadow-[0_0_20px_rgba(234,179,8,0.8)] animate-pulse'
+                : 'border-amber-400/70 shadow-[0_0_12px_rgba(234,179,8,0.4)]'
+            }`}
+          >
+            <span className="text-2xl pointer-events-none">⚡</span>
+            <span className="text-[9px] font-black tracking-wider pointer-events-none">RAYO</span>
+            {elementQueue.filter((e) => e === 'lightning').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-amber-500 text-black text-[9px] font-black rounded-full border border-amber-200 shadow">
+                x{elementQueue.filter((e) => e === 'lightning').length}
+              </span>
+            )}
+          </button>
+        </div>
 
-            {/* HIELO */}
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                handleSelectElement('ice');
-              }}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 active:scale-95 border-2 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.4)] flex flex-col items-center justify-center text-white"
-            >
-              <span className="text-xl">❄️</span>
-              <span className="text-[9px] font-black tracking-wider">HIELO</span>
-            </button>
+        {/* HIELO (❄️) — Posición superior-derecha del arco */}
+        <div
+          className="absolute p-2.5 -m-2.5 z-10"
+          style={{ right: '44px', bottom: '168px' }}
+        >
+          <button
+            data-element="ice"
+            onPointerDown={(e) => handleElementTouchStart('ice', e)}
+            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
+              elementQueue.includes('ice')
+                ? 'border-cyan-300 ring-2 ring-cyan-300/80 shadow-[0_0_20px_rgba(6,182,212,0.8)] animate-pulse'
+                : 'border-cyan-400/70 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+            }`}
+          >
+            <span className="text-2xl pointer-events-none">❄️</span>
+            <span className="text-[9px] font-black tracking-wider pointer-events-none">HIELO</span>
+            {elementQueue.filter((e) => e === 'ice').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-cyan-400 text-slate-900 text-[9px] font-black rounded-full border border-cyan-100 shadow">
+                x{elementQueue.filter((e) => e === 'ice').length}
+              </span>
+            )}
+          </button>
+        </div>
 
-            {/* TIERRA */}
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                stopChanneledAttack();
-                handleSelectElement('earth');
-              }}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-600 to-stone-800 active:scale-95 border-2 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)] flex flex-col items-center justify-center text-white"
-            >
-              <span className="text-xl">🌍</span>
-              <span className="text-[9px] font-black tracking-wider">TIERRA</span>
-            </button>
-          </div>
+        {/* TIERRA (🌍) — Posición central-interior del arco */}
+        <div
+          className="absolute p-2.5 -m-2.5 z-10"
+          style={{ right: '12px', bottom: '108px' }}
+        >
+          <button
+            data-element="earth"
+            onPointerDown={(e) => {
+              stopChanneledAttack();
+              handleElementTouchStart('earth', e);
+            }}
+            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-stone-800 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
+              elementQueue.includes('earth')
+                ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.8)] animate-pulse'
+                : 'border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+            }`}
+          >
+            <span className="text-2xl pointer-events-none">🌍</span>
+            <span className="text-[9px] font-black tracking-wider pointer-events-none">TIERRA</span>
+            {elementQueue.filter((e) => e === 'earth').length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-emerald-500 text-white text-[9px] font-black rounded-full border border-emerald-200 shadow">
+                x{elementQueue.filter((e) => e === 'earth').length}
+              </span>
+            )}
+          </button>
+        </div>
 
-          {/* BOTÓN DE ESQUIVA RÁPIDA (DASH) */}
+        {/* BOTÓN DE ESQUIVA RÁPIDA (DASH) — Posición adyacente al pulgar */}
+        <div
+          className="absolute z-20"
+          style={{ right: '114px', bottom: '18px' }}
+        >
           <button
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -10569,11 +10834,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 style={{ height: `${dashCooldownRatio * 100}%` }}
               />
             )}
-            <span className="text-xl relative z-10">⚡</span>
-            <span className="text-[8px] font-black tracking-wider relative z-10">ESQUIVAR</span>
+            <span className="text-xl relative z-10 pointer-events-none">⚡</span>
+            <span className="text-[8px] font-black tracking-wider relative z-10 pointer-events-none">ESQUIVAR</span>
           </button>
+        </div>
 
-          {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA, APUNTADO TÁCTIL Y FEEDBACK DE COOLDOWN */}
+        {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA Y APUNTADO — Foco Central Natural del Pulgar */}
+        <div
+          className="absolute z-20"
+          style={{ right: '20px', bottom: '14px' }}
+        >
           <button
             onPointerDown={handleAttackPointerDown}
             onPointerMove={handleAttackPointerMove}
