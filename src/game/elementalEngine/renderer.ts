@@ -95,6 +95,7 @@ export class IsometricRenderer {
       invulnerableTimer?: number;
       isRespawning?: boolean;
       respawnFadeTimer?: number;
+      victoryScale?: number;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -1312,6 +1313,7 @@ export class IsometricRenderer {
       invulnerableTimer?: number;
       isRespawning?: boolean;
       respawnFadeTimer?: number;
+      victoryScale?: number;
       vx?: number;
       vy?: number;
       recoilX?: number;
@@ -2363,7 +2365,7 @@ export class IsometricRenderer {
       ctx,
       x: 0,
       y: levY,
-      scale: 1.15, // Mago con presencia visual mejorada
+      scale: 1.15 * (wizard.victoryScale !== undefined ? wizard.victoryScale : 1.0), // Mago con presencia visual y absorción en vórtice
       facingAngle: wizard.facingAngle,
       isMoving: wizard.isMoving,
       vx: wizard.vx,
@@ -2430,14 +2432,44 @@ export class IsometricRenderer {
       ctx.stroke();
     }
 
-    // 3. Si está congelado: Cubo de hielo 3D traslúcido
-    const isFrozen = enemy.statuses.some((s) => s.type === 'frozen');
-    if (isFrozen) {
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
+    // 3. Efecto procedural de escarcha y congelamiento (sin rectángulos planos)
+    const isFrozen = enemy.statuses.some((s) => s.type === 'frozen' || s.type === 'slowed');
+    if (isFrozen && enemy.bossType !== 'threshold_custodian') {
+      ctx.save();
+      const r = enemy.radius;
+      const frostGrad = ctx.createRadialGradient(0, -r, 2, 0, -r, r * 1.35);
+      frostGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+      frostGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.35)');
+      frostGrad.addColorStop(0.85, 'rgba(14, 165, 233, 0.25)');
+      frostGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+
+      ctx.fillStyle = frostGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -r, r * 1.15, r * 1.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Púas o cristales vectoriales afilados en los bordes
       ctx.strokeStyle = '#e0f2fe';
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(-enemy.radius - 5, -enemy.radius * 2 - 5, (enemy.radius + 5) * 2, (enemy.radius + 5) * 2);
-      ctx.fillRect(-enemy.radius - 5, -enemy.radius * 2 - 5, (enemy.radius + 5) * 2, (enemy.radius + 5) * 2);
+      ctx.lineWidth = 1.6;
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.85)';
+      const crystalCount = 6;
+      for (let c = 0; c < crystalCount; c++) {
+        const cAng = (Math.PI * 2 / crystalCount) * c + 0.3;
+        const bx = Math.cos(cAng) * (r * 0.95);
+        const by = -r + Math.sin(cAng) * (r * 0.95);
+        const tipX = Math.cos(cAng) * (r * 1.35);
+        const tipY = -r + Math.sin(cAng) * (r * 1.35);
+        const p1x = Math.cos(cAng - 0.2) * (r * 0.95);
+        const p1y = -r + Math.sin(cAng - 0.2) * (r * 0.95);
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(bx, by);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // 4. Si está aturdido (Stunned): Estrellas doradas vectoriales orbitando

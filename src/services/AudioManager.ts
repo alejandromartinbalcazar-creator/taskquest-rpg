@@ -4,6 +4,15 @@
 export type AmbientMood = 'exploration' | 'boss' | 'peaceful' | 'none';
 
 interface AmbientLayerState {
+  sequenceTimer?: number | ReturnType<typeof setInterval>;
+  stepIndex?: number;
+  padOsc1?: OscillatorNode;
+  padOsc2?: OscillatorNode;
+  padFilter?: BiquadFilterNode;
+  padGain?: GainNode;
+  padLfo?: OscillatorNode;
+  padLfoGain?: GainNode;
+
   droneOsc1?: OscillatorNode;
   droneOsc2?: OscillatorNode;
   droneFilter?: BiquadFilterNode;
@@ -990,15 +999,59 @@ export class AudioManager {
     this.scheduleCleanup(duration, osc, gain);
   }
 
+  /**
+   * Fanfarria triunfal ceremonial de victoria de nivel (C Major / E / G / C).
+   */
+  public playVictoryFanfare(): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const fanfareNotes = [
+      { freq: 261.63, time: 0.00, dur: 0.16 }, // C4
+      { freq: 392.00, time: 0.14, dur: 0.16 }, // G4
+      { freq: 523.25, time: 0.28, dur: 0.22 }, // C5
+      { freq: 659.25, time: 0.44, dur: 0.22 }, // E5
+      { freq: 783.99, time: 0.62, dur: 0.95 }, // G5
+      { freq: 1046.50, time: 0.62, dur: 0.95 }, // C6
+    ];
+
+    fanfareNotes.forEach((n) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(n.freq, now + n.time);
+
+      gain.gain.setValueAtTime(0.001, now + n.time);
+      gain.gain.linearRampToValueAtTime(0.22, now + n.time + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + n.time + n.dur);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+
+      osc.start(now + n.time);
+      osc.stop(now + n.time + n.dur);
+      this.scheduleCleanup(n.time + n.dur, osc, gain);
+    });
+  }
+
   // ==========================================
-  // GENERADOR PROCEDURAL AMBIENTAL / MÚSICA
+  // GENERADOR PROCEDURAL AMBIENTAL / MÚSICA DE AVENTURA HEROICA
   // ==========================================
 
+  public getCurrentMood(): AmbientMood {
+    return this.currentAmbientMood;
+  }
+
   /**
-   * Inicia o conmuta la atmósfera/música procedural viva en tiempo real sin archivos de audio.
+   * Inicia o conmuta la banda sonora procedural heroica y de combate en tiempo real.
+   * Cero archivos de audio: síntesis matemática pura Web Audio API a 60 FPS.
+   * - Modo 'exploration': Pulso rítmico suave de marcha a 105 BPM + melodía dórica/pentatónica heroica en C4-A4.
+   * - Modo 'boss': Ritmo de combate intenso a 128 BPM + arpegios diente de sierra con filtro pasobajo modulado por LFO.
    */
   public startAmbient(mood: AmbientMood = 'exploration'): void {
-    if (this.currentAmbientMood === mood && this.ambientState.droneOsc1) {
+    if (this.currentAmbientMood === mood && (this.ambientState.sequenceTimer || this.ambientState.padOsc1)) {
       return; // Ya está activo en este modo
     }
 
@@ -1013,175 +1066,237 @@ export class AudioManager {
 
     this.currentAmbientMood = mood;
     const now = ctx.currentTime;
-
-    // ------------------------------------------
-    // Capa 1: Drone / Pad Resonante (Raíz + Quinta)
-    // ------------------------------------------
     const isBoss = mood === 'boss';
-    const rootFreq = isBoss ? 73.42 : 130.81; // D2 (Boss) o C3 (Exploración)
-    const fifthFreq = isBoss ? 110.00 : 196.00; // A2 (Boss) o G3 (Exploración)
+
+    // -------------------------------------------------------------
+    // Capa 1: Pad Armónico Cálido Heroico (Reemplaza los drones tétricos)
+    // -------------------------------------------------------------
+    const rootFreq = isBoss ? 146.83 : 130.81; // D3 (Boss) o C3 (Exploración)
+    const fifthFreq = isBoss ? 220.00 : 196.00; // A3 (Boss) o G3 (Exploración)
+    const thirdFreq = isBoss ? 174.61 : 164.81; // F3 (Boss menor) o E3 (Exploración mayor)
 
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
     osc1.type = isBoss ? 'sawtooth' : 'triangle';
     osc2.type = 'sine';
     osc1.frequency.setValueAtTime(rootFreq, now);
-    osc2.frequency.setValueAtTime(fifthFreq, now);
+    osc2.frequency.setValueAtTime(isBoss ? thirdFreq : fifthFreq, now);
 
-    // Filtro pasa bajo resonante modulado por LFO
-    const droneFilter = ctx.createBiquadFilter();
-    droneFilter.type = 'lowpass';
-    droneFilter.Q.setValueAtTime(isBoss ? 4.2 : 2.8, now);
-    droneFilter.frequency.setValueAtTime(isBoss ? 260 : 200, now);
+    // Filtro pasa-bajo musical cálido
+    const padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.Q.setValueAtTime(isBoss ? 3.5 : 1.8, now);
+    padFilter.frequency.setValueAtTime(isBoss ? 480 : 520, now);
 
-    // LFO lento para respiración ambiental
-    const droneLfo = ctx.createOscillator();
-    const droneLfoGain = ctx.createGain();
-    droneLfo.type = 'sine';
-    droneLfo.frequency.setValueAtTime(isBoss ? 0.14 : 0.08, now);
-    droneLfoGain.gain.setValueAtTime(isBoss ? 140 : 80, now);
+    // LFO dinámico para respiración orquestal
+    const padLfo = ctx.createOscillator();
+    const padLfoGain = ctx.createGain();
+    padLfo.type = 'sine';
+    padLfo.frequency.setValueAtTime(isBoss ? 0.35 : 0.12, now);
+    padLfoGain.gain.setValueAtTime(isBoss ? 260 : 130, now);
 
-    droneLfo.connect(droneLfoGain);
-    droneLfoGain.connect(droneFilter.frequency);
+    padLfo.connect(padLfoGain);
+    padLfoGain.connect(padFilter.frequency);
 
-    const droneGain = ctx.createGain();
-    droneGain.gain.setValueAtTime(0.001, now);
-    droneGain.gain.linearRampToValueAtTime(isBoss ? 0.22 : 0.16, now + 1.8);
+    const padGain = ctx.createGain();
+    padGain.gain.setValueAtTime(0.001, now);
+    padGain.gain.linearRampToValueAtTime(isBoss ? 0.18 : 0.14, now + 1.2);
 
-    osc1.connect(droneFilter);
-    osc2.connect(droneFilter);
-    droneFilter.connect(droneGain);
-    droneGain.connect(this.ambientGain);
+    osc1.connect(padFilter);
+    osc2.connect(padFilter);
+    padFilter.connect(padGain);
+    padGain.connect(this.ambientGain);
 
     osc1.start(now);
     osc2.start(now);
-    droneLfo.start(now);
+    padLfo.start(now);
 
-    // ------------------------------------------
-    // Capa 2: Susurros de Viento (Ruido Rosa Filtrado)
-    // ------------------------------------------
-    let windSource: AudioBufferSourceNode | undefined;
-    let windFilter: BiquadFilterNode | undefined;
-    let windGain: GainNode | undefined;
-    let windLfo: OscillatorNode | undefined;
-    let windLfoGain: GainNode | undefined;
+    // -------------------------------------------------------------
+    // Capa 2: Secuenciador Rítmico y Melódico Procedural (105 BPM o 128 BPM)
+    // -------------------------------------------------------------
+    const bpm = isBoss ? 128 : 105;
+    const stepIntervalMs = Math.round(((60 / bpm) / 4) * 1000); // Duración de semicorchea (16th note)
+    let step = 0;
 
-    if (this.pinkNoiseBuffer) {
-      windSource = ctx.createBufferSource();
-      windSource.buffer = this.pinkNoiseBuffer;
-      windSource.loop = true;
+    // Escala Mayor Pentatónica / Dórica Heroica para Exploración: C4, D4, E4, G4, A4, C5
+    const exploreMelody = [
+      261.63, 0, 329.63, 0, 392.00, 0, 440.00, 392.00, // C4, E4, G4, A4, G4
+      329.63, 0, 293.66, 0, 392.00, 440.00, 523.25, 0  // E4, D4, G4, A4, C5
+    ];
 
-      windFilter = ctx.createBiquadFilter();
-      windFilter.type = 'bandpass';
-      windFilter.Q.setValueAtTime(2.5, now);
-      windFilter.frequency.setValueAtTime(450, now);
+    // Arpegios Dórico/Menor de Batalla para Boss a 128 BPM:
+    const bossArp = [
+      146.83, 220.00, 293.66, 349.23, 440.00, 349.23, 293.66, 220.00, // D3, A3, D4, F4, A4, F4, D4, A3
+      261.63, 329.63, 392.00, 523.25, 440.00, 349.23, 293.66, 220.00  // C4, E4, G4, C5, A4, F4, D4, A3
+    ];
 
-      windLfo = ctx.createOscillator();
-      windLfo.type = 'sine';
-      windLfo.frequency.setValueAtTime(0.06, now);
-
-      windLfoGain = ctx.createGain();
-      windLfoGain.gain.setValueAtTime(220, now);
-
-      windLfo.connect(windLfoGain);
-      windLfoGain.connect(windFilter.frequency);
-
-      windGain = ctx.createGain();
-      windGain.gain.setValueAtTime(0.001, now);
-      windGain.gain.linearRampToValueAtTime(0.08, now + 2.0);
-
-      windSource.connect(windFilter);
-      windFilter.connect(windGain);
-      windGain.connect(this.ambientGain);
-
-      windSource.start(now);
-      windLfo.start(now);
-    }
-
-    // ------------------------------------------
-    // Capa 3: Campanas / Chimes Pentatónicos Intermitentes
-    // ------------------------------------------
-    const chimeTimer = setInterval(() => {
+    const sequenceTimer = setInterval(() => {
       if (this.muted || this.currentAmbientMood === 'none') return;
-      this.triggerAmbientChime(mood);
-    }, isBoss ? 5200 : 4200);
+      const cCtx = this.ctx;
+      if (!cCtx || !this.ambientGain) return;
+      const tNow = cCtx.currentTime;
+
+      // A. PERCUSIÓN
+      if (isBoss) {
+        // Boss 128 BPM: Bombo contundente en los 4 tiempos
+        if (step % 4 === 0) {
+          this.playSyntheticKick(tNow, 150, 48, 0.08, 0.22);
+        }
+        // Caja de combate en beats 2 y 4 (pasos 4 y 12)
+        if (step === 4 || step === 12) {
+          this.playSyntheticSnare(tNow, 1400, 0.06, 0.09);
+        }
+        // Hi-hats rítmicos en contratiempos
+        if (step % 2 === 1) {
+          this.playSyntheticHat(tNow, 0.03, 0.04);
+        }
+      } else {
+        // Exploración 105 BPM: Pulso rítmico suave estilo marcha (bombo pasos 0 y 8, chasquido pasos 4 y 12)
+        if (step === 0 || step === 8) {
+          this.playSyntheticKick(tNow, 115, 42, 0.09, 0.13);
+        }
+        if (step === 4 || step === 12) {
+          this.playSyntheticSnare(tNow, 1600, 0.04, 0.045);
+        }
+      }
+
+      // B. MELODÍA / ARPEGIOS HEROICOS
+      if (isBoss) {
+        // Arpegio diente de sierra con filtro pasobajo modulado dinámico
+        const noteFreq = bossArp[step % bossArp.length];
+        if (noteFreq > 0) {
+          this.playHeroicLead(tNow, noteFreq, 'sawtooth', 0.10, 0.09, true);
+        }
+      } else {
+        // Melodía épica de exploración en onda triangular cálida
+        const noteFreq = exploreMelody[step % exploreMelody.length];
+        if (noteFreq > 0) {
+          this.playHeroicLead(tNow, noteFreq, 'triangle', 0.16, 0.08, false);
+        }
+      }
+
+      step = (step + 1) % 16;
+    }, stepIntervalMs);
 
     this.ambientState = {
-      droneOsc1: osc1,
-      droneOsc2: osc2,
-      droneFilter,
-      droneGain,
-      droneLfo,
-      droneLfoGain,
-      windSource,
-      windFilter,
-      windGain,
-      windLfo,
-      windLfoGain,
-      chimeTimer,
+      sequenceTimer,
+      padOsc1: osc1,
+      padOsc2: osc2,
+      padFilter,
+      padGain,
+      padLfo,
+      padLfoGain,
     };
   }
 
-  /**
-   * Dispara una campana pentatónica mística con sobretonos inarmónicos
-   */
-  private triggerAmbientChime(mood: AmbientMood): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.ambientGain || this.muted) return;
-
-    // Escala mística: Doriana/Pentatónica en exploración, Frigia en jefe
-    const pentatonicExplore = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50]; // C5, D5, E5, G5, A5, C6
-    const pentatonicBoss = [293.66, 311.13, 369.99, 440.00, 466.16, 587.33]; // D4, Eb4, F#4, A4, Bb4, D5
-
-    const scale = mood === 'boss' ? pentatonicBoss : pentatonicExplore;
-    const freq = scale[Math.floor(Math.random() * scale.length)];
-
-    const now = ctx.currentTime;
-    const duration = 2.2;
-
-    // Fundamental
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+  private playSyntheticKick(time: number, startFreq: number, endFreq: number, duration: number, volume: number): void {
+    if (!this.ctx || !this.ambientGain) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, now);
-
-    // Sobretono inarmónico característico de campanilla metálica (2.76x)
-    const overtone = ctx.createOscillator();
-    const overtoneGain = ctx.createGain();
-    overtone.type = 'sine';
-    overtone.frequency.setValueAtTime(freq * 2.76, now);
-
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-    overtoneGain.gain.setValueAtTime(0.001, now);
-    overtoneGain.gain.linearRampToValueAtTime(0.04, now + 0.015);
-    overtoneGain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.7);
-
+    osc.frequency.setValueAtTime(startFreq, time);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration);
+    gain.gain.setValueAtTime(volume, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
     osc.connect(gain);
-    overtone.connect(overtoneGain);
     gain.connect(this.ambientGain);
-    overtoneGain.connect(this.ambientGain);
+    osc.start(time);
+    osc.stop(time + duration);
+    this.scheduleCleanup(duration, osc, gain);
+  }
 
-    osc.start(now);
-    overtone.start(now);
-    osc.stop(now + duration);
-    overtone.stop(now + duration);
+  private playSyntheticSnare(time: number, filterFreq: number, duration: number, volume: number): void {
+    if (!this.ctx || !this.ambientGain || !this.pinkNoiseBuffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.pinkNoiseBuffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(filterFreq, time);
+    filter.Q.setValueAtTime(2.2, time);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(volume, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientGain);
+    source.start(time);
+    source.stop(time + duration);
+    this.scheduleCleanup(duration, source, filter, gain);
+  }
 
-    this.scheduleCleanup(duration, osc, overtone, gain, overtoneGain);
+  private playSyntheticHat(time: number, duration: number, volume: number): void {
+    if (!this.ctx || !this.ambientGain || !this.pinkNoiseBuffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.pinkNoiseBuffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(6500, time);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(volume, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientGain);
+    source.start(time);
+    source.stop(time + duration);
+    this.scheduleCleanup(duration, source, filter, gain);
+  }
+
+  private playHeroicLead(
+    time: number,
+    freq: number,
+    type: OscillatorType,
+    duration: number,
+    volume: number,
+    isBoss: boolean
+  ): void {
+    if (!this.ctx || !this.ambientGain) return;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+
+    filter.type = 'lowpass';
+    filter.Q.setValueAtTime(isBoss ? 4.5 : 2.0, time);
+    filter.frequency.setValueAtTime(isBoss ? 600 : 900, time);
+    filter.frequency.exponentialRampToValueAtTime(isBoss ? 2400 : 1800, time + duration * 0.4);
+    filter.frequency.exponentialRampToValueAtTime(isBoss ? 500 : 700, time + duration);
+
+    gain.gain.setValueAtTime(0.001, time);
+    gain.gain.linearRampToValueAtTime(volume, time + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientGain);
+
+    osc.start(time);
+    osc.stop(time + duration);
+    this.scheduleCleanup(duration, osc, filter, gain);
   }
 
   /**
-   * Detiene suavemente la música ambiental liberando todos los osciladores
+   * Detiene suavemente la música ambiental liberando todos los osciladores y secuenciadores
    */
   public stopAmbient(fast: boolean = false): void {
+    if (this.ambientState.sequenceTimer) {
+      clearInterval(this.ambientState.sequenceTimer);
+      this.ambientState.sequenceTimer = undefined;
+    }
     if (this.ambientState.chimeTimer) {
       clearInterval(this.ambientState.chimeTimer);
       this.ambientState.chimeTimer = undefined;
     }
 
     const {
+      padOsc1,
+      padOsc2,
+      padFilter,
+      padGain,
+      padLfo,
+      padLfoGain,
       droneOsc1,
       droneOsc2,
       droneFilter,
@@ -1198,9 +1313,13 @@ export class AudioManager {
     this.ambientState = {};
     this.currentAmbientMood = 'none';
 
-    const fadeDuration = fast ? 0.08 : 1.2;
+    const fadeDuration = fast ? 0.08 : 1.0;
     const now = this.ctx ? this.ctx.currentTime : 0;
 
+    if (this.ctx && padGain) {
+      padGain.gain.setValueAtTime(padGain.gain.value, now);
+      padGain.gain.linearRampToValueAtTime(0.001, now + fadeDuration);
+    }
     if (this.ctx && droneGain) {
       droneGain.gain.setValueAtTime(droneGain.gain.value, now);
       droneGain.gain.linearRampToValueAtTime(0.001, now + fadeDuration);
@@ -1212,11 +1331,21 @@ export class AudioManager {
 
     setTimeout(() => {
       try {
+        padOsc1?.stop();
+        padOsc2?.stop();
+        padLfo?.stop();
         droneOsc1?.stop();
         droneOsc2?.stop();
         droneLfo?.stop();
         windSource?.stop();
         windLfo?.stop();
+
+        padOsc1?.disconnect();
+        padOsc2?.disconnect();
+        padFilter?.disconnect();
+        padGain?.disconnect();
+        padLfo?.disconnect();
+        padLfoGain?.disconnect();
 
         droneOsc1?.disconnect();
         droneOsc2?.disconnect();

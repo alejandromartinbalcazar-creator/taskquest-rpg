@@ -509,6 +509,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [isMuted, setIsMuted] = useState(() => audioManager.isMuted());
   const [isDefeated, setIsDefeated] = useState(false);
   const [isVictorious, setIsVictorious] = useState(false);
+  const [finalRunTimeSec, setFinalRunTimeSec] = useState(0);
+  const [totalKillsCount, setTotalKillsCount] = useState(0);
   const [isPortraitWarning, setIsPortraitWarning] = useState(false);
 
   // Progresión de salas conectadas
@@ -528,6 +530,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
   const lastAttackCdRatioRef = useRef(0);
+  const runStartTimeRef = useRef<number>(Date.now());
+  const suctionStateRef = useRef<{ isSuctioning: boolean; startTime: number }>({ isSuctioning: false, startTime: 0 });
 
   // Reducción de enfriamiento por progresión de nivel: -5% cada 3 niveles
   const getEffectiveCooldown = useCallback(
@@ -615,7 +619,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         lastDamageTimestampPerEnemy: {} as Record<string, number>,
         lastDamageTimestampPerObstacle: {} as Record<string, number>,
       } as ChanneledStreamState,
+      isEnteringVictoryPortal: false,
+      victoryScale: 1.0,
     },
+    isBossDefeated: false,
     camera: { x: 550, y: 560 },
     cameraSystem: new CameraSystem(550, 560),
     prevWizardX: 550,
@@ -858,7 +865,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Selección de elemento
   const handleSelectElement = useCallback(
     (el: ElementType) => {
-      if (isDefeated || isVictorious) return;
+      if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
       const activeStream = gameStateRef.current.wizard.channeledStream;
       if (activeStream.active && activeStream.type !== el) {
         stopChanneledAttack();
@@ -1078,7 +1085,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Esquiva Rápida (Dash / Glide)
   const handleDash = useCallback(() => {
-    if (isDefeated || isVictorious) return;
+    if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
     const g = gameStateRef.current;
     const wizard = g.wizard;
     if (wizard.dashCooldown > 0 || wizard.isDashing) return;
@@ -1125,7 +1132,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Lanzamiento de Hechizo (con soporte para variante Cargada)
   const handleAttack = useCallback(
     (isCharged: boolean = false, chargeRatio?: number) => {
-      if (isDefeated || isVictorious) return;
+      if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
       const now = Date.now();
       const g = gameStateRef.current;
       const rawRecipe = activeRecipe;
@@ -3534,7 +3541,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
   const startCharge = useCallback(() => {
-    if (isDefeated || isVictorious) return;
+    if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
     const hasActiveOverloadCore = gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating');
     if (hasActiveOverloadCore) {
       handleAttack();
@@ -3820,6 +3827,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const g = gameStateRef.current;
+    if (g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -3849,6 +3857,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gameStateRef.current;
+    if (g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
     if (!g.joystick.active || g.joystick.touchId !== e.pointerId) return;
 
     let dx = e.clientX - g.joystick.baseX;
@@ -6028,18 +6037,84 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           enemy.y = resolved.y;
         });
 
+        // GESTIÓN DINÁMICA DE BGM (Exploración en sendero vs Combate heroico en arena del Custodio)
+        const inArena = wizard.x >= (tm.bossArenaBounds.minX - 100);
+        const targetMood = inArena && !g.isBossDefeated ? 'boss' : 'exploration';
+        if (audioManager.getCurrentMood() !== targetMood) {
+          audioManager.startAmbient(targetMood);
+        }
+
         // COMPROBACIÓN DE DERROTA DEL JEFE FINAL Y ACTIVACIÓN DEL PORTAL DE VICTORIA
         const bossEnemy = enemies.find((e) => e.bossType === 'threshold_custodian');
-        if (bossEnemy && bossEnemy.hp <= 0 && bossEnemy.custodianState?.isDefeated) {
+        if (bossEnemy && (bossEnemy.hp <= 0 || bossEnemy.custodianState?.isDefeated)) {
+          g.isBossDefeated = true;
           tm.victoryPortal.isActive = true;
+        }
 
+        if (g.isBossDefeated) {
+          tm.victoryPortal.isActive = true;
+        }
+
+        // TRIGGER Y ANIMACIÓN DE SUCCIÓN DEL VÓRTICE DE VICTORIA (400ms)
+        if (tm.victoryPortal.isActive && !isVictorious) {
           const distToPortal = Math.hypot(wizard.x - tm.victoryPortal.x, wizard.y - tm.victoryPortal.y);
-          const defeatAnimationDone = (bossEnemy.custodianState.defeatTimer || 0) > 150;
 
-          if ((distToPortal <= tm.victoryPortal.radius + 25 || defeatAnimationDone) && !isVictorious) {
-            setIsVictorious(true);
-            elementalSound.playVictory();
-            onVictory(floor.floorNumber, floor.enemy.expReward * 2, floor.enemy.goldReward * 2);
+          // Si el jugador entra en el radio de activación (<= 96px ~ 1.5 unidades de proximidad)
+          if (distToPortal <= 96 && !wizard.isEnteringVictoryPortal) {
+            wizard.isEnteringVictoryPortal = true;
+            wizard.isMoving = false;
+            g.joystick.active = false;
+            g.joystick.vx = 0;
+            g.joystick.vy = 0;
+            suctionStateRef.current = {
+              isSuctioning: true,
+              startTime: performance.now(),
+            };
+          }
+
+          // Cinemática de absorción espiralada (400ms)
+          if (suctionStateRef.current.isSuctioning) {
+            const elapsed = performance.now() - suctionStateRef.current.startTime;
+            const progress = Math.min(1.0, elapsed / 400);
+
+            // Reducción proporcional de escala 1.0 -> 0.0
+            wizard.victoryScale = Math.max(0, 1.0 - progress);
+
+            // Atracción continua hacia el centro exacto del vórtice
+            wizard.x += (tm.victoryPortal.x - wizard.x) * 0.18;
+            wizard.y += (tm.victoryPortal.y - wizard.y) * 0.18;
+
+            // Partículas de absorción espiraladas doradas y cian
+            for (let p = 0; p < 2; p++) {
+              const pAngle = Math.random() * Math.PI * 2;
+              const pDist = 32 * (1.0 - progress);
+              g.particles.push({
+                x: wizard.x + Math.cos(pAngle) * pDist,
+                y: wizard.y + Math.sin(pAngle) * pDist,
+                vx: -Math.sin(pAngle) * 3,
+                vy: Math.cos(pAngle) * 3,
+                color: Math.random() > 0.4 ? '#38bdf8' : '#fbbf24',
+                radius: Math.random() * 2.5 + 1.2,
+                life: 18,
+                maxLife: 18,
+                alpha: 1,
+                type: 'spark',
+              });
+            }
+
+            // Al completarse los 400ms: detonar fanfarria triunfal y abrir modal de estadísticas
+            if (progress >= 1.0) {
+              suctionStateRef.current.isSuctioning = false;
+              wizard.victoryScale = 0;
+              audioManager.playVictoryFanfare();
+              elementalSound.playVictory();
+
+              const elapsedSec = Math.max(1, Math.floor((Date.now() - runStartTimeRef.current) / 1000));
+              setFinalRunTimeSec(elapsedSec);
+              setTotalKillsCount(g.enemyManager.totalKills || 0);
+              setIsVictorious(true);
+              onVictory(floor.floorNumber, floor.enemy.expReward * 2, floor.enemy.goldReward * 2);
+            }
           }
         }
       }
@@ -10939,11 +11014,18 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (deadEnemy.hp <= 0) {
           // Si es el Custodio del Umbral, esperar que concluya la animación de colapso en escombros (60 frames)
           if (deadEnemy.bossType === 'threshold_custodian') {
+            g.isBossDefeated = true;
+            if (g.tilemap) {
+              g.tilemap.victoryPortal.isActive = true;
+            }
             const cs = deadEnemy.custodianState;
             if (cs && cs.defeatTimer < 60) {
               continue; // Mantener visible mientras los bloques de roca caen al suelo en escombros
             }
-            // Al finalizar el colapso, abrir el portal del santuario al final del mapa
+            // Al finalizar el colapso, asegurar que el vórtice final esté activo en el centro de la arena
+            if (g.tilemap) {
+              g.tilemap.victoryPortal.isActive = true;
+            }
             const exitPortal = g.terrainManager.obstacles.find((o) => o.id === 'forest-exit-portal');
             if (exitPortal) {
               exitPortal.doorLocked = false;
@@ -11487,28 +11569,55 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       {/* MODAL DE VICTORIA TOTAL */}
       {isVictorious && (
-        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#121422] border-2 border-amber-500 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <Award className="w-14 h-14 text-amber-400 mx-auto animate-bounce" />
-            <h3 className="text-xl font-black text-amber-300">¡NIVEL 1 COMPLETADO!</h3>
-            <p className="text-xs text-slate-300">
-              ¡Has atravesado con éxito La Ruta del Umbral y derrotado al colosal Custodio del Umbral!
-            </p>
-            <div className="bg-[#1a1c30] p-3 rounded-2xl border border-slate-700 flex justify-around text-xs">
-              <div>
-                <div className="font-bold text-cyan-400">+{floor.enemy.expReward * 2} EXP</div>
-                <div className="text-[10px] text-slate-400">Experiencia</div>
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
+          <div className="bg-[#121422] border-2 border-amber-500/90 p-5 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.35)] animate-in fade-in zoom-in-95 duration-300">
+            <div className="relative inline-block">
+              <Award className="w-14 h-14 text-amber-400 mx-auto animate-bounce filter drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]" />
+              <div className="absolute -inset-1 rounded-full bg-amber-400/20 blur-md pointer-events-none" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 tracking-wide uppercase">
+                ¡NIVEL 1 COMPLETADO!
+              </h3>
+              <p className="text-xs text-slate-300 mt-1">
+                ¡Has atravesado con éxito La Ruta del Umbral y derrotado al colosal Custodio del Umbral!
+              </p>
+            </div>
+
+            {/* Tarjetas de Estadísticas Detalladas de la Incursión */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
+                <span className="text-[10px] text-slate-400 font-medium">Monstruos Derrotados</span>
+                <span className="font-extrabold text-sm text-rose-400 mt-0.5">
+                  ⚔️ {totalKillsCount}
+                </span>
               </div>
-              <div>
-                <div className="font-bold text-amber-400">+{floor.enemy.goldReward * 2} Oro</div>
-                <div className="text-[10px] text-slate-400">Recompensa</div>
+              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
+                <span className="text-[10px] text-slate-400 font-medium">Tiempo de Incursión</span>
+                <span className="font-extrabold text-sm text-cyan-300 mt-0.5">
+                  ⏱️ {Math.floor(finalRunTimeSec / 60).toString().padStart(2, '0')}:{(finalRunTimeSec % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
+                <span className="text-[10px] text-slate-400 font-medium">EXP Obtenida</span>
+                <span className="font-extrabold text-sm text-cyan-400 mt-0.5">
+                  +{floor.enemy.expReward * 2} EXP
+                </span>
+              </div>
+              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
+                <span className="text-[10px] text-slate-400 font-medium">Oro Recompensa</span>
+                <span className="font-extrabold text-sm text-amber-400 mt-0.5">
+                  +{floor.enemy.goldReward * 2} Oro
+                </span>
               </div>
             </div>
+
             <button
               onClick={onExit}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-sm shadow-lg hover:brightness-110 active:scale-95 transition"
+              className="w-full py-3 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black rounded-xl text-sm shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-95 transition tracking-wider uppercase"
             >
-              VOLVER AL DIARIO
+              Volver a la Base / Tareas
             </button>
           </div>
         </div>

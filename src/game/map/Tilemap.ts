@@ -193,9 +193,9 @@ export class Tilemap {
       };
       this.bossArenaBounds = { minX: minBx, maxX: maxBx, minY: minBy, maxY: maxBy };
       this.victoryPortal = {
-        x: maxBx - 160,
+        x: this.bossSpawn.x,
         y: this.bossSpawn.y,
-        radius: 48,
+        radius: 52,
         isActive: false,
       };
     }
@@ -1030,6 +1030,22 @@ export class Tilemap {
       ctx.stroke();
     }
     ctx.restore();
+
+    // Partículas vectoriales doradas y cian absorbidas hacia el centro del vórtice
+    if (portal.isActive) {
+      const partCount = 14;
+      for (let p = 0; p < partCount; p++) {
+        const pProg = ((time * 1.6 + p / partCount) % 1.0);
+        const pDist = portal.radius * (1.0 - pProg);
+        const pAngle = time * 3.4 + p * (Math.PI * 2 / partCount);
+        const pxp = px + Math.cos(pAngle) * pDist;
+        const pyp = py + Math.sin(pAngle) * pDist * 0.58;
+        ctx.fillStyle = p % 2 === 0 ? '#38bdf8' : '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(pxp, pyp, 2.2 + (1.0 - pProg) * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     // 4. Cartel flotante indicador de Fin del Nivel
     ctx.font = 'bold 11px sans-serif';

@@ -82,6 +82,12 @@ export function drawThresholdCustodian(
   // 7. NÚCLEO ELEMENTAL CENTRAL PALPITANTE
   drawCentralCore(ctx, r, phase, isVulnerable, now);
 
+  // 7.5 EFECTO PROCEDURAL DE ESCARCHA Y CONGELAMIENTO (Shader adaptado a la coraza de piedra)
+  const isChilledOrFrozen = boss.statuses.some((s) => s.type === 'frozen' || s.type === 'slowed') || isVulnerable;
+  if (isChilledOrFrozen) {
+    drawCustodianFrostShader(ctx, boss, r, now);
+  }
+
   ctx.restore();
 
   // 8. GUANTELETES FLOTANTES MONUMENTALES (Dibujados en sus coordenadas independientes)
@@ -435,6 +441,108 @@ function drawCentralCore(
   ctx.arc(0, coreY, coreR * 0.65, 0, Math.PI * 2);
   ctx.stroke();
   ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+/**
+ * Renderiza el efecto procedural de escarcha y congelamiento sobre el coloso.
+ * Cero cajas rectangulares: silueta translúcida adaptada al modelo de piedra,
+ * cristales afilados en los bordes de hombreras y vaho ascendente desde el núcleo.
+ */
+function drawCustodianFrostShader(
+  ctx: CanvasRenderingContext2D,
+  _boss: GameEnemy,
+  r: number,
+  now: number
+) {
+  ctx.save();
+
+  // 1. Tinte gélido translúcido adaptado a la forma exacta de la coraza
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#38bdf8';
+  ctx.strokeStyle = '#e0f2fe';
+  ctx.lineWidth = 2.0;
+
+  ctx.beginPath();
+  ctx.moveTo(-r * 1.25, -r * 1.1); // Hombro izq
+  ctx.lineTo(-r * 0.85, -r * 1.7); // Borde superior izq
+  ctx.lineTo(-r * 0.35, -r * 1.9); // Cuello izq
+  ctx.lineTo(0, -r * 2.05);        // Cima yelmo/corona
+  ctx.lineTo(r * 0.35, -r * 1.9);  // Cuello der
+  ctx.lineTo(r * 0.85, -r * 1.7);  // Borde superior der
+  ctx.lineTo(r * 1.25, -r * 1.1);  // Hombro der
+  ctx.lineTo(r * 0.95, -r * 0.5);  // Clavícula baja der
+  ctx.lineTo(r * 0.65, -r * 0.3);  // Costillar der
+  ctx.lineTo(r * 0.45, 0.1 * r);   // Cintura der
+  ctx.lineTo(0, 0.45 * r);         // Quilla inferior
+  ctx.lineTo(-r * 0.45, 0.1 * r);  // Cintura izq
+  ctx.lineTo(-r * 0.65, -r * 0.3); // Costillar izq
+  ctx.lineTo(-r * 0.95, -r * 0.5); // Clavícula baja izq
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. Cristales y púas vectoriales afiladas en los bordes de las hombreras de piedra
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = 'rgba(224, 242, 254, 0.9)';
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.6;
+
+  // Cristales en hombrera izquierda
+  const leftSpikes = [
+    { bx: -r * 1.35, by: -r * 1.15, tx: -r * 1.55, ty: -r * 1.3 },
+    { bx: -r * 1.2, by: -r * 1.45, tx: -r * 1.42, ty: -r * 1.65 },
+    { bx: -r * 0.95, by: -r * 1.65, tx: -r * 1.1, ty: -r * 1.88 },
+  ];
+  leftSpikes.forEach((sp) => {
+    ctx.beginPath();
+    ctx.moveTo(sp.bx, sp.by + 6);
+    ctx.lineTo(sp.tx, sp.ty);
+    ctx.lineTo(sp.bx + 8, sp.by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  // Cristales en hombrera derecha
+  const rightSpikes = [
+    { bx: r * 1.35, by: -r * 1.15, tx: r * 1.55, ty: -r * 1.3 },
+    { bx: r * 1.2, by: -r * 1.45, tx: r * 1.42, ty: -r * 1.65 },
+    { bx: r * 0.95, by: -r * 1.65, tx: r * 1.1, ty: -r * 1.88 },
+  ];
+  rightSpikes.forEach((sp) => {
+    ctx.beginPath();
+    ctx.moveTo(sp.bx, sp.by + 6);
+    ctx.lineTo(sp.tx, sp.ty);
+    ctx.lineTo(sp.bx - 8, sp.by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // 3. Vaho y vapor frío ascendente desde su núcleo
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  for (let v = 0; v < 4; v++) {
+    const vPhase = ((now * 0.0018 + v * 0.25) % 1.0);
+    const vx = Math.sin(now * 0.005 + v * 1.8) * (r * 0.35);
+    const vy = -r * 0.8 - vPhase * (r * 0.9);
+    const vRadius = 8 + vPhase * 16;
+    const vGrad = ctx.createRadialGradient(vx, vy, 1, vx, vy, vRadius);
+    vGrad.addColorStop(0, 'rgba(224, 242, 254, 0.45)');
+    vGrad.addColorStop(0.6, 'rgba(56, 189, 248, 0.25)');
+    vGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = vGrad;
+    ctx.beginPath();
+    ctx.arc(vx, vy, vRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 
   ctx.restore();
 }
