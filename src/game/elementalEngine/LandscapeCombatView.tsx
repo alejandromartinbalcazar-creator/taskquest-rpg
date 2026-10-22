@@ -3771,6 +3771,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     swipeActiveRef.current = true;
     lastSwipedElementRef.current = el;
     handleSelectElement(el);
+    try {
+      (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+    } catch {}
   };
 
   const handleArcPadPointerMove = (e: React.PointerEvent) => {
@@ -3788,9 +3791,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
   };
 
-  const handleArcPadPointerUp = () => {
+  const handleArcPadPointerUp = (e?: React.PointerEvent) => {
     swipeActiveRef.current = false;
     lastSwipedElementRef.current = null;
+    if (e) {
+      try {
+        (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
+      } catch {}
+    }
   };
 
   // LOOP PRINCIPAL DE COMBATE (60 FPS)
@@ -10951,31 +10959,236 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         </div>
       </div>
 
-      {/* 2. LADO DERECHO: PAD RADIAL ERGONÓMICO EN ABANICO + BOTÓN DE ATAQUE Y DASH */}
-      <div
-        className="absolute bottom-2 right-2 z-40 pointer-events-auto select-none touch-none w-[275px] h-[265px]"
-        onPointerMove={handleArcPadPointerMove}
-        onPointerUp={handleArcPadPointerUp}
-        onPointerCancel={handleArcPadPointerUp}
-      >
-        {/* Barra superior de Cola de Elementos y Receta Activa */}
-        <div className="absolute -top-10 right-0 flex items-center gap-1.5 bg-[#121422]/95 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-700/80 shadow-xl pointer-events-auto">
-          <div className="flex items-center gap-1">
+      {/* 2. LADO DERECHO: PAD RADIAL ERGONÓMICO EN ABANICO MOBA COMPACTO + BOTÓN DE ATAQUE Y DASH */}
+      <div className="absolute bottom-0 right-0 z-40 pointer-events-none select-none touch-none w-[205px] h-[175px]">
+        {/* FUEGO (🔥) — Posición media-izquierda del arco radial */}
+        <div
+          className="absolute z-10 pointer-events-auto"
+          style={{ right: '122px', bottom: '60px' }}
+        >
+          <button
+            data-element="fire"
+            onPointerDown={(e) => handleElementTouchStart('fire', e)}
+            onPointerMove={handleArcPadPointerMove}
+            onPointerUp={handleArcPadPointerUp}
+            onPointerCancel={handleArcPadPointerUp}
+            className={`w-[46px] h-[46px] rounded-full bg-slate-900/80 backdrop-blur-sm active:scale-90 border-[1.5px] transition-all flex items-center justify-center text-white relative shadow-md ${
+              elementQueue.includes('fire')
+                ? 'border-orange-300 ring-2 ring-orange-400/70 shadow-[0_0_14px_rgba(249,115,22,0.8)]'
+                : 'border-orange-500/80 shadow-[0_0_8px_rgba(249,115,22,0.35)]'
+            }`}
+            title="Fuego"
+          >
+            <span className="text-xl pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">🔥</span>
+            {elementQueue.filter((e) => e === 'fire').length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-500 text-white text-[9px] font-black rounded-full border border-orange-200 shadow flex items-center justify-center pointer-events-none">
+                x{elementQueue.filter((e) => e === 'fire').length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* RAYO (⚡) — Posición superior-izquierda del arco radial */}
+        <div
+          className="absolute z-10 pointer-events-auto"
+          style={{ right: '80px', bottom: '98px' }}
+        >
+          <button
+            data-element="lightning"
+            onPointerDown={(e) => {
+              stopChanneledAttack();
+              handleElementTouchStart('lightning', e);
+            }}
+            onPointerMove={handleArcPadPointerMove}
+            onPointerUp={handleArcPadPointerUp}
+            onPointerCancel={handleArcPadPointerUp}
+            className={`w-[46px] h-[46px] rounded-full bg-slate-900/80 backdrop-blur-sm active:scale-90 border-[1.5px] transition-all flex items-center justify-center text-white relative shadow-md ${
+              elementQueue.includes('lightning')
+                ? 'border-amber-200 ring-2 ring-amber-400/70 shadow-[0_0_14px_rgba(251,191,36,0.8)]'
+                : 'border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.35)]'
+            }`}
+            title="Rayo"
+          >
+            <span className="text-xl pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">⚡</span>
+            {elementQueue.filter((e) => e === 'lightning').length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-amber-400 text-slate-950 text-[9px] font-black rounded-full border border-amber-200 shadow flex items-center justify-center pointer-events-none">
+                x{elementQueue.filter((e) => e === 'lightning').length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* HIELO (❄️) — Posición superior del arco radial */}
+        <div
+          className="absolute z-10 pointer-events-auto"
+          style={{ right: '24px', bottom: '110px' }}
+        >
+          <button
+            data-element="ice"
+            onPointerDown={(e) => handleElementTouchStart('ice', e)}
+            onPointerMove={handleArcPadPointerMove}
+            onPointerUp={handleArcPadPointerUp}
+            onPointerCancel={handleArcPadPointerUp}
+            className={`w-[46px] h-[46px] rounded-full bg-slate-900/80 backdrop-blur-sm active:scale-90 border-[1.5px] transition-all flex items-center justify-center text-white relative shadow-md ${
+              elementQueue.includes('ice')
+                ? 'border-cyan-200 ring-2 ring-cyan-400/70 shadow-[0_0_14px_rgba(56,189,248,0.8)]'
+                : 'border-cyan-400/80 shadow-[0_0_8px_rgba(56,189,248,0.35)]'
+            }`}
+            title="Hielo"
+          >
+            <span className="text-xl pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">❄️</span>
+            {elementQueue.filter((e) => e === 'ice').length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-cyan-400 text-slate-950 text-[9px] font-black rounded-full border border-cyan-100 shadow flex items-center justify-center pointer-events-none">
+                x{elementQueue.filter((e) => e === 'ice').length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* TIERRA (🌍) — Posición inferior-izquierda del arco radial */}
+        <div
+          className="absolute z-10 pointer-events-auto"
+          style={{ right: '140px', bottom: '8px' }}
+        >
+          <button
+            data-element="earth"
+            onPointerDown={(e) => {
+              stopChanneledAttack();
+              handleElementTouchStart('earth', e);
+            }}
+            onPointerMove={handleArcPadPointerMove}
+            onPointerUp={handleArcPadPointerUp}
+            onPointerCancel={handleArcPadPointerUp}
+            className={`w-[46px] h-[46px] rounded-full bg-slate-900/80 backdrop-blur-sm active:scale-90 border-[1.5px] transition-all flex items-center justify-center text-white relative shadow-md ${
+              elementQueue.includes('earth')
+                ? 'border-emerald-200 ring-2 ring-emerald-400/70 shadow-[0_0_14px_rgba(16,185,129,0.8)]'
+                : 'border-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.35)]'
+            }`}
+            title="Tierra"
+          >
+            <span className="text-xl pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">🌍</span>
+            {elementQueue.filter((e) => e === 'earth').length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-emerald-500 text-white text-[9px] font-black rounded-full border border-emerald-200 shadow flex items-center justify-center pointer-events-none">
+                x{elementQueue.filter((e) => e === 'earth').length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* BOTÓN DE ESQUIVA RÁPIDA (DASH) — Lateral interior del arco */}
+        <div
+          className="absolute z-20 pointer-events-auto"
+          style={{ right: '92px', bottom: '16px' }}
+        >
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleDash();
+            }}
+            disabled={dashCooldownRatio > 0}
+            className={`w-10 h-10 rounded-full flex flex-col items-center justify-center border-[1.5px] transition-all active:scale-90 relative overflow-hidden shadow-md ${
+              dashCooldownRatio > 0
+                ? 'bg-slate-950/90 border-slate-700/80 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-900/80 backdrop-blur-sm border-cyan-400/80 text-cyan-200 shadow-[0_0_12px_rgba(56,189,248,0.4)]'
+            }`}
+            title="Esquivar"
+          >
+            {dashCooldownRatio > 0 && (
+              <div
+                className="absolute bottom-0 inset-x-0 bg-cyan-400/30 transition-all duration-75"
+                style={{ height: `${dashCooldownRatio * 100}%` }}
+              />
+            )}
+            <span className="text-sm relative z-10 pointer-events-none">⚡</span>
+          </button>
+        </div>
+
+        {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR — Círculo grande (~70px) estilo MOBA */}
+        <div
+          className="absolute z-20 pointer-events-auto"
+          style={{ right: '24px', bottom: '24px' }}
+        >
+          <button
+            onPointerDown={handleAttackPointerDown}
+            onPointerMove={handleAttackPointerMove}
+            onPointerUp={handleAttackPointerUp}
+            onPointerCancel={handleAttackPointerUp}
+            className={`w-[70px] h-[70px] rounded-full relative overflow-hidden transition-all active:scale-92 border-[2px] flex flex-col items-center justify-center text-white shadow-xl ${
+              attackCooldownRatio > 0
+                ? 'bg-slate-950/90 border-slate-700/80 text-slate-400 opacity-80 cursor-not-allowed shadow-none'
+                : 'bg-slate-900/65 backdrop-blur-md border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.45)]'
+            }`}
+            style={{
+              borderColor: attackCooldownRatio === 0 && elementQueue.length > 0 ? activeRecipe.color : undefined,
+              boxShadow: attackCooldownRatio === 0 && elementQueue.length > 0 ? `0 0 20px ${activeRecipe.color}66` : undefined,
+            }}
+            title="Lanzar / Atacar"
+          >
+            {/* Overlay de enfriamiento (Cooldown) */}
+            {attackCooldownRatio > 0 && (
+              <div
+                className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-[1px] transition-all duration-75 pointer-events-none"
+                style={{ height: `${attackCooldownRatio * 100}%` }}
+              />
+            )}
+
+            <span className={`text-2xl relative z-10 transition-transform ${attackCooldownRatio > 0 ? 'opacity-35 scale-90 grayscale' : ''}`}>
+              {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
+                ? '💣'
+                : activeRecipe.icon}
+            </span>
+
+            {attackCooldownRatio > 0 && (
+              <span className="text-[10px] font-bold text-pink-300 animate-pulse font-mono relative z-10 mt-0.5">
+                {attackCooldownSec.toFixed(1)}s
+              </span>
+            )}
+
+            {isChargingUi && chargeVisualRatio < 1.0 && attackCooldownRatio === 0 && (
+              <div className="w-8 bg-black/60 h-1 rounded-full mt-0.5 overflow-hidden relative z-10">
+                <div
+                  className="h-full bg-amber-400 transition-all duration-75"
+                  style={{ width: `${chargeVisualRatio * 100}%` }}
+                />
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* 3. PARTE INFERIOR CENTRAL: RECÁMARA DE ESFERAS (SLOTS 24x24) Y TEXTO DE HECHIZO */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center pointer-events-none select-none">
+        {/* Texto del Hechizo Preparado con desvanecimiento si está vacío */}
+        <div
+          className={`mb-1.5 px-3 py-0.5 rounded-full backdrop-blur-sm border transition-all duration-200 text-center ${
+            elementQueue.length > 0
+              ? 'opacity-100 scale-100 bg-black/60 border-amber-400/40 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+              : 'opacity-0 scale-95 pointer-events-none'
+          }`}
+        >
+          <span className="text-[11px] font-black tracking-wider text-amber-200 uppercase drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+            {activeRecipe.name}
+          </span>
+        </div>
+
+        {/* Cápsula de 4 slots de 24x24 px */}
+        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10 shadow-2xl pointer-events-auto">
+          <div className="flex items-center gap-1.5">
             {[0, 1, 2, 3].map((slot) => {
               const el = elementQueue[slot];
               return (
                 <div
                   key={slot}
-                  className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-all duration-150 ${
                     el === 'fire'
-                      ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                      ? 'bg-gradient-to-br from-rose-500 to-red-600 border border-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.7)] text-white scale-105'
                       : el === 'lightning'
-                      ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(234,179,8,0.5)]'
+                      ? 'bg-gradient-to-br from-amber-400 to-yellow-600 border border-amber-200 shadow-[0_0_10px_rgba(251,191,36,0.7)] text-slate-950 scale-105'
                       : el === 'ice'
-                      ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.5)]'
+                      ? 'bg-gradient-to-br from-cyan-400 to-blue-600 border border-cyan-200 shadow-[0_0_10px_rgba(56,189,248,0.7)] text-white scale-105'
                       : el === 'earth'
-                      ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                      : 'bg-slate-900/40 border-slate-800 text-slate-600'
+                      ? 'bg-gradient-to-br from-emerald-500 to-stone-700 border border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.7)] text-white scale-105'
+                      : 'border border-dashed border-white/20 bg-white/5'
                   }`}
                 >
                   {el === 'fire' && '🔥'}
@@ -10990,355 +11203,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           {elementQueue.length > 0 && (
             <button
               onClick={handleClearQueue}
-              className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 bg-slate-800 rounded-md border border-slate-700 active:scale-95"
+              className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 text-[10px] text-slate-300 hover:text-white flex items-center justify-center border border-white/20 transition-all ml-0.5"
+              title="Vaciar recámara"
             >
-              Borrar
+              ✕
             </button>
           )}
-
-          <div
-            className="text-xs font-black px-2 py-0.5 rounded-md text-white shadow"
-            style={{ backgroundColor: activeRecipe.color }}
-          >
-            {activeRecipe.name}
-          </div>
-        </div>
-
-        {/* FUEGO (🔥) — Posición superior-izquierda del arco */}
-        <div
-          className="absolute p-2.5 -m-2.5 z-10"
-          style={{ right: '160px', bottom: '92px' }}
-        >
-          <button
-            data-element="fire"
-            onPointerDown={(e) => handleElementTouchStart('fire', e)}
-            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-600 to-red-800 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
-              elementQueue.includes('fire')
-                ? 'border-rose-400 ring-2 ring-rose-400/80 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
-                : 'border-rose-500/70 shadow-[0_0_12px_rgba(239,68,68,0.4)]'
-            }`}
-          >
-            <span className="text-2xl pointer-events-none">🔥</span>
-            <span className="text-[9px] font-black tracking-wider pointer-events-none">FUEGO</span>
-            {elementQueue.filter((e) => e === 'fire').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full border border-rose-300 shadow">
-                x{elementQueue.filter((e) => e === 'fire').length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* RAYO (⚡) — Posición superior-central del arco */}
-        <div
-          className="absolute p-2.5 -m-2.5 z-10"
-          style={{ right: '110px', bottom: '156px' }}
-        >
-          <button
-            data-element="lightning"
-            onPointerDown={(e) => {
-              stopChanneledAttack();
-              handleElementTouchStart('lightning', e);
-            }}
-            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-700 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
-              elementQueue.includes('lightning')
-                ? 'border-amber-300 ring-2 ring-amber-300/80 shadow-[0_0_20px_rgba(234,179,8,0.8)] animate-pulse'
-                : 'border-amber-400/70 shadow-[0_0_12px_rgba(234,179,8,0.4)]'
-            }`}
-          >
-            <span className="text-2xl pointer-events-none">⚡</span>
-            <span className="text-[9px] font-black tracking-wider pointer-events-none">RAYO</span>
-            {elementQueue.filter((e) => e === 'lightning').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-amber-500 text-black text-[9px] font-black rounded-full border border-amber-200 shadow">
-                x{elementQueue.filter((e) => e === 'lightning').length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* HIELO (❄️) — Posición superior-derecha del arco */}
-        <div
-          className="absolute p-2.5 -m-2.5 z-10"
-          style={{ right: '44px', bottom: '168px' }}
-        >
-          <button
-            data-element="ice"
-            onPointerDown={(e) => handleElementTouchStart('ice', e)}
-            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-700 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
-              elementQueue.includes('ice')
-                ? 'border-cyan-300 ring-2 ring-cyan-300/80 shadow-[0_0_20px_rgba(6,182,212,0.8)] animate-pulse'
-                : 'border-cyan-400/70 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
-            }`}
-          >
-            <span className="text-2xl pointer-events-none">❄️</span>
-            <span className="text-[9px] font-black tracking-wider pointer-events-none">HIELO</span>
-            {elementQueue.filter((e) => e === 'ice').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-cyan-400 text-slate-900 text-[9px] font-black rounded-full border border-cyan-100 shadow">
-                x{elementQueue.filter((e) => e === 'ice').length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* TIERRA (🌍) — Posición central-interior del arco */}
-        <div
-          className="absolute p-2.5 -m-2.5 z-10"
-          style={{ right: '12px', bottom: '108px' }}
-        >
-          <button
-            data-element="earth"
-            onPointerDown={(e) => {
-              stopChanneledAttack();
-              handleElementTouchStart('earth', e);
-            }}
-            className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-stone-800 active:scale-88 border-2 transition-transform duration-100 flex flex-col items-center justify-center text-white relative shadow-lg ${
-              elementQueue.includes('earth')
-                ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.8)] animate-pulse'
-                : 'border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-            }`}
-          >
-            <span className="text-2xl pointer-events-none">🌍</span>
-            <span className="text-[9px] font-black tracking-wider pointer-events-none">TIERRA</span>
-            {elementQueue.filter((e) => e === 'earth').length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-emerald-500 text-white text-[9px] font-black rounded-full border border-emerald-200 shadow">
-                x{elementQueue.filter((e) => e === 'earth').length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* BOTÓN DE ESQUIVA RÁPIDA (DASH) — Posición adyacente al pulgar */}
-        <div
-          className="absolute z-20"
-          style={{ right: '114px', bottom: '18px' }}
-        >
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              handleDash();
-            }}
-            disabled={dashCooldownRatio > 0}
-            className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-2 transition-all active:scale-90 relative overflow-hidden shadow-lg ${
-              dashCooldownRatio > 0
-                ? 'bg-slate-900/80 border-slate-700 text-slate-500 cursor-not-allowed'
-                : 'bg-gradient-to-br from-cyan-600 to-blue-700 border-cyan-300 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]'
-            }`}
-          >
-            {dashCooldownRatio > 0 && (
-              <div
-                className="absolute bottom-0 inset-x-0 bg-cyan-400/30 transition-all duration-75"
-                style={{ height: `${dashCooldownRatio * 100}%` }}
-              />
-            )}
-            <span className="text-xl relative z-10 pointer-events-none">⚡</span>
-            <span className="text-[8px] font-black tracking-wider relative z-10 pointer-events-none">ESQUIVAR</span>
-          </button>
-        </div>
-
-        {/* BOTÓN PRINCIPAL DE ATAQUE / LANZAR CON CARGA Y APUNTADO — Foco Central Natural del Pulgar */}
-        <div
-          className="absolute z-20"
-          style={{ right: '20px', bottom: '14px' }}
-        >
-          <button
-            onPointerDown={handleAttackPointerDown}
-            onPointerMove={handleAttackPointerMove}
-            onPointerUp={handleAttackPointerUp}
-            onPointerCancel={handleAttackPointerUp}
-            className={`w-20 h-20 rounded-3xl relative overflow-hidden transition-all active:scale-95 border-2 ${
-              attackCooldownRatio > 0
-                ? 'bg-slate-900/90 border-slate-700/80 text-slate-400 opacity-80 cursor-not-allowed shadow-none'
-                : `bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 ${
-                    chargeVisualRatio >= 1.0
-                      ? (activeRecipe.id === 'lightning_storm'
-                          ? 'border-cyan-300 shadow-[0_0_28px_rgba(56,189,248,0.95)] animate-pulse'
-                          : activeRecipe.id === 'ice_lance'
-                          ? 'border-cyan-200 shadow-[0_0_28px_rgba(6,182,212,0.95)] animate-pulse'
-                          : activeRecipe.id === 'earth_megalith'
-                          ? 'border-amber-300 shadow-[0_0_28px_rgba(245,158,11,0.95)] animate-pulse'
-                          : activeRecipe.id === 'cryo_storm'
-                          ? 'border-cyan-200 shadow-[0_0_30px_rgba(0,240,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'magma_eruption'
-                          ? 'border-orange-400 shadow-[0_0_30px_rgba(255,109,0,0.95)] animate-pulse'
-                          : activeRecipe.id === 'thermal_shock'
-                          ? 'border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.95)] animate-pulse'
-                          : activeRecipe.id === 'crystal_field'
-                          ? 'border-yellow-300 shadow-[0_0_30px_rgba(234,179,8,0.95)] animate-pulse'
-                          : activeRecipe.id === 'permafrost_prison'
-                          ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'explosive_overload'
-                          ? 'border-cyan-300 shadow-[0_0_30px_rgba(0,229,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'hell_rain'
-                          ? 'border-red-400 shadow-[0_0_32px_rgba(255,61,0,0.95)] animate-pulse'
-                          : activeRecipe.id === 'celestial_storm'
-                          ? 'border-cyan-300 shadow-[0_0_32px_rgba(0,240,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'devastating_glacier'
-                          ? 'border-cyan-200 shadow-[0_0_32px_rgba(0,229,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'telluric_barrier'
-                          ? 'border-amber-400 shadow-[0_0_32px_rgba(245,158,11,0.95)] animate-pulse'
-                          : activeRecipe.id === 'obsidian_volcano'
-                          ? 'border-fuchsia-400 shadow-[0_0_32px_rgba(217,70,239,0.95)] animate-pulse'
-                          : activeRecipe.id === 'conductive_prison'
-                          ? 'border-indigo-400 shadow-[0_0_32px_rgba(124,77,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'overload_core'
-                          ? 'border-amber-400 shadow-[0_0_35px_rgba(255,109,0,0.95)] animate-pulse'
-                          : activeRecipe.id === 'glacial_plasma_storm'
-                          ? 'border-cyan-300 shadow-[0_0_35px_rgba(0,229,255,0.95)] animate-pulse'
-                          : activeRecipe.id === 'elemental_cataclysm'
-                          ? 'border-pink-400 shadow-[0_0_42px_rgba(236,72,153,1.0)] animate-pulse'
-                          : 'border-amber-300 shadow-[0_0_25px_rgba(250,204,21,0.9)] animate-pulse')
-                      : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
-                          ? 'border-red-500 shadow-[0_0_36px_rgba(255,23,68,1.0)] animate-pulse'
-                          : activeRecipe.id === 'lightning_storm'
-                          ? 'border-cyan-400 shadow-[0_0_18px_rgba(56,189,248,0.6)]'
-                          : activeRecipe.id === 'ice_lance'
-                          ? 'border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
-                          : activeRecipe.id === 'earth_megalith'
-                          ? 'border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.6)]'
-                          : activeRecipe.id === 'cryo_storm'
-                          ? 'border-cyan-300 shadow-[0_0_20px_rgba(0,240,255,0.7)]'
-                          : activeRecipe.id === 'magma_eruption'
-                          ? 'border-orange-500 shadow-[0_0_20px_rgba(255,109,0,0.7)]'
-                          : activeRecipe.id === 'thermal_shock'
-                          ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)]'
-                          : activeRecipe.id === 'crystal_field'
-                          ? 'border-amber-400 shadow-[0_0_20px_rgba(234,179,8,0.7)]'
-                          : activeRecipe.id === 'permafrost_prison'
-                          ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
-                          : activeRecipe.id === 'explosive_overload'
-                          ? 'border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.7)]'
-                          : activeRecipe.id === 'hell_rain'
-                          ? 'border-red-500 shadow-[0_0_22px_rgba(255,61,0,0.75)]'
-                          : activeRecipe.id === 'celestial_storm'
-                          ? 'border-cyan-400 shadow-[0_0_22px_rgba(0,240,255,0.75)]'
-                          : activeRecipe.id === 'devastating_glacier'
-                          ? 'border-cyan-300 shadow-[0_0_22px_rgba(0,229,255,0.75)]'
-                          : activeRecipe.id === 'telluric_barrier'
-                          ? 'border-amber-500 shadow-[0_0_22px_rgba(217,119,6,0.75)]'
-                          : activeRecipe.id === 'obsidian_volcano'
-                          ? 'border-fuchsia-600 shadow-[0_0_22px_rgba(192,38,211,0.75)]'
-                          : activeRecipe.id === 'conductive_prison'
-                          ? 'border-indigo-500 shadow-[0_0_22px_rgba(124,77,255,0.75)]'
-                          : activeRecipe.id === 'overload_core'
-                          ? 'border-amber-500 shadow-[0_0_24px_rgba(255,109,0,0.8)]'
-                          : activeRecipe.id === 'glacial_plasma_storm'
-                          ? 'border-cyan-400 shadow-[0_0_24px_rgba(0,229,255,0.8)]'
-                          : activeRecipe.id === 'elemental_cataclysm'
-                          ? 'border-pink-500 shadow-[0_0_30px_rgba(236,72,153,0.9)] animate-pulse'
-                          : 'border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.7)]')
-                  }`
-            } flex flex-col items-center justify-center text-white transition-all`}
-          >
-            {/* OVERLAY DE ENFRIAMIENTO (COOLDOWN) */}
-            {attackCooldownRatio > 0 && (
-              <div
-                className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-[1px] transition-all duration-75 pointer-events-none"
-                style={{ height: `${attackCooldownRatio * 100}%` }}
-              />
-            )}
-
-            <span className={`text-2xl relative z-10 transition-transform ${attackCooldownRatio > 0 ? 'opacity-35 scale-90 grayscale' : ''}`}>
-              {gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
-                ? '💣💥'
-                : activeRecipe.icon}
-            </span>
-            <span className={`text-[11px] font-black tracking-wider mt-0.5 relative z-10 ${attackCooldownRatio > 0 ? 'text-pink-300 animate-pulse font-mono' : ''}`}>
-              {attackCooldownRatio > 0
-                ? `⏳ ${attackCooldownSec.toFixed(1)}s`
-                : (gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating')
-                    ? '¡DETONAR!'
-                    : activeRecipe.id === 'fire_shot'
-                    ? 'CANALIZAR'
-                    : activeRecipe.id === 'ice_shard'
-                    ? 'CANALIZAR'
-                    : activeRecipe.id === 'ice_lance'
-                    ? (chargeVisualRatio >= 1.0 ? '¡GLACIAL +50%! ❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️' : 'GLACIAL ❄️❄️')
-                    : activeRecipe.id === 'earth_megalith'
-                    ? (chargeVisualRatio >= 1.0 ? '¡PUÑO +50%! 🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'PUÑO 🌍🌍')
-                    : activeRecipe.id === 'fire_inferno'
-                    ? (chargeVisualRatio >= 1.0 ? '¡CORONA+!' : 'CORONA 🔥')
-                    : activeRecipe.id === 'lightning_storm'
-                    ? (chargeVisualRatio >= 1.0 ? '¡VOLTAICA +50%! ⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'VOLTAICA ⚡⚡')
-                    : activeRecipe.id === 'cryo_storm'
-                    ? (chargeVisualRatio >= 1.0 ? '¡CRÍO +50%! ❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️⚡' : 'RAYO CRÍO ❄️⚡')
-                    : activeRecipe.id === 'magma_eruption'
-                    ? (chargeVisualRatio >= 1.0 ? '¡VOLCÁNICO +50%! 🌋🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'BOMBARDEO 🌋🔥')
-                    : activeRecipe.id === 'thermal_shock'
-                    ? (chargeVisualRatio >= 1.0 ? '¡VÓRTICE +50%! ♨️💥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ♨️' : 'VÓRTICE ♨️💥')
-                    : activeRecipe.id === 'crystal_field'
-                    ? (chargeVisualRatio >= 1.0 ? '¡JAULA +50%! ⚡🏛️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🏛️' : 'JAULA ⚡🏛️')
-                    : activeRecipe.id === 'permafrost_prison'
-                    ? (chargeVisualRatio >= 1.0 ? '¡PRISIÓN +50%! ❄️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ❄️🌍' : 'PRISIÓN ❄️🌍')
-                    : activeRecipe.id === 'explosive_overload'
-                    ? (chargeVisualRatio >= 1.0 ? '¡TORNADO +50%! 🌪️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️⚡' : 'TORNADO 🌪️⚡')
-                    : activeRecipe.id === 'hell_rain'
-                    ? (chargeVisualRatio >= 1.0 ? '¡FURIA CÓSMICA +50%! ☄️🔥' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ☄️🔥' : 'LLUVIA INFIERNO ☄️🔥')
-                    : activeRecipe.id === 'celestial_storm'
-                    ? (chargeVisualRatio >= 1.0 ? '¡FURIA TEMPESTAD +50%! ⚡🌩️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡🌩️' : 'TORMENTA ⚡⚡⚡')
-                    : activeRecipe.id === 'devastating_glacier'
-                    ? (chargeVisualRatio >= 1.0 ? '¡ERA DE HIELO +50%! 🏔️❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🏔️❄️' : 'GLACIAR ❄️❄️❄️')
-                    : activeRecipe.id === 'telluric_barrier'
-                    ? (chargeVisualRatio >= 1.0 ? '¡DENSIDAD TELÚRICA +50%! 🛡️🌍' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌍' : 'BARRERA 🌍🌍🌍')
-                    : activeRecipe.id === 'obsidian_volcano'
-                    ? (chargeVisualRatio >= 1.0 ? '¡FUSIÓN VÍTREA +50%! 🌋🖤' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌋' : 'VOLCÁN 🌋🖤')
-                    : activeRecipe.id === 'conductive_prison'
-                    ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA CRIOCONDUCTORA +50%! ⚡❄️' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO ⚡' : 'PRISIÓN ⚡❄️🏛️')
-                    : activeRecipe.id === 'overload_core'
-                    ? (chargeVisualRatio >= 1.0 ? '¡MASA INESTABLE +50%! 💣⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 💣⚡' : 'NÚCLEO 💣⚡🌋')
-                    : activeRecipe.id === 'glacial_plasma_storm'
-                    ? (chargeVisualRatio >= 1.0 ? '¡SOBRECARGA TRI-ELEMENTAL +50%! 🌪️❄️⚡' : isChargingUi && chargeVisualRatio > 0.08 ? 'CARGANDO 🌪️❄️⚡' : 'TORMENTA 🌪️❄️⚡')
-                    : activeRecipe.id === 'elemental_cataclysm'
-                    ? (chargeVisualRatio >= 1.0 ? '¡SINTONÍA PRIMORDIAL +50%! 🪐✨' : isChargingUi && chargeVisualRatio > 0.08 ? 'SINTONIZANDO 🪐' : 'CATACLISMO 🪐✨')
-                    : chargeVisualRatio >= 1.0
-                    ? '¡CARGADO!'
-                    : 'LANZAR')}
-            </span>
-            {isChargingUi && chargeVisualRatio < 1.0 && attackCooldownRatio === 0 && (
-              <div className="w-12 bg-black/50 h-1.5 rounded-full mt-1 overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-75 ${
-                    activeRecipe.id === 'lightning_storm'
-                      ? 'bg-cyan-400 shadow-[0_0_8px_#38bdf8]'
-                      : activeRecipe.id === 'ice_lance'
-                      ? 'bg-cyan-300 shadow-[0_0_8px_#06b6d4]'
-                      : activeRecipe.id === 'earth_megalith'
-                      ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
-                      : activeRecipe.id === 'cryo_storm'
-                      ? 'bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_8px_#00f0ff]'
-                      : activeRecipe.id === 'magma_eruption'
-                      ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff6d00]'
-                      : activeRecipe.id === 'thermal_shock'
-                      ? 'bg-gradient-to-r from-orange-500 via-rose-500 to-cyan-400 shadow-[0_0_8px_#f43f5e]'
-                      : activeRecipe.id === 'crystal_field'
-                      ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-cyan-400 shadow-[0_0_8px_#eab308]'
-                      : activeRecipe.id === 'permafrost_prison'
-                      ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-slate-400 shadow-[0_0_8px_#00e5ff]'
-                      : activeRecipe.id === 'explosive_overload'
-                      ? 'bg-gradient-to-r from-orange-500 via-amber-400 to-cyan-400 shadow-[0_0_8px_#00e5ff]'
-                      : activeRecipe.id === 'hell_rain'
-                      ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600 shadow-[0_0_8px_#ff3d00]'
-                      : activeRecipe.id === 'celestial_storm'
-                      ? 'bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-500 shadow-[0_0_8px_#00f0ff]'
-                      : activeRecipe.id === 'devastating_glacier'
-                      ? 'bg-gradient-to-r from-cyan-400 via-sky-200 to-blue-500 shadow-[0_0_8px_#00e5ff]'
-                      : activeRecipe.id === 'telluric_barrier'
-                      ? 'bg-gradient-to-r from-amber-600 via-yellow-400 to-stone-600 shadow-[0_0_8px_#f59e0b]'
-                      : activeRecipe.id === 'obsidian_volcano'
-                      ? 'bg-gradient-to-r from-orange-600 via-fuchsia-500 to-cyan-300 shadow-[0_0_8px_#c026d3]'
-                      : activeRecipe.id === 'conductive_prison'
-                      ? 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600 shadow-[0_0_8px_#7c4dff]'
-                      : activeRecipe.id === 'overload_core'
-                      ? 'bg-gradient-to-r from-red-600 via-amber-500 to-yellow-300 shadow-[0_0_8px_#ffd600]'
-                      : activeRecipe.id === 'glacial_plasma_storm'
-                      ? 'bg-gradient-to-r from-cyan-400 via-indigo-500 to-orange-500 shadow-[0_0_8px_#00e5ff]'
-                      : activeRecipe.id === 'elemental_cataclysm'
-                      ? 'bg-gradient-to-r from-red-600 via-amber-500 via-cyan-400 to-purple-600 shadow-[0_0_12px_#ec4899]'
-                      : 'bg-amber-400'
-                  }`}
-                  style={{ width: `${chargeVisualRatio * 100}%` }}
-                />
-              </div>
-            )}
-          </button>
         </div>
       </div>
 
