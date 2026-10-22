@@ -364,14 +364,14 @@ export function App() {
   };
 
   // Daño en Mazmorra
-  const handleTakeBattleDamage = (damage: number) => {
+  const handleTakeBattleDamage = useCallback((damage: number) => {
     setIsDamagedAnimation(true);
     setTimeout(() => setIsDamagedAnimation(false), 400);
     setPlayer((prev) => ({
       ...prev,
       currentHp: Math.max(0, prev.currentHp - damage),
     }));
-  };
+  }, []);
 
   const handleConsumeKey = () => {
     setPlayer((prev) => ({

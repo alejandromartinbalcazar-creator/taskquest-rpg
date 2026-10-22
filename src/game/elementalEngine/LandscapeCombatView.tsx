@@ -502,8 +502,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const onPlayerTakeDamageRef = useRef(onPlayerTakeDamage);
+  useEffect(() => {
+    onPlayerTakeDamageRef.current = onPlayerTakeDamage;
+  }, [onPlayerTakeDamage]);
+
   // Estados del juego
-  const [currentHp, setCurrentHp] = useState(player.currentHp);
+  const [currentHp, setCurrentHp] = useState(() => Math.max(1, player.currentHp > 0 ? player.currentHp : player.maxHp));
   const [maxHp, setMaxHp] = useState(player.maxHp);
   const [elementQueue, setElementQueue] = useState<ElementType[]>([]);
   const [isMuted, setIsMuted] = useState(() => audioManager.isMuted());
@@ -675,7 +680,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     enemyManager: new EnemyManager(),
     lastAttackTime: 0,
     recipeCooldowns: {} as Record<string, number>,
-    currentHp: player.currentHp,
+    currentHp: Math.max(1, player.currentHp > 0 ? player.currentHp : player.maxHp),
     maxHp: player.maxHp,
     roomIndex: 0,
     roomCleared: false,
@@ -763,9 +768,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap);
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
-    g.currentHp = player.currentHp;
+    const initialHp = Math.max(1, player.currentHp > 0 ? player.currentHp : player.maxHp);
+    g.currentHp = initialHp;
     g.maxHp = player.maxHp;
-    setCurrentHp(player.currentHp);
+    setCurrentHp(initialHp);
     setMaxHp(player.maxHp);
     setRoomBanner(DUNGEON_ROOMS[0].title);
     setTimeout(() => setRoomBanner(null), 3000);
@@ -777,7 +783,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       audioManager.stopAmbient();
       audioManager.stopCharge();
     };
-  }, [currentRoom.roomType, player.currentHp, player.maxHp]);
+  }, [currentRoom.roomType]);
 
   // Manejo de derrota y reaparición en el último punto de control (400ms fade -> 100% HP -> 1.5s i-frames)
   const triggerPlayerDefeatAndRespawn = useCallback(() => {
@@ -823,7 +829,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // 2. Aplicar daño una sola vez por impacto
       g.currentHp = Math.max(0, g.currentHp - damage);
       setCurrentHp(g.currentHp);
-      onPlayerTakeDamage(damage);
+      onPlayerTakeDamageRef.current(damage);
 
       // 3. Activar i-frames temporales (0.8s = 800ms)
       wizard.invulnerableTimer = 0.8;
@@ -846,7 +852,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         triggerPlayerDefeatAndRespawn();
       }
     },
-    [onPlayerTakeDamage, triggerPlayerDefeatAndRespawn]
+    [triggerPlayerDefeatAndRespawn]
   );
 
   const stopChanneledAttack = useCallback((type?: 'fire' | 'ice') => {
@@ -11141,7 +11147,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       cancelAnimationFrame(animId);
       elementalSound.stopContinuousStream();
     };
-  }, [changeToRoom, currentRoom.roomType, isDefeated, isVictorious, onPlayerTakeDamage]);
+  }, [changeToRoom, currentRoom.roomType, isDefeated, isVictorious]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#040509] flex flex-col items-center justify-center select-none overflow-hidden touch-none font-sans">
