@@ -25,7 +25,7 @@ export class EnemyManager {
       radius: 24,
       hp: 220,
       maxHp: 220,
-      attackPower: 24,
+      attackPower: 28, // Puñetazo telegrafiado pesado calibrado a ~28% del HP base
       moveSpeed: 0.72,
       statuses: [],
       color: '#ea580c',
@@ -57,7 +57,7 @@ export class EnemyManager {
       radius: 18,
       hp: 130,
       maxHp: 130,
-      attackPower: 16,
+      attackPower: 14, // Orbe eléctrico calibrado a 14% del HP base
       moveSpeed: 1.05,
       statuses: [],
       color: '#06b6d4',
@@ -90,7 +90,7 @@ export class EnemyManager {
       radius: 20,
       hp: 160,
       maxHp: 160,
-      attackPower: 22,
+      attackPower: 14, // Aguja de hielo calibrada a 14% del HP base
       moveSpeed: 0.85,
       statuses: [],
       color: '#38bdf8',
@@ -237,7 +237,7 @@ export class EnemyManager {
     projectiles: Projectile[],
     floatingTexts: FloatingText[],
     obstacles: Array<{ x: number; y: number; radius: number; obstacleType: string; solid: boolean }>,
-    onPlayerDamage: (amount: number) => void,
+    onPlayerDamage: (amount: number, sourceX?: number, sourceY?: number) => void,
     onScreenShake?: (amount: number) => void
   ) {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -322,7 +322,7 @@ export class EnemyManager {
 
             // Daño al jugador si es arrollado por la embestida
             if (checkCircleCollision(e.x, e.y, e.radius, wizard.x, wizard.y, wizard.radius)) {
-              onPlayerDamage(e.attackPower);
+              onPlayerDamage(e.attackPower, e.x, e.y);
               e.isCharging = false;
             }
 
@@ -383,7 +383,7 @@ export class EnemyManager {
             };
           } else {
             // Golpe Sísmico en área
-            onPlayerDamage(e.attackPower);
+            onPlayerDamage(e.attackPower, e.x, e.y);
             floatingTexts.push({
               id: `slam-${Date.now()}`,
               x: wizard.x,
@@ -545,7 +545,7 @@ export class EnemyManager {
             e.isTelegraphing = false;
             // Al terminar la telegrafía en zona roja, si el jugador sigue en rango
             if (distToPlayer <= 90) {
-              onPlayerDamage(e.attackPower);
+              onPlayerDamage(e.attackPower, e.x, e.y);
               elementalSound.playBasaltCrash();
               floatingTexts.push({
                 id: `pyre-slam-${Date.now()}`,
@@ -687,7 +687,7 @@ export class EnemyManager {
               radius: 6,
               color: '#38bdf8',
               secondaryColor: '#0284c7',
-              damage: Math.round(e.attackPower * 1.25),
+              damage: e.attackPower,
               knockback: 3.5,
               life: 140,
               maxLife: 140,
@@ -710,7 +710,7 @@ export class EnemyManager {
           e.attackCooldown++;
           if (e.attackCooldown >= e.attackMaxCooldown) {
             e.attackCooldown = 0;
-            onPlayerDamage(e.attackPower);
+            onPlayerDamage(e.attackPower, e.x, e.y);
             floatingTexts.push({
               id: `dmg-p-${Date.now()}`,
               x: wizard.x,
@@ -786,7 +786,7 @@ export class EnemyManager {
           e.attackCooldown = 0;
           e.isTelegraphing = false;
           if (distToPlayer < 95) {
-            onPlayerDamage(e.attackPower);
+            onPlayerDamage(e.attackPower, e.x, e.y);
             floatingTexts.push({
               id: `slam-p-${Date.now()}`,
               x: wizard.x,

@@ -10,6 +10,7 @@ import {
   FireBarrierEntity,
   AmbientLeafParticle,
   PhysicalObstacle,
+  LevelCheckpoint,
 } from './types';
 
 export const LEVEL_WIDTH = 2400;
@@ -498,6 +499,43 @@ export function createLevel1Forest(): {
     });
   }
 
+  // 8.5 Puntos de Control Rúnicos (Checkpoints del Nivel 1)
+  const checkpoints: LevelCheckpoint[] = [
+    // Checkpoint 0: Zona de desembarco e inicio del bosque / campamento
+    {
+      id: 'checkpoint-0-camp',
+      name: 'Campamento del Bosque',
+      x: 1080,
+      y: 8020,
+      respawnX: 1200,
+      respawnY: 8050,
+      isActive: true, // Siempre activo al iniciar
+      activationRadius: 75,
+    },
+    // Checkpoint 1: El Manantial (Pre-Puzle), justo antes de la rueda y el portón de hielo
+    {
+      id: 'checkpoint-1-spring',
+      name: 'El Manantial (Pre-Puzle)',
+      x: 1080,
+      y: 4420,
+      respawnX: 1200,
+      respawnY: 4420,
+      isActive: false,
+      activationRadius: 75,
+    },
+    // Checkpoint 2: La Antesala del Umbral, tras cruzar el portón, antes de la arena del Jefe
+    {
+      id: 'checkpoint-2-threshold',
+      name: 'La Antesala del Umbral',
+      x: 1080,
+      y: 2380,
+      respawnX: 1200,
+      respawnY: 2380,
+      isActive: false,
+      activationRadius: 75,
+    },
+  ];
+
   const levelData: ForestLevelData = {
     worldWidth: LEVEL_WIDTH,
     worldHeight: LEVEL_HEIGHT,
@@ -509,6 +547,7 @@ export function createLevel1Forest(): {
     boundaryColliders,
     ambientLeaves,
     trailWaypoints,
+    checkpoints,
   };
 
   return { levelData, initialObstacles };

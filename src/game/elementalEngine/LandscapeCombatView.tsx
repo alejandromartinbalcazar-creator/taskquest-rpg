@@ -473,6 +473,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       isMoving: false,
       animFrame: 0,
       hitFlash: 0,
+      invulnerableTimer: 0,
+      isRespawning: false,
+      respawnFadeTimer: 0,
       staffOrbColor: '#94a3b8',
       isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
       hasLightningAura: (player.unlockedMilestones || []).includes('mente_inquebrantable'),
@@ -549,6 +552,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     maxHp: player.maxHp,
     roomIndex: 0,
     roomCleared: false,
+    isRespawning: false,
+    respawnFadeTimer: 0,
+    lastCheckpointId: 'checkpoint-0-camp',
     forestLevel: null as ForestLevelData | null,
   });
 
@@ -582,13 +588,52 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.roomIndex = 0;
     g.roomCleared = false;
 
+    // Recuperar último punto de control persistido en localStorage
+    let savedCheckpointId: string | null = null;
+    try {
+      savedCheckpointId = localStorage.getItem('taskquest_level1_last_checkpoint');
+    } catch {
+      // Ignorar error de sandbox / storage
+    }
+
     // Crear el nivel extendido del bosque (2400 x 8800)
     const { levelData, initialObstacles } = createLevel1Forest();
     g.forestLevel = levelData;
-    g.wizard.x = 1200;
-    g.wizard.y = 8100;
-    g.camera.x = 1200;
-    g.camera.y = 8100;
+
+    let spawnX = 1200;
+    let spawnY = 8050;
+
+    if (savedCheckpointId && levelData.checkpoints) {
+      g.lastCheckpointId = savedCheckpointId;
+      const targetCp = levelData.checkpoints.find((c) => c.id === savedCheckpointId);
+      if (targetCp) {
+        spawnX = targetCp.respawnX;
+        spawnY = targetCp.respawnY;
+
+        // Activar todos los puntos de control hasta el alcanzado
+        const targetIdx = levelData.checkpoints.findIndex((c) => c.id === savedCheckpointId);
+        for (let cIdx = 0; cIdx <= targetIdx; cIdx++) {
+          levelData.checkpoints[cIdx].isActive = true;
+        }
+
+        // Si ya había cruzado el portón (Checkpoint 2: Antesala del Umbral)
+        if (savedCheckpointId === 'checkpoint-2-threshold') {
+          levelData.puzzleWheel.isCompleted = true;
+          levelData.puzzleWheel.charge = 100;
+          levelData.gateDoor.isOpen = true;
+          levelData.gateDoor.openProgress = 1.0;
+          levelData.gateDoor.solid = false;
+        }
+      }
+    } else {
+      g.lastCheckpointId = 'checkpoint-0-camp';
+    }
+
+    g.wizard.x = spawnX;
+    g.wizard.y = spawnY;
+    g.wizard.invulnerableTimer = 1.0; // Gracia de 1.0s de i-frames al entrar al nivel
+    g.camera.x = spawnX;
+    g.camera.y = spawnY;
     g.terrainManager.obstacles = [...initialObstacles];
 
     // Generar patrullas del Bestiario y jefe a lo largo del sendero
@@ -602,6 +647,74 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setRoomBanner(DUNGEON_ROOMS[0].title);
     setTimeout(() => setRoomBanner(null), 3000);
   }, [player.currentHp, player.maxHp]);
+
+  // Manejo de derrota y reaparición en el último punto de control (400ms fade -> 100% HP -> 1.5s i-frames)
+  const triggerPlayerDefeatAndRespawn = useCallback(() => {
+    const g = gameStateRef.current;
+    const wizard = g.wizard;
+    if (g.isRespawning) return;
+
+    g.isRespawning = true;
+    g.respawnFadeTimer = 0.4; // 400ms de desvanecimiento
+    wizard.isMoving = false;
+    wizard.channeledStream.active = false;
+    wizard.isDashing = false;
+    wizard.isCharging = false;
+    wizard.isRespawning = true;
+    wizard.respawnFadeTimer = 0.4;
+
+    elementalSound.playPlayerHurt();
+    g.floatingTexts.push({
+      id: `hero-fallen-${Date.now()}`,
+      x: wizard.x,
+      y: wizard.y - 30,
+      text: '💀 ¡HÉROE CAÍDO! REAPARECIENDO...',
+      color: '#f43f5e',
+      fontSize: 15,
+      opacity: 1,
+      vy: -1.4,
+      life: 45,
+    });
+  }, []);
+
+  // Sistema centralizado de daño con frames de invulnerabilidad (i-frames 800ms) y micro-knockback
+  const applyDamageToPlayer = useCallback(
+    (damage: number, sourceX?: number, sourceY?: number) => {
+      const g = gameStateRef.current;
+      const wizard = g.wizard;
+
+      // 1. Si está en i-frames, en Dash invulnerable o en proceso de respawn: ignorar daño
+      if ((wizard.invulnerableTimer && wizard.invulnerableTimer > 0) || wizard.isDashing || g.isRespawning) {
+        return;
+      }
+
+      // 2. Aplicar daño una sola vez por impacto
+      g.currentHp = Math.max(0, g.currentHp - damage);
+      setCurrentHp(g.currentHp);
+      onPlayerTakeDamage(damage);
+
+      // 3. Activar i-frames temporales (0.8s = 800ms)
+      wizard.invulnerableTimer = 0.8;
+      wizard.hitFlash = 10;
+      g.screenShake = 6;
+      elementalSound.playPlayerHurt();
+
+      // 4. Micro-empuje sutil (knockback de 0.2 unidades / ~12px) en dirección opuesta al daño
+      if (sourceX !== undefined && sourceY !== undefined) {
+        const kdx = wizard.x - sourceX;
+        const kdy = wizard.y - sourceY;
+        const kdist = Math.max(1, Math.hypot(kdx, kdy));
+        wizard.x += (kdx / kdist) * 12;
+        wizard.y += (kdy / kdist) * 12;
+      }
+
+      // 5. Si la vida llega a 0: Iniciar flujo de derrota y respawn en checkpoint
+      if (g.currentHp <= 0) {
+        triggerPlayerDefeatAndRespawn();
+      }
+    },
+    [onPlayerTakeDamage, triggerPlayerDefeatAndRespawn]
+  );
 
   const stopChanneledAttack = useCallback((type?: 'fire' | 'ice') => {
     const g = gameStateRef.current;
@@ -721,10 +834,36 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (nextIndex === 0) {
         const { levelData, initialObstacles } = createLevel1Forest();
         g.forestLevel = levelData;
-        g.wizard.x = 1200;
-        g.wizard.y = 8100;
-        g.camera.x = 1200;
-        g.camera.y = 8100;
+        let savedCpId: string | null = null;
+        try {
+          savedCpId = localStorage.getItem('taskquest_level1_last_checkpoint');
+        } catch {}
+        let rx = 1200;
+        let ry = 8050;
+        if (savedCpId && levelData.checkpoints) {
+          g.lastCheckpointId = savedCpId;
+          const cp = levelData.checkpoints.find((c) => c.id === savedCpId);
+          if (cp) {
+            rx = cp.respawnX;
+            ry = cp.respawnY;
+            const tIdx = levelData.checkpoints.findIndex((c) => c.id === savedCpId);
+            for (let cIdx = 0; cIdx <= tIdx; cIdx++) {
+              levelData.checkpoints[cIdx].isActive = true;
+            }
+            if (savedCpId === 'checkpoint-2-threshold') {
+              levelData.puzzleWheel.isCompleted = true;
+              levelData.puzzleWheel.charge = 100;
+              levelData.gateDoor.isOpen = true;
+              levelData.gateDoor.openProgress = 1.0;
+              levelData.gateDoor.solid = false;
+            }
+          }
+        }
+        g.wizard.x = rx;
+        g.wizard.y = ry;
+        g.wizard.invulnerableTimer = 1.0;
+        g.camera.x = rx;
+        g.camera.y = ry;
         g.terrainManager.obstacles = [...initialObstacles];
         g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
@@ -3489,20 +3628,102 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const frameNow = performance.now();
         const dt = Math.min(50, Math.max(1, frameNow - lastFrameTimestamp));
         lastFrameTimestamp = frameNow;
+        const dtSeconds = dt / 1000;
 
-      const g = gameStateRef.current;
-      const wizard = g.wizard;
-      wizard.isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now()));
-      const enemies = g.enemyManager.enemies;
+        const g = gameStateRef.current;
+        const wizard = g.wizard;
+        wizard.isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now()));
+        const enemies = g.enemyManager.enemies;
 
-      // 1. Dash y Movimiento del Mago (WASD / Flechas / Joystick)
-      let keyVx = 0;
-      let keyVy = 0;
-      const keys = keysPressedRef.current;
-      if (keys['KeyW'] || keys['ArrowUp']) keyVy -= 1;
-      if (keys['KeyS'] || keys['ArrowDown']) keyVy += 1;
-      if (keys['KeyA'] || keys['ArrowLeft']) keyVx -= 1;
-      if (keys['KeyD'] || keys['ArrowRight']) keyVx += 1;
+        // Decrementar temporizador de frames de invulnerabilidad (i-frames) con deltaTime real
+        if (wizard.invulnerableTimer && wizard.invulnerableTimer > 0) {
+          wizard.invulnerableTimer = Math.max(0, wizard.invulnerableTimer - dtSeconds);
+        }
+
+        // PROCESAR ANIMACIÓN DE DERROTA Y RESPAWN EN CHECKPOINT (400ms)
+        if (g.isRespawning) {
+          if (g.respawnFadeTimer > 0) {
+            g.respawnFadeTimer = Math.max(0, g.respawnFadeTimer - dtSeconds);
+            wizard.respawnFadeTimer = g.respawnFadeTimer;
+          }
+
+          if (g.respawnFadeTimer <= 0) {
+            // 1. Obtener el último checkpoint alcanzado
+            const cpId = g.lastCheckpointId || 'checkpoint-0-camp';
+            const cp = g.forestLevel?.checkpoints?.find((c) => c.id === cpId) || g.forestLevel?.checkpoints?.[0];
+            const respawnX = cp ? cp.respawnX : 1200;
+            const respawnY = cp ? cp.respawnY : 8050;
+
+            // 2. Reubicar al jugador y cámara suavemente
+            wizard.x = respawnX;
+            wizard.y = respawnY;
+            g.camera.x = respawnX;
+            g.camera.y = respawnY;
+
+            // 3. Restaurar Vida Máxima al 100%
+            g.currentHp = g.maxHp;
+            setCurrentHp(g.maxHp);
+            player.currentHp = g.maxHp;
+
+            // 4. Invulnerabilidad inicial de 1.5 segundos
+            wizard.invulnerableTimer = 1.5;
+            wizard.hitFlash = 0;
+            wizard.isRespawning = false;
+            wizard.respawnFadeTimer = 0;
+
+            // 5. Limpieza de proyectiles hostiles en vuelo y efectos de daño periódico
+            g.projectiles = [];
+            g.lastFireBarrierBurnTime = 0;
+            g.infernalCrowns = [];
+            g.glacialEruptions = [];
+            g.tectonicFists = [];
+            g.cryoBeams = [];
+            g.volcanicBombardments = [];
+            g.thermalVortices = [];
+            g.conductiveCages = [];
+            g.permafrostPrisons = [];
+            g.plasmaTornadoes = [];
+            g.hellRains = [];
+            g.celestialStorms = [];
+            g.devastatingGlaciers = [];
+            g.telluricBarriers = [];
+            g.obsidianVolcanoes = [];
+            g.conductivePrisons = [];
+            g.overloadCores = [];
+            g.glacialPlasmaStorms = [];
+            g.elementalCataclysms = [];
+            g.lightningBolts = [];
+
+            // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
+            g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+            g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
+
+            g.floatingTexts.push({
+              id: `respawn-chime-${Date.now()}`,
+              x: wizard.x,
+              y: wizard.y - 30,
+              text: `🛡️ ¡REAPARICIÓN EN ${cp ? cp.name.toUpperCase() : 'PUNTO DE CONTROL'}! [+1.5s INVULNERABLE]`,
+              color: '#38bdf8',
+              fontSize: 14,
+              opacity: 1,
+              vy: -1.4,
+              life: 55,
+            });
+
+            g.isRespawning = false;
+          }
+        }
+
+        // 1. Dash y Movimiento del Mago (WASD / Flechas / Joystick)
+        let keyVx = 0;
+        let keyVy = 0;
+        if (!g.isRespawning) {
+          const keys = keysPressedRef.current;
+          if (keys['KeyW'] || keys['ArrowUp']) keyVy -= 1;
+          if (keys['KeyS'] || keys['ArrowDown']) keyVy += 1;
+          if (keys['KeyA'] || keys['ArrowLeft']) keyVx -= 1;
+          if (keys['KeyD'] || keys['ArrowRight']) keyVx += 1;
+        }
 
       if (wizard.dashCooldown > 0) {
         wizard.dashCooldown--;
@@ -4599,15 +4820,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               }
 
               // Daño por quemadura periódica al tocar físicamente las llamas
-              if (frameNow - (g.lastFireBarrierBurnTime || 0) >= 550) {
+              if (frameNow - (g.lastFireBarrierBurnTime || 0) >= 600) {
                 g.lastFireBarrierBurnTime = frameNow;
-                elementalSound.playFireBurnHurt();
-                wizard.hitFlash = 10;
-                g.screenShake = 3.5;
-                const burnDmg = 5;
-                g.currentHp = Math.max(0, g.currentHp - burnDmg);
-                setCurrentHp(g.currentHp);
-                onPlayerTakeDamage(burnDmg);
+                applyDamageToPlayer(5, barrier.x, barrier.y);
                 g.floatingTexts.push({
                   id: `burn_${frameNow}`,
                   x: wizard.x,
@@ -4619,9 +4834,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                   vy: -1.0,
                   life: 25,
                 });
-                if (g.currentHp <= 0) {
-                  setIsDefeated(true);
-                }
               }
             }
           });
@@ -4678,6 +4890,76 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           if (leaf.y > g.camera.y + 600) leaf.y = g.camera.y - 600;
           if (leaf.x > g.camera.x + 800) leaf.x = g.camera.x - 800;
         });
+
+        // ACTUALIZAR Y COMPROBAR PUNTOS DE CONTROL (CHECKPOINTS DEL NIVEL 1)
+        if (forest.checkpoints) {
+          forest.checkpoints.forEach((cp) => {
+            // Animación de partículas ascendentes doradas si está activo
+            if (cp.isActive) {
+              if (!cp.particles) cp.particles = [];
+              if (Math.random() < 0.25 && cp.particles.length < 12) {
+                cp.particles.push({
+                  x: cp.x + (Math.random() - 0.5) * 24,
+                  y: cp.y + 10,
+                  vy: -0.6 - Math.random() * 0.8,
+                  life: 35,
+                  maxLife: 35,
+                });
+              }
+              for (let pIdx = cp.particles.length - 1; pIdx >= 0; pIdx--) {
+                const part = cp.particles[pIdx];
+                part.y += part.vy;
+                part.life--;
+                if (part.life <= 0) cp.particles.splice(pIdx, 1);
+              }
+            }
+
+            // Detección de proximidad para activación automática (2.0 unidades ~ 65-75px)
+            const distToCp = Math.hypot(wizard.x - cp.x, wizard.y - cp.y);
+            if (distToCp <= cp.activationRadius && !cp.isActive) {
+              cp.isActive = true;
+              g.lastCheckpointId = cp.id;
+              try {
+                localStorage.setItem('taskquest_level1_last_checkpoint', cp.id);
+              } catch {}
+
+              elementalSound.playRelicChestOpen();
+              g.screenShake = 3;
+
+              // Feedback visual: texto flotante
+              g.floatingTexts.push({
+                id: `cp-active-${Date.now()}`,
+                x: cp.x,
+                y: cp.y - 65,
+                text: `✨ ¡PUNTO DE CONTROL GUARDADO! (${cp.name})`,
+                color: '#f59e0b',
+                fontSize: 14,
+                opacity: 1,
+                vy: -1.4,
+                life: 55,
+              });
+
+              // Bono: Restaura inmediatamente el 50% de la vida faltante
+              const missingHp = g.maxHp - g.currentHp;
+              if (missingHp > 0) {
+                const healAmt = Math.round(missingHp * 0.5);
+                g.currentHp = Math.min(g.maxHp, g.currentHp + healAmt);
+                setCurrentHp(g.currentHp);
+                g.floatingTexts.push({
+                  id: `cp-heal-${Date.now()}`,
+                  x: wizard.x,
+                  y: wizard.y - 25,
+                  text: `💚 +${healAmt} HP RESTAURADOS (50%)`,
+                  color: '#4ade80',
+                  fontSize: 13,
+                  opacity: 1,
+                  vy: -1.2,
+                  life: 45,
+                });
+              }
+            }
+          });
+        }
 
         // INTERACCIÓN CON HIELO SOBRE LA RUEDA DENTADA
         if (!wheel.isCompleted) {
@@ -5026,17 +5308,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.projectiles,
         g.floatingTexts,
         g.terrainManager.obstacles,
-        (damage) => {
-          elementalSound.playPlayerHurt();
-          wizard.hitFlash = 10;
-          g.screenShake = 7;
-          g.currentHp = Math.max(0, g.currentHp - damage);
-          setCurrentHp(g.currentHp);
-          onPlayerTakeDamage(damage);
-
-          if (g.currentHp <= 0) {
-            setIsDefeated(true);
-          }
+        (damage, sourceX, sourceY) => {
+          applyDamageToPlayer(damage, sourceX, sourceY);
         },
         (shake) => {
           g.screenShake = Math.max(g.screenShake, shake);
@@ -5066,6 +5339,30 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               enemy.y += (tdy / tdist) * overlap;
             }
           });
+        });
+      }
+
+      // Colisión física entre el mago y los monstruos (separación de círculos y daño de contacto controlado con i-frames)
+      if (!g.isRespawning) {
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const edx = wizard.x - enemy.x;
+          const edy = wizard.y - enemy.y;
+          const edist = Math.hypot(edx, edy);
+          const minDist = wizard.radius + enemy.radius;
+          if (edist > 0 && edist < minDist) {
+            const push = minDist - edist;
+            const angle = Math.atan2(edy, edx);
+            // Empujar a ambos suavemente para separar hitboxes y evitar superposiciones
+            wizard.x += Math.cos(angle) * push * 0.55;
+            wizard.y += Math.sin(angle) * push * 0.55;
+            enemy.x -= Math.cos(angle) * push * 0.45;
+            enemy.y -= Math.sin(angle) * push * 0.45;
+
+            // Daño de contacto controlado (~10% HP base) si el mago no está en i-frames
+            const contactDmg = Math.max(8, Math.round(enemy.attackPower * 0.5));
+            applyDamageToPlayer(contactDmg, enemy.x, enemy.y);
+          }
         });
       }
 
@@ -5242,19 +5539,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           continue;
         }
 
-        // Si es proyectil enemigo -> Daña al jugador (¡a menos que esté en Dash invulnerable!)
+        // Si es proyectil enemigo -> Daña al jugador (¡a menos que esté en Dash o i-frames!)
         if (p.isHostile) {
           if (!wizard.isDashing && checkCircleCollision(p.x, p.y, p.radius, wizard.x, wizard.y, wizard.radius)) {
-            elementalSound.playPlayerHurt();
-            wizard.hitFlash = 10;
-            g.screenShake = 6;
-            g.currentHp = Math.max(0, g.currentHp - p.damage);
-            setCurrentHp(g.currentHp);
-            onPlayerTakeDamage(p.damage);
-
-            if (g.currentHp <= 0) {
-              setIsDefeated(true);
-            }
+            applyDamageToPlayer(p.damage, p.x, p.y);
             g.projectiles.splice(pIdx, 1);
             continue;
           }

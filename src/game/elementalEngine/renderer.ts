@@ -49,6 +49,7 @@ import {
   GateDoorEntity,
   FireBarrierEntity,
   AmbientLeafParticle,
+  LevelCheckpoint,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
@@ -90,6 +91,9 @@ export class IsometricRenderer {
       channeledStream?: ChanneledStreamState | null;
       isCursed?: boolean;
       hasLightningAura?: boolean;
+      invulnerableTimer?: number;
+      isRespawning?: boolean;
+      respawnFadeTimer?: number;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -266,8 +270,19 @@ export class IsometricRenderer {
       });
     });
 
-    // Si hay nivel de bosque: añadir Troncos de Árboles, Rueda Elemental y Portón al Y-Sorting
+    // Si hay nivel de bosque: añadir Troncos de Árboles, Rueda Elemental, Portón y Checkpoints al Y-Sorting
     if (forestLevel) {
+      if (forestLevel.checkpoints) {
+        forestLevel.checkpoints.forEach((cp) => {
+          if (isInFrustum(cp.x, cp.y, 100, frustum)) {
+            renderList.push({
+              y: cp.y,
+              draw: () => this.drawCheckpointMonolith(ctx, cp, performance.now()),
+            });
+          }
+        });
+      }
+
       forestLevel.trees.forEach((tree) => {
         if (!isInFrustum(tree.x, tree.y, tree.canopyRadius + 60, frustum)) return;
         renderList.push({
@@ -1139,6 +1154,9 @@ export class IsometricRenderer {
       channeledStream?: ChanneledStreamState | null;
       isCursed?: boolean;
       hasLightningAura?: boolean;
+      invulnerableTimer?: number;
+      isRespawning?: boolean;
+      respawnFadeTimer?: number;
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -2172,6 +2190,14 @@ export class IsometricRenderer {
       ctx.restore();
     }
 
+    // Feedback de desvanecimiento por muerte/respawn o parpadeo por i-frames de invulnerabilidad
+    if (wizard.isRespawning && wizard.respawnFadeTimer !== undefined) {
+      ctx.globalAlpha = Math.max(0, wizard.respawnFadeTimer / 0.4);
+    } else if (wizard.invulnerableTimer && wizard.invulnerableTimer > 0) {
+      const time = performance.now() * 0.001;
+      ctx.globalAlpha = Math.sin(time * 25) > 0 ? 0.3 : 0.8;
+    }
+
     drawWizardSprite({
       ctx,
       x: 0,
@@ -2180,6 +2206,8 @@ export class IsometricRenderer {
       facingAngle: wizard.facingAngle,
       isMoving: wizard.isMoving,
     });
+
+    ctx.globalAlpha = 1.0;
 
     ctx.restore();
   }
@@ -4695,6 +4723,186 @@ export class IsometricRenderer {
     ctx.moveTo(tx - r * 0.2, ty - tree.canopyHeight * 0.7);
     ctx.lineTo(tx - r * 0.2, ty - 2);
     ctx.stroke();
+  }
+
+  // CAPA 2 (Y-SORTED): Monolito Rúnico de Punto de Control (Checkpoint)
+  private static drawCheckpointMonolith(
+    ctx: CanvasRenderingContext2D,
+    cp: LevelCheckpoint,
+    now: number
+  ) {
+    ctx.save();
+    ctx.translate(cp.x, cp.y);
+
+    const isActive = cp.isActive;
+    const pulse = 0.8 + 0.2 * Math.sin(now * 0.005);
+    const goldColor = '#f59e0b';
+
+    // 1. Sombra elíptica en el suelo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 32, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Runa concéntrica giratoria en la base si está activo
+    if (isActive) {
+      ctx.save();
+      ctx.scale(1, 0.58);
+      ctx.strokeStyle = `rgba(245, 158, 11, ${0.45 * pulse})`;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = goldColor;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(0, 16, 34, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const rAngle = (now * 0.001) % (Math.PI * 2);
+      for (let i = 0; i < 4; i++) {
+        const a = rAngle + (i * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * 34, 16 + Math.sin(a) * 34, 3, 0, Math.PI * 2);
+        ctx.fillStyle = goldColor;
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    // 3. Pedestal escalonado de piedra rúnica
+    // Escalón inferior
+    ctx.fillStyle = isActive ? '#1c1917' : '#18181b';
+    ctx.strokeStyle = isActive ? '#78350f' : '#27272a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-26, 0, 52, 14, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Escalón superior
+    ctx.fillStyle = isActive ? '#292524' : '#27272a';
+    ctx.strokeStyle = isActive ? '#b45309' : '#3f3f46';
+    ctx.beginPath();
+    ctx.roundRect(-20, -8, 40, 12, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Eje vertical del monolito / obelisco
+    const obeliskGrad = ctx.createLinearGradient(-14, -58, 14, 0);
+    if (isActive) {
+      obeliskGrad.addColorStop(0, '#44403c');
+      obeliskGrad.addColorStop(0.5, '#292524');
+      obeliskGrad.addColorStop(1, '#1c1917');
+    } else {
+      obeliskGrad.addColorStop(0, '#3f3f46');
+      obeliskGrad.addColorStop(0.5, '#27272a');
+      obeliskGrad.addColorStop(1, '#18181b');
+    }
+    ctx.fillStyle = obeliskGrad;
+    ctx.strokeStyle = isActive ? '#d97706' : '#52525b';
+    ctx.lineWidth = 1.8;
+
+    ctx.beginPath();
+    ctx.moveTo(-14, -8);
+    ctx.lineTo(-10, -56);
+    ctx.lineTo(0, -68); // Cúspide piramidal
+    ctx.lineTo(10, -56);
+    ctx.lineTo(14, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Arista central para relieve 3D
+    ctx.strokeStyle = isActive ? '#78350f' : '#3f3f46';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -68);
+    ctx.lineTo(0, -8);
+    ctx.stroke();
+
+    // 5. Glifos rúnicos verticales grabados
+    if (isActive) {
+      ctx.shadowColor = goldColor;
+      ctx.shadowBlur = 10 * pulse;
+      ctx.fillStyle = goldColor;
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.5;
+
+      // Glifo superior
+      ctx.beginPath();
+      ctx.arc(0, -50, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glifo rúnico angular central
+      ctx.beginPath();
+      ctx.moveTo(-5, -40);
+      ctx.lineTo(0, -44);
+      ctx.lineTo(5, -40);
+      ctx.lineTo(0, -32);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+
+      // Glifo inferior
+      ctx.beginPath();
+      ctx.moveTo(-4, -24);
+      ctx.lineTo(4, -24);
+      ctx.moveTo(0, -28);
+      ctx.lineTo(0, -18);
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+
+      // 6. Cristal de ámbar flotante sobre la cúspide
+      const crystalY = -78 + Math.sin(now * 0.006) * 4;
+      ctx.save();
+      ctx.translate(0, crystalY);
+      ctx.rotate(Math.PI / 4 + Math.sin(now * 0.003) * 0.2);
+      ctx.fillStyle = goldColor;
+      ctx.shadowColor = goldColor;
+      ctx.shadowBlur = 14 * pulse;
+      ctx.fillRect(-5, -5, 10, 10);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-5, -5, 10, 10);
+      ctx.restore();
+
+      // 7. Partículas ascendentes doradas
+      if (cp.particles && cp.particles.length > 0) {
+        cp.particles.forEach((part) => {
+          const alpha = part.life / part.maxLife;
+          ctx.fillStyle = `rgba(245, 158, 11, ${alpha * 0.85})`;
+          ctx.beginPath();
+          ctx.arc(part.x - cp.x, part.y - cp.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    } else {
+      // Glifos inactivos tenues
+      ctx.fillStyle = 'rgba(156, 163, 175, 0.35)';
+      ctx.strokeStyle = 'rgba(156, 163, 175, 0.25)';
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+      ctx.arc(0, -50, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(-4, -40);
+      ctx.lineTo(0, -43);
+      ctx.lineTo(4, -40);
+      ctx.lineTo(0, -33);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-3, -22);
+      ctx.lineTo(3, -22);
+      ctx.moveTo(0, -25);
+      ctx.lineTo(0, -17);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   // CAPA 2 (Y-SORTED): Mecanismo de Rueda Elemental accionado por Hielo

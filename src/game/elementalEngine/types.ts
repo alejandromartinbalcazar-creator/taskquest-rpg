@@ -1216,6 +1216,18 @@ export interface LevelChunk {
   zone: 'camp' | 'trail' | 'gate' | 'arena';
 }
 
+export interface LevelCheckpoint {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  respawnX: number;
+  respawnY: number;
+  isActive: boolean;
+  activationRadius: number;
+  particles?: Array<{ x: number; y: number; vy: number; life: number; maxLife: number }>;
+}
+
 export interface ForestLevelData {
   worldWidth: number;
   worldHeight: number;
@@ -1227,4 +1239,5 @@ export interface ForestLevelData {
   boundaryColliders: Array<{ x: number; y: number; radius: number }>;
   ambientLeaves: AmbientLeafParticle[];
   trailWaypoints: Array<{ x: number; y: number; width: number }>;
+  checkpoints: LevelCheckpoint[];
 }

@@ -84,7 +84,7 @@ export function updateThresholdCustodian(
   wizard: { x: number; y: number; radius: number },
   projectiles: Projectile[],
   floatingTexts: FloatingText[],
-  onPlayerDamage: (amt: number) => void,
+  onPlayerDamage: (amt: number, sourceX?: number, sourceY?: number) => void,
   onScreenShake: (amt: number) => void
 ) {
   const cs = boss.custodianState;
@@ -411,7 +411,7 @@ function processAttack(
   cs: CustodianState,
   projectiles: Projectile[],
   floatingTexts: FloatingText[],
-  onPlayerDamage: (amt: number) => void,
+  onPlayerDamage: (amt: number, sourceX?: number, sourceY?: number) => void,
   onScreenShake: (amt: number) => void
 ) {
   cs.attackTimer++;
@@ -471,7 +471,7 @@ function processAttack(
       // Comprobar si el jugador está dentro de la línea de fisura
       const isHit = checkLineCollision(wizard.x, wizard.y, wizard.radius, ft.x1, ft.y1, ft.x2, ft.y2, ft.width);
       if (isHit) {
-        onPlayerDamage(24);
+        onPlayerDamage(20, (ft.x1 + ft.x2) / 2, (ft.y1 + ft.y2) / 2);
         floatingTexts.push({
           id: `fissure-dmg-${Date.now()}`,
           x: wizard.x,
@@ -504,7 +504,7 @@ function processAttack(
 
         const d = Math.hypot(wizard.x - st.x, (wizard.y - st.y) / 0.58);
         if (d <= st.radius + wizard.radius) {
-          onPlayerDamage(22);
+          onPlayerDamage(20, st.x, st.y);
           floatingTexts.push({
             id: `stalagmite-dmg-${Date.now()}`,
             x: wizard.x,
@@ -542,7 +542,7 @@ function processAttack(
 
       const d = Math.hypot(wizard.x - nt.x, (wizard.y - nt.y) / 0.58);
       if (d <= nt.maxRadius + wizard.radius) {
-        onPlayerDamage(28);
+        onPlayerDamage(26, nt.x, nt.y);
         const pdx = wizard.x - nt.x;
         const pdy = wizard.y - nt.y;
         const pdist = Math.max(1, Math.hypot(pdx, pdy));
@@ -604,7 +604,7 @@ function processAttack(
           life: 45,
         });
       } else {
-        onPlayerDamage(45);
+        onPlayerDamage(35, boss.x, boss.y);
         floatingTexts.push({
           id: `judgment-dmg-${Date.now()}`,
           x: wizard.x,
