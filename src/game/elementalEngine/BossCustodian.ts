@@ -44,6 +44,14 @@ export function createThresholdCustodian(x: number, y: number): GameEnemy {
     },
     isDefeated: false,
     defeatTimer: 0,
+    homeX: x,
+    homeY: y,
+    arenaBounds: {
+      minX: x - 520,
+      maxX: x + 520,
+      minY: y - 190,
+      maxY: y + 190,
+    },
   };
 
   return {
@@ -279,9 +287,13 @@ export function updateThresholdCustodian(
   if (dist > 180 && cs.activeAttack === 'none') {
     boss.x += (dx / dist) * boss.moveSpeed * speedMult;
     boss.y += (dy / dist) * boss.moveSpeed * speedMult * 0.58;
-    // Mantener al coloso confinado dentro de los límites de la arena
-    boss.x = Math.max(900, Math.min(1500, boss.x));
-    boss.y = Math.max(1050, Math.min(1950, boss.y));
+    // Mantener al coloso confinado dinámicamente dentro de los límites de su arena
+    const minX = cs.arenaBounds ? cs.arenaBounds.minX : (cs.homeX ? cs.homeX - 520 : boss.x - 520);
+    const maxX = cs.arenaBounds ? cs.arenaBounds.maxX : (cs.homeX ? cs.homeX + 520 : boss.x + 520);
+    const minY = cs.arenaBounds ? cs.arenaBounds.minY : (cs.homeY ? cs.homeY - 190 : boss.y - 190);
+    const maxY = cs.arenaBounds ? cs.arenaBounds.maxY : (cs.homeY ? cs.homeY + 190 : boss.y + 190);
+    boss.x = Math.max(minX, Math.min(maxX, boss.x));
+    boss.y = Math.max(minY, Math.min(maxY, boss.y));
   }
 
   if (cs.activeAttack === 'none') {
@@ -377,9 +389,9 @@ function initiateAttack(
       detonated: false,
     };
   } else if (cs.activeAttack === 'judgment_ultimate') {
-    // El jefe se teletransporta al centro y canaliza durante 2.5s (150 frames)
-    boss.x = 1200;
-    boss.y = 1500;
+    // El jefe se teletransporta al centro de su arena y canaliza durante 2.5s (150 frames)
+    boss.x = cs.homeX || boss.x;
+    boss.y = cs.homeY || boss.y;
     cs.leftGauntlet.x = boss.x - 75;
     cs.leftGauntlet.y = boss.y - 45;
     cs.rightGauntlet.x = boss.x + 75;

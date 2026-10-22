@@ -53,18 +53,10 @@ export function assembleLevel(sequence: string[][]): string[] {
 /**
  * Genera la matriz completa ensamblada de "La Ruta del Umbral" (Nivel 1).
  */
-let cachedLevel1Map: string[] | null = null;
-
 export function assembleLevel1Map(): string[] {
-  if (!cachedLevel1Map) {
-    cachedLevel1Map = assembleLevel(LEVEL_1_SEQUENCE);
-  }
-  return cachedLevel1Map;
+  return assembleLevel(LEVEL_1_SEQUENCE);
 }
 
-/**
- * Limpia la caché si se modifica dinámicamente un segmento.
- */
 export function invalidateLevelCache(): void {
-  cachedLevel1Map = null;
+  // Sin caché para asegurar recargas siempre actualizadas con HMR
 }

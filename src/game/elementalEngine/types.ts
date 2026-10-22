@@ -300,6 +300,9 @@ export interface CustodianState {
   defeatTimer: number;
   shockwaveActive?: boolean;
   shockwaveRadius?: number;
+  homeX?: number;
+  homeY?: number;
+  arenaBounds?: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
 export interface GameEnemy {

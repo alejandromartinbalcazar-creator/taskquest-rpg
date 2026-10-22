@@ -3688,9 +3688,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // Ignorar si no está soportado en el entorno
     }
 
+    // Margen mínimo en X para asegurar rango físico completo hacia la izquierda
+    const clampedBaseX = Math.max(55, e.clientX);
+
     g.joystick.active = true;
     g.joystick.touchId = e.pointerId;
-    g.joystick.baseX = e.clientX;
+    g.joystick.baseX = clampedBaseX;
     g.joystick.baseY = e.clientY;
     g.joystick.currX = e.clientX;
     g.joystick.currY = e.clientY;
@@ -3703,27 +3706,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (el) {
       el.style.transition = 'none';
     }
-    updateJoystickVisual(e.clientX, e.clientY, e.clientX, e.clientY, 1, true);
+    updateJoystickVisual(clampedBaseX, e.clientY, e.clientX, e.clientY, 1, true);
   };
 
   const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gameStateRef.current;
     if (!g.joystick.active || g.joystick.touchId !== e.pointerId) return;
 
-    const dx = e.clientX - g.joystick.baseX;
+    let dx = e.clientX - g.joystick.baseX;
     const dy = e.clientY - g.joystick.baseY;
+
+    // Inversión rápida: si el jugador cambia drásticamente de dirección izquierda/derecha, recentrar la base
+    if ((dx < -12 && g.joystick.vx > 0.5) || (dx > 12 && g.joystick.vx < -0.5)) {
+      g.joystick.baseX = e.clientX - (dx > 0 ? 12 : -12);
+      dx = e.clientX - g.joystick.baseX;
+    }
+
     const dist = Math.hypot(dx, dy);
-    const maxRadius = 55;
+    const maxRadius = 42; // Radio de acción optimizado para respuesta táctil inmediata
 
     if (dist > maxRadius) {
       const dirX = dx / dist;
       const dirY = dy / dist;
       g.joystick.knobX = g.joystick.baseX + dirX * maxRadius;
       g.joystick.knobY = g.joystick.baseY + dirY * maxRadius;
-      // Arrastre suave de la base (Follow-thumb drag) para no perder tracción
+      // Arrastre suave de la base (Follow-thumb drag)
       const overflow = dist - maxRadius;
-      g.joystick.baseX += dirX * overflow * 0.45;
-      g.joystick.baseY += dirY * overflow * 0.45;
+      g.joystick.baseX += dirX * overflow * 0.35;
+      g.joystick.baseY += dirY * overflow * 0.35;
     } else {
       g.joystick.knobX = e.clientX;
       g.joystick.knobY = e.clientY;
@@ -3735,16 +3745,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     const effDy = g.joystick.knobY - g.joystick.baseY;
     const effDist = Math.hypot(effDx, effDy);
 
-    // Zona muerta de 8px
-    if (effDist < 8) {
+    // Zona muerta mínima de 5px para respuesta inmediata
+    if (effDist < 5) {
       g.joystick.vx = 0;
       g.joystick.vy = 0;
       g.wizard.isMoving = false;
     } else {
-      const normalizedDist = (Math.min(effDist, maxRadius) - 8) / (maxRadius - 8);
+      // Alcanza el 100% de velocidad a solo 30px de desplazamiento en cualquier dirección (izquierda/derecha simétricos)
+      const normalizedDist = Math.min(1.0, (effDist - 5) / 25);
       const angle = Math.atan2(effDy, effDx);
       const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
-      const speed = (2.7 + player.stats.speed * 0.08) * normalizedDist * moveMultiplier;
+      const speed = (3.4 + player.stats.speed * 0.08) * normalizedDist * moveMultiplier;
       g.joystick.vx = Math.cos(angle) * speed;
       g.joystick.vy = Math.sin(angle) * speed;
       g.wizard.facingAngle = angle;
@@ -3988,7 +3999,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       } else if (keyVx !== 0 || keyVy !== 0) {
         const len = Math.hypot(keyVx, keyVy);
         const moveMultiplier = (player.unlockedMilestones || []).includes('mente_inquebrantable') ? 1.15 : 1.0;
-        const speed = (3.2 + player.stats.speed * 0.08) * moveMultiplier;
+        const speed = (3.4 + player.stats.speed * 0.08) * moveMultiplier;
         const curVx = (keyVx / len) * speed;
         const curVy = (keyVy / len) * speed;
         wizard.x += curVx;
@@ -5842,6 +5853,21 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           enemy.x = resolved.x;
           enemy.y = resolved.y;
         });
+
+        // COMPROBACIÓN DE DERROTA DEL JEFE FINAL Y ACTIVACIÓN DEL PORTAL DE VICTORIA
+        const bossEnemy = enemies.find((e) => e.bossType === 'threshold_custodian');
+        if (bossEnemy && bossEnemy.hp <= 0 && bossEnemy.custodianState?.isDefeated) {
+          tm.victoryPortal.isActive = true;
+
+          const distToPortal = Math.hypot(wizard.x - tm.victoryPortal.x, wizard.y - tm.victoryPortal.y);
+          const defeatAnimationDone = (bossEnemy.custodianState.defeatTimer || 0) > 150;
+
+          if ((distToPortal <= tm.victoryPortal.radius + 25 || defeatAnimationDone) && !isVictorious) {
+            setIsVictorious(true);
+            elementalSound.playVictory();
+            onVictory(floor.floorNumber, floor.enemy.expReward * 2, floor.enemy.goldReward * 2);
+          }
+        }
       }
 
       // Colisión de enemigos con troncos de árboles del bosque
@@ -11290,9 +11316,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#121422] border-2 border-amber-500 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
             <Award className="w-14 h-14 text-amber-400 mx-auto animate-bounce" />
-            <h3 className="text-xl font-black text-amber-300">¡GRAN VICTORIA TOTAL!</h3>
+            <h3 className="text-xl font-black text-amber-300">¡NIVEL 1 COMPLETADO!</h3>
             <p className="text-xs text-slate-300">
-              Has atravesado todas las salas y derrotado al Guardián de Basalto, al Espectro de la Tormenta y al Dragón de Obsidiana.
+              ¡Has atravesado con éxito La Ruta del Umbral y derrotado al colosal Custodio del Umbral!
             </p>
             <div className="bg-[#1a1c30] p-3 rounded-2xl border border-slate-700 flex justify-around text-xs">
               <div>

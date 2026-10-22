@@ -84,6 +84,7 @@ export class Tilemap {
   public enemySpawns: EnemySpawnPoint[] = [];
   public bossSpawn: { x: number; y: number } = { x: 4064, y: 256 };
   public bossArenaBounds = { minX: 3712, maxX: 4416, minY: 128, maxY: 384 };
+  public victoryPortal = { x: 28400, y: 384, radius: 48, isActive: false };
 
   constructor(layout: string[]) {
     this.loadLayout(layout);
@@ -191,6 +192,12 @@ export class Tilemap {
         y: Math.round(bossSumY / bossCellsCount),
       };
       this.bossArenaBounds = { minX: minBx, maxX: maxBx, minY: minBy, maxY: maxBy };
+      this.victoryPortal = {
+        x: maxBx - 160,
+        y: this.bossSpawn.y,
+        radius: 48,
+        isActive: false,
+      };
     }
 
     // Ubicar la rueda elemental cerca del portón para el puzle de hielo en el sendero
@@ -454,6 +461,16 @@ export class Tilemap {
       this.puzzleWheel.y <= frustum.bottom + 100
     ) {
       this.drawPuzzleWheel(ctx, this.puzzleWheel, time);
+    }
+
+    // Dibujar el Portal de Salida / Fin de Nivel si está en rango visible
+    if (
+      this.victoryPortal.x >= frustum.left - 120 &&
+      this.victoryPortal.x <= frustum.right + 120 &&
+      this.victoryPortal.y >= frustum.top - 120 &&
+      this.victoryPortal.y <= frustum.bottom + 120
+    ) {
+      this.drawVictoryPortal(ctx, this.victoryPortal, time);
     }
   }
 
@@ -940,6 +957,99 @@ export class Tilemap {
     ctx.beginPath();
     ctx.arc(0, 0, 7, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
+   * Dibuja el Portal Ancestral de Victoria y Fin del Nivel al final del sendero del jefe.
+   */
+  private drawVictoryPortal(
+    ctx: CanvasRenderingContext2D,
+    portal: { x: number; y: number; radius: number; isActive: boolean },
+    time: number
+  ): void {
+    const px = portal.x;
+    const py = portal.y;
+
+    ctx.save();
+
+    // 1. Base ceremonial octagonal de piedra
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = portal.isActive ? '#f59e0b' : '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px, py, portal.radius + 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 2. Anillo de runas de teletransporte
+    const ringPulse = portal.isActive ? Math.sin(time * 3) * 0.15 + 0.85 : 0.4;
+    ctx.strokeStyle = portal.isActive ? 'rgba(56, 189, 248, 0.85)' : 'rgba(100, 116, 139, 0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(px, py, portal.radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 3. Vórtice etéreo giratorio
+    const rotSpeed = portal.isActive ? time * 1.8 : time * 0.4;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(rotSpeed);
+
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, portal.radius * ringPulse);
+    if (portal.isActive) {
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.3, 'rgba(56, 189, 248, 0.85)');
+      grad.addColorStop(0.7, 'rgba(168, 85, 247, 0.6)');
+      grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+    } else {
+      grad.addColorStop(0, '#334155');
+      grad.addColorStop(0.6, 'rgba(30, 41, 59, 0.5)');
+      grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, portal.radius * ringPulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Rayos en espiral
+    const rays = 6;
+    for (let i = 0; i < rays; i++) {
+      const angle = (Math.PI * 2 / rays) * i;
+      ctx.strokeStyle = portal.isActive ? 'rgba(253, 224, 71, 0.7)' : 'rgba(148, 163, 184, 0.2)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(
+        Math.cos(angle + 0.5) * (portal.radius * 0.6),
+        Math.sin(angle + 0.5) * (portal.radius * 0.6),
+        Math.cos(angle) * (portal.radius * ringPulse),
+        Math.sin(angle) * (portal.radius * ringPulse)
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 4. Cartel flotante indicador de Fin del Nivel
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    if (portal.isActive) {
+      ctx.fillStyle = '#fde047';
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 8;
+      ctx.fillText('✨ ¡PORTAL DE VICTORIA ACTIVO! ✨', px, py - portal.radius - 16);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText('Pisa el vórtice para terminar el nivel', px, py - portal.radius - 4);
+    } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('🔒 PORTAL ANCESTRAL (FIN DE NIVEL)', px, py - portal.radius - 12);
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Derrota al Custodio del Umbral para abrirlo', px, py - portal.radius - 2);
+    }
 
     ctx.restore();
   }

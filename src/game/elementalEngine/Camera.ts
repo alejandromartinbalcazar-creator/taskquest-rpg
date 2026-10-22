@@ -18,10 +18,10 @@ export class CameraSystem {
   public targetOffsetX: number = 0;
   public targetOffsetY: number = 0;
 
-  // Calibración de distancias óptimas según especificación
-  public lookaheadDistX: number = 105; // 80 a 120 px hacia adelante
-  public lookaheadDistY: number = 60;  // 50 a 70 px hacia adelante
-  public lerpFactor: number = 0.10;    // 0.08 a 0.12 para fluidez sin retraso excesivo
+  // Calibración de distancias balanceadas para movimiento continuo y simétrico en ambas direcciones
+  public lookaheadDistX: number = 45; // Adelanto suave sin retraso visual al girar a la izquierda
+  public lookaheadDistY: number = 30;  // Adelanto vertical equilibrado
+  public lerpFactor: number = 0.14;    // Respuesta fluida y continua sin tirones
 
   constructor(initialX: number = 0, initialY: number = 0) {
     this.x = initialX;
