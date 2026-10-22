@@ -14,7 +14,7 @@ import { elementalSound } from './soundEngine';
  */
 
 export function createThresholdCustodian(x: number, y: number): GameEnemy {
-  const maxHp = 1200;
+  const maxHp = 1800; // Incrementado +50% (base 1200 -> 1800) para un combate culminante más épico y estratégico
   const initialShield = 90;
 
   const custodianState: CustodianState = {
