@@ -417,6 +417,82 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
   return enemies;
 }
 
+export interface CombatTargetInfo {
+  x: number;
+  y: number;
+  angle: number;
+  dist: number;
+  id: string;
+}
+
+export function findNearestCombatTarget(
+  wizard: { x: number; y: number },
+  enemies: GameEnemy[],
+  type: 'fire' | 'ice',
+  puzzleWheel?: { x: number; y: number; isCompleted: boolean } | null,
+  maxRange: number = 550,
+  preferredAngle?: number | null,
+  angleTolerance: number = Math.PI
+): CombatTargetInfo | null {
+  let bestTarget: CombatTargetInfo | null = null;
+  let bestScore = Infinity;
+
+  // 1. Considerar enemigos vivos dentro del rango de alcance
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.hp <= 0) continue;
+    const dx = e.x - wizard.x;
+    const dy = e.y - wizard.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxRange) continue;
+
+    const angle = Math.atan2(dy, dx);
+    let angleDiff = 0;
+    if (preferredAngle !== undefined && preferredAngle !== null) {
+      angleDiff = Math.abs(angle - preferredAngle);
+      while (angleDiff > Math.PI) angleDiff = Math.abs(angleDiff - Math.PI * 2);
+      if (angleDiff > angleTolerance) continue;
+    }
+
+    const score = preferredAngle !== undefined && preferredAngle !== null
+      ? dist * (1 + angleDiff * 0.9)
+      : dist;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestTarget = { x: e.x, y: e.y, angle, dist, id: e.id };
+    }
+  }
+
+  // 2. Si es hielo, incluir la rueda elemental del puzle de hielo si aún no está resuelta
+  if (type === 'ice' && puzzleWheel && !puzzleWheel.isCompleted) {
+    const wdx = puzzleWheel.x - wizard.x;
+    const wdy = puzzleWheel.y - wizard.y;
+    const wdist = Math.hypot(wdx, wdy);
+    if (wdist <= maxRange) {
+      const wAngle = Math.atan2(wdy, wdx);
+      let angleDiff = 0;
+      let inCone = true;
+      if (preferredAngle !== undefined && preferredAngle !== null) {
+        angleDiff = Math.abs(wAngle - preferredAngle);
+        while (angleDiff > Math.PI) angleDiff = Math.abs(angleDiff - Math.PI * 2);
+        if (angleDiff > angleTolerance) inCone = false;
+      }
+      if (inCone) {
+        const score = preferredAngle !== undefined && preferredAngle !== null
+          ? wdist * (1 + angleDiff * 0.9)
+          : wdist;
+        if (score < bestScore) {
+          bestScore = score;
+          bestTarget = { x: puzzleWheel.x, y: puzzleWheel.y, angle: wAngle, dist: wdist, id: 'puzzle_wheel' };
+        }
+      }
+    }
+  }
+
+  return bestTarget;
+}
+
 export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   player,
   floor,
@@ -791,10 +867,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       haptics.light();
 
       setElementQueue((prev) => {
-        if (prev.length >= 4) {
-          return [...prev.slice(1), el];
+        const nextQueue = prev.length >= 4 ? [...prev.slice(1), el] : [...prev, el];
+        // Si se selecciona un único poder de fuego o hielo, orientar al mago de inmediato al objetivo más cercano
+        if (nextQueue.length === 1 && (el === 'fire' || el === 'ice')) {
+          const g = gameStateRef.current;
+          const target = findNearestCombatTarget(
+            g.wizard,
+            g.enemyManager.enemies,
+            el,
+            g.tilemap?.puzzleWheel,
+            550
+          );
+          if (target) {
+            g.wizard.facingAngle = target.angle;
+          }
         }
-        return [...prev, el];
+        return nextQueue;
       });
     },
     [isDefeated, isVictorious, stopChanneledAttack]
@@ -822,19 +910,38 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       wizard.staffOrbColor = isFire ? '#ef4444' : '#06b6d4';
       wizard.channeledStream.lockedEnemyId = null;
 
-      // Apuntado manual inicial (hacia cursor del ratón en PC o hacia donde mira el mago)
+      // Apuntado inteligente automático hacia el objetivo más cercano (o manual si hay ratón o arrastre activo)
+      const tmWheel = g.tilemap?.puzzleWheel;
+      let targetAngle = wizard.facingAngle;
+
       if (mousePosRef.current.active) {
         const dx = mousePosRef.current.x - wizard.x;
         const dy = mousePosRef.current.y - wizard.y;
         if (Math.hypot(dx, dy) > 10) {
-          wizard.channeledStream.aimAngle = Math.atan2(dy, dx);
-          wizard.facingAngle = wizard.channeledStream.aimAngle;
+          targetAngle = Math.atan2(dy, dx);
+        }
+      } else if (attackAimRef.current.active && attackAimRef.current.isAiming) {
+        const adx = attackAimRef.current.currX - attackAimRef.current.startX;
+        const ady = attackAimRef.current.currY - attackAimRef.current.startY;
+        const rawAngle = Math.atan2(ady, adx);
+        const target = findNearestCombatTarget(wizard, g.enemyManager.enemies, type, tmWheel, 550, rawAngle, Math.PI * 0.45);
+        if (target) {
+          targetAngle = target.angle;
+          wizard.channeledStream.lockedEnemyId = target.id;
         } else {
-          wizard.channeledStream.aimAngle = wizard.facingAngle;
+          targetAngle = rawAngle;
         }
       } else {
-        wizard.channeledStream.aimAngle = wizard.facingAngle;
+        // Auto-aim prioritario: Snap al objetivo vivo más cercano o engranaje de hielo
+        const target = findNearestCombatTarget(wizard, g.enemyManager.enemies, type, tmWheel, 550);
+        if (target) {
+          targetAngle = target.angle;
+          wizard.channeledStream.lockedEnemyId = target.id;
+        }
       }
+
+      wizard.channeledStream.aimAngle = targetAngle;
+      wizard.facingAngle = targetAngle;
 
       elementalSound.startContinuousStream(type);
     },
@@ -1237,16 +1344,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           }
         }
       } else {
-        // Auto-apuntar al enemigo más cercano o disparar hacia la dirección del mago
-        for (const enemy of g.enemyManager.enemies) {
-          const dx = enemy.x - wizard.x;
-          const dy = enemy.y - wizard.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < closestDist) {
-            closestDist = dist;
-            aimAngle = Math.atan2(dy, dx);
-            targetX = enemy.x;
-            targetY = enemy.y;
+        // Auto-apuntar al enemigo más cercano o rueda del puzle de hielo, o disparar hacia la dirección del mago
+        const tmWheel = g.tilemap?.puzzleWheel;
+        const isIceSpell = (recipe.id as string) === 'ice_shard' || (recipe.id as string) === 'ice_lance';
+        const isFireSpell = recipe.id === 'fire_shot';
+        if (isIceSpell || isFireSpell) {
+          const target = findNearestCombatTarget(
+            wizard,
+            g.enemyManager.enemies,
+            isFireSpell ? 'fire' : 'ice',
+            tmWheel,
+            460
+          );
+          if (target) {
+            aimAngle = target.angle;
+            targetX = target.x;
+            targetY = target.y;
+          }
+        } else {
+          for (const enemy of g.enemyManager.enemies) {
+            const dx = enemy.x - wizard.x;
+            const dy = enemy.y - wizard.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < closestDist) {
+              closestDist = dist;
+              aimAngle = Math.atan2(dy, dx);
+              targetX = enemy.x;
+              targetY = enemy.y;
+            }
           }
         }
       }
@@ -3538,10 +3663,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     if (dist > 7) {
       aim.isAiming = true;
-      const angle = Math.atan2(dy, dx);
-      const wizard = gameStateRef.current.wizard;
-      wizard.channeledStream.aimAngle = angle;
-      wizard.facingAngle = angle;
+      const rawAngle = Math.atan2(dy, dx);
+      const g = gameStateRef.current;
+      const wizard = g.wizard;
+
+      let finalAngle = rawAngle;
+      if (wizard.channeledStream.active && (wizard.channeledStream.type === 'fire' || wizard.channeledStream.type === 'ice')) {
+        const tmWheel = g.tilemap?.puzzleWheel;
+        const target = findNearestCombatTarget(wizard, g.enemyManager.enemies, wizard.channeledStream.type, tmWheel, 550, rawAngle, Math.PI * 0.45);
+        if (target) {
+          finalAngle = target.angle;
+          wizard.channeledStream.lockedEnemyId = target.id;
+        } else {
+          wizard.channeledStream.lockedEnemyId = null;
+        }
+      }
+      wizard.channeledStream.aimAngle = finalAngle;
+      wizard.facingAngle = finalAngle;
     }
   }, []);
 
@@ -3758,7 +3896,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const speed = (3.4 + player.stats.speed * 0.08) * normalizedDist * moveMultiplier;
       g.joystick.vx = Math.cos(angle) * speed;
       g.joystick.vy = Math.sin(angle) * speed;
-      g.wizard.facingAngle = angle;
+      if (!g.wizard.channeledStream.active) {
+        g.wizard.facingAngle = angle;
+      }
       g.wizard.isMoving = true;
     }
   };
@@ -4006,7 +4146,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         wizard.y += curVy;
         wizard.vx = curVx;
         wizard.vy = curVy;
-        wizard.facingAngle = Math.atan2(keyVy, keyVx);
+        if (!wizard.channeledStream.active) {
+          wizard.facingAngle = Math.atan2(keyVy, keyVx);
+        }
         wizard.isMoving = true;
         wizard.animFrame += 0.2;
       } else if (g.joystick.vx !== 0 || g.joystick.vy !== 0) {
@@ -4786,14 +4928,18 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (wizard.isDashing) {
           stopChanneledAttack();
         } else {
-          // A. Control Direccional y Apuntado Manual (Arrastre táctil en botón de ataque, Ratón en PC o dirección de movimiento)
+          // A. Control Direccional y Apuntado Inteligente Auto-Lock
           if (attackAimRef.current.active && attackAimRef.current.isAiming) {
             const dx = attackAimRef.current.currX - attackAimRef.current.startX;
             const dy = attackAimRef.current.currY - attackAimRef.current.startY;
             if (Math.hypot(dx, dy) > 7) {
-              const ang = Math.atan2(dy, dx);
-              stream.aimAngle = ang;
-              wizard.facingAngle = ang;
+              const rawAng = Math.atan2(dy, dx);
+              const tmWheel = g.tilemap?.puzzleWheel;
+              const target = findNearestCombatTarget(wizard, enemies, stream.type, tmWheel, 550, rawAng, Math.PI * 0.45);
+              const finalAng = target ? target.angle : rawAng;
+              stream.aimAngle = finalAng;
+              wizard.facingAngle = finalAng;
+              if (target) stream.lockedEnemyId = target.id;
             }
           } else if (mousePosRef.current.active) {
             const dx = mousePosRef.current.x - wizard.x;
@@ -4804,7 +4950,35 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               wizard.facingAngle = ang;
             }
           } else {
-            stream.aimAngle = wizard.facingAngle;
+            // Auto-aim continuo: Mantener seguimiento del objetivo bloqueado o buscar el objetivo vivo más cercano
+            const tmWheel = g.tilemap?.puzzleWheel;
+            let currentTarget: CombatTargetInfo | null = null;
+            if (stream.lockedEnemyId) {
+              if (stream.lockedEnemyId === 'puzzle_wheel' && stream.type === 'ice' && tmWheel && !tmWheel.isCompleted) {
+                const wDist = Math.hypot(tmWheel.x - wizard.x, tmWheel.y - wizard.y);
+                if (wDist <= 550) {
+                  currentTarget = { x: tmWheel.x, y: tmWheel.y, angle: Math.atan2(tmWheel.y - wizard.y, tmWheel.x - wizard.x), dist: wDist, id: 'puzzle_wheel' };
+                }
+              } else {
+                const lockedEnemy = enemies.find((e) => e.id === stream.lockedEnemyId && e.hp > 0);
+                if (lockedEnemy) {
+                  const eDist = Math.hypot(lockedEnemy.x - wizard.x, lockedEnemy.y - wizard.y);
+                  if (eDist <= 550) {
+                    currentTarget = { x: lockedEnemy.x, y: lockedEnemy.y, angle: Math.atan2(lockedEnemy.y - wizard.y, lockedEnemy.x - wizard.x), dist: eDist, id: lockedEnemy.id };
+                  }
+                }
+              }
+            }
+
+            const target = currentTarget || findNearestCombatTarget(wizard, enemies, stream.type, tmWheel, 550);
+            if (target) {
+              stream.aimAngle = target.angle;
+              wizard.facingAngle = target.angle;
+              stream.lockedEnemyId = target.id;
+            } else {
+              stream.aimAngle = wizard.facingAngle;
+              stream.lockedEnemyId = null;
+            }
           }
 
           // B. Detección de Colisión Cónica y Daño Periódico Multi-Objetivo
