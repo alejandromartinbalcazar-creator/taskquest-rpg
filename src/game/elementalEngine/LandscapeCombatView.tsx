@@ -52,6 +52,7 @@ import {
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
+import { audioManager } from '../../services/AudioManager';
 import {
   TerrainManager,
   checkCircleCollision,
@@ -403,7 +404,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [currentHp, setCurrentHp] = useState(player.currentHp);
   const [maxHp, setMaxHp] = useState(player.maxHp);
   const [elementQueue, setElementQueue] = useState<ElementType[]>([]);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => audioManager.isMuted());
   const [isDefeated, setIsDefeated] = useState(false);
   const [isVictorious, setIsVictorious] = useState(false);
   const [isPortraitWarning, setIsPortraitWarning] = useState(false);
@@ -646,7 +647,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setMaxHp(player.maxHp);
     setRoomBanner(DUNGEON_ROOMS[0].title);
     setTimeout(() => setRoomBanner(null), 3000);
-  }, [player.currentHp, player.maxHp]);
+
+    // Iniciar atmósfera y paisaje sonoro procedural
+    audioManager.startAmbient(currentRoom.roomType.startsWith('boss_') ? 'boss' : 'exploration');
+
+    return () => {
+      audioManager.stopAmbient();
+      audioManager.stopCharge();
+    };
+  }, [currentRoom.roomType, player.currentHp, player.maxHp]);
 
   // Manejo de derrota y reaparición en el último punto de control (400ms fade -> 100% HP -> 1.5s i-frames)
   const triggerPlayerDefeatAndRespawn = useCallback(() => {
@@ -660,6 +669,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.channeledStream.active = false;
     wizard.isDashing = false;
     wizard.isCharging = false;
+    audioManager.stopCharge();
     wizard.isRespawning = true;
     wizard.respawnFadeTimer = 0.4;
 
@@ -882,6 +892,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       setCurrentRoomIndex(nextIndex);
       setRoomBanner(nextRoom.title);
       setTimeout(() => setRoomBanner(null), 3500);
+
+      // Conmutar el modo de música procedural según el tipo de sala
+      const isBossRoom = nextRoom?.roomType ? nextRoom.roomType.startsWith('boss_') : false;
+      audioManager.startAmbient(isBossRoom ? 'boss' : 'exploration');
     },
     [floor.enemy.expReward, floor.enemy.goldReward, floor.floorNumber, onVictory]
   );
@@ -920,6 +934,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     if (wizard.dashCooldown > 0 || wizard.isDashing) return;
 
     stopChanneledAttack();
+    if (wizard.isCharging) {
+      wizard.isCharging = false;
+      audioManager.stopCharge();
+    }
     elementalSound.playDash();
     wizard.isDashing = true;
     wizard.dashTimer = 11;
@@ -3387,9 +3405,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeType = cType;
     wizard.chargeSoundPlayed = false;
     setIsChargingUi(true);
-    if (activeRecipe.id !== 'lightning_storm') {
-      elementalSound.playChargeStart();
-    }
+    audioManager.startCharge();
   }, [activeRecipe.elements, activeRecipe.id, getEffectiveCooldown, handleAttack, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
@@ -3410,6 +3426,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     wizard.chargeRatio = 0;
     setIsChargingUi(false);
     setChargeVisualRatio(0);
+    if (wasCharged) {
+      audioManager.playChargeRelease();
+    } else {
+      audioManager.stopCharge();
+    }
     handleAttack(wasCharged, finalRatio);
   }, [activeRecipe.id, handleAttack, player.unlockedMilestones, stopChanneledAttack]);
 
@@ -3823,6 +3844,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const maxChargeTime = baseChargeTime * chargeSpeedMult;
         const elapsed = Date.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
+        audioManager.updateCharge(wizard.chargeRatio);
 
         // Zumbido eléctrico progresivo y partículas hacia el báculo para Sobrecarga Voltaica
         if (isVoltaic) {
@@ -10200,6 +10222,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               });
             }
           }
+          audioManager.playMonsterDeath();
           g.enemyManager.totalKills++;
           enemies.splice(i, 1);
         }
@@ -10352,11 +10375,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         <div className="flex items-center gap-1.5 pointer-events-auto">
           <button
             onClick={() => {
-              const muted = !isMuted;
-              setIsMuted(muted);
-              elementalSound.setMuted(muted);
+              const nextMuted = audioManager.toggleMute();
+              setIsMuted(nextMuted);
             }}
             className="p-2 bg-[#121422]/85 backdrop-blur-md text-slate-300 hover:text-white rounded-xl border border-slate-700/60 transition"
+            title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
           >
             {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>

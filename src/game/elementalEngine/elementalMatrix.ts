@@ -1,4 +1,5 @@
 import { ElementType, GameEnemy, FloatingText } from './types';
+import { audioManager } from '../../services/AudioManager';
 
 export interface DamageResult {
   finalDamage: number;
@@ -442,6 +443,10 @@ export function applyDamageToEnemy(
   attackSourceY?: number
 ): DamageResult {
   const res = calculateElementalDamage(enemy, rawDamage, elementType, attackSourceX, attackSourceY);
+
+  if (res.specialReaction === 'shield_broken') {
+    audioManager.playBossShieldBreak();
+  }
 
   if (res.isImmune || res.isAbsorbed) {
     enemy.hitFlash = 4;

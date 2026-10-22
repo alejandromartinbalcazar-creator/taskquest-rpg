@@ -1,26 +1,30 @@
-// Sintetizador Web Audio API Procedural de Alta Fidelidad para Magia Elemental
+﻿// Sintetizador Web Audio API Procedural de Alta Fidelidad para Magia Elemental
+import { audioManager } from '../../services/AudioManager';
 
 class ElementalSoundEngine {
   private ctx: AudioContext | null = null;
-  private isMuted = false;
+
+  public get isMuted(): boolean {
+    return audioManager.isMuted();
+  }
+
+  public set isMuted(val: boolean) {
+    audioManager.setMuted(val);
+  }
 
   private initCtx() {
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
+    this.ctx = audioManager.getContext();
+  }
+
+  private get dest(): AudioNode {
+    return audioManager.getSfxDestination() || (this.ctx ? this.dest : audioManager.ensureContext()!.destination);
   }
 
   public setMuted(muted: boolean) {
-    this.isMuted = muted;
+    audioManager.setMuted(muted);
   }
 
-  // Toque táctil al seleccionar un elemento
+  // Toque tÃ¡ctil al seleccionar un elemento
   public playElementSelect(element: 'fire' | 'lightning' | 'ice' | 'earth') {
     if (this.isMuted) return;
     this.initCtx();
@@ -45,12 +49,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.1);
   }
 
-  // Hechizo Básico / Chispa
+  // Hechizo BÃ¡sico / Chispa
   public playBasicSpark() {
     if (this.isMuted) return;
     this.initCtx();
@@ -68,111 +72,39 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.12);
   }
 
-  // Fuego Puro / Proyectil Ígneo
+  // Fuego Puro / Proyectil Ãgneo (ModulaciÃ³n por filtro pasabanda + sub-bajo senoidal)
   public playFireShot() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const now = this.ctx.currentTime;
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.linearRampToValueAtTime(90, now + 0.22);
-
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.22);
+    audioManager.playFireShot();
   }
 
-  // Rayo Puro / Descarga Voltaica
+  // Rayo Puro / Descarga Voltaica (Diente de sierra FM rÃ¡pida + crackle)
   public playLightningBolt() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const now = this.ctx.currentTime;
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(950, now);
-    osc.frequency.exponentialRampToValueAtTime(140, now + 0.16);
-
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.16);
+    audioManager.playLightningBolt();
   }
 
-  // Hielo Puro / Fragmento Glacial
+  // Hielo Puro / Fragmento Glacial (InarmÃ³nicos senoidales cristalinos)
   public playIceShard() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const now = this.ctx.currentTime;
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now);
-    osc.frequency.exponentialRampToValueAtTime(440, now + 0.18);
-
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.18);
+    audioManager.playIceShard();
   }
 
-  // Tierra Pura / Peñasco
+  // Tierra Pura / PeÃ±asco (Sub-grave triangular + ruido sÃ­smico filtrado)
   public playEarthToss() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const now = this.ctx.currentTime;
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(130, now);
-    osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
-
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.25);
+    audioManager.playEarthToss();
   }
 
-  // 1. Choque Térmico (Explosión + Siseo de Vapor)
+  // 1. Choque TÃ©rmico (ExplosiÃ³n + Siseo de Vapor)
   public playThermalShock() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
-    // Golpe sónico grave
+    // Golpe sÃ³nico grave
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
@@ -181,7 +113,7 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.28, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.3);
 
@@ -194,12 +126,12 @@ class ElementalSoundEngine {
     steamGain.gain.setValueAtTime(0.12, now + 0.05);
     steamGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     steam.connect(steamGain);
-    steamGain.connect(this.ctx.destination);
+    steamGain.connect(this.dest);
     steam.start(now + 0.05);
     steam.stop(now + 0.35);
   }
 
-  // 2. Erupción de Magma (Fisura Subterránea)
+  // 2. ErupciÃ³n de Magma (Fisura SubterrÃ¡nea)
   public playMagmaEruption() {
     if (this.isMuted) return;
     this.initCtx();
@@ -218,12 +150,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.4);
   }
 
-  // 3. Campo de Cristales Energizados (Resonancia Eléctrica)
+  // 3. Campo de Cristales Energizados (Resonancia ElÃ©ctrica)
   public playCrystalField() {
     if (this.isMuted) return;
     this.initCtx();
@@ -247,7 +179,7 @@ class ElementalSoundEngine {
     });
   }
 
-  // 4. Tormenta Criogénica
+  // 4. Tormenta CriogÃ©nica
   public playCryoStorm() {
     if (this.isMuted) return;
     this.initCtx();
@@ -266,12 +198,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.35);
   }
 
-  // 5. Prisión de Permafrost
+  // 5. PrisiÃ³n de Permafrost
   public playPermafrostPrison() {
     if (this.isMuted) return;
     this.initCtx();
@@ -289,7 +221,7 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.3);
   }
@@ -306,7 +238,7 @@ class ElementalSoundEngine {
     if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
-    // Ráfaga armónica descendente
+    // RÃ¡faga armÃ³nica descendente
     [120, 240, 360, 480].forEach((freq) => {
       const osc = this.ctx!.createOscillator();
       const gain = this.ctx!.createGain();
@@ -325,7 +257,7 @@ class ElementalSoundEngine {
     });
   }
 
-  // Daño al enemigo
+  // DaÃ±o al enemigo
   public playEnemyHit() {
     if (this.isMuted) return;
     this.initCtx();
@@ -343,32 +275,14 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.08);
   }
 
-  // Daño al jugador
+  // DaÃ±o al jugador (Thud sordo y contundente con caÃ­da de tono)
   public playPlayerHurt() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const now = this.ctx.currentTime;
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, now);
-    osc.frequency.linearRampToValueAtTime(60, now + 0.2);
-
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.2);
+    audioManager.playPlayerHurt();
   }
 
   // Victoria
@@ -448,7 +362,7 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.35, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.85);
   }
@@ -467,17 +381,17 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.4, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.45);
   }
 
-  // Ruptura de Permafrost (Fragmentos de Hielo y Roca - Delegación)
+  // Ruptura de Permafrost (Fragmentos de Hielo y Roca - DelegaciÃ³n)
   public playLegacyPermafrostShatter() {
     this.playPermafrostShatter(false);
   }
 
-  // Aliento de Fuego del Dragón
+  // Aliento de Fuego del DragÃ³n
   public playDragonBreath() {
     if (this.isMuted) return;
     this.initCtx();
@@ -491,12 +405,12 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.3, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.65);
   }
 
-  // Esquiva Rápida (Dash / Glide)
+  // Esquiva RÃ¡pida (Dash / Glide)
   public playDash() {
     if (this.isMuted) return;
     this.initCtx();
@@ -510,7 +424,7 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.24, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.18);
   }
@@ -529,54 +443,22 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.12, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.08);
   }
 
-  // Inicio de Carga de Hechizo
+  // Inicio de Carga de Hechizo (Hold continuo con aceleraciÃ³n de LFO)
   public playChargeStart() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(260, now);
-    osc.frequency.exponentialRampToValueAtTime(520, now + 0.35);
-    gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.35);
+    audioManager.startCharge();
   }
 
-  // Hechizo Totalmente Cargado (Campana / Resonancia Mágica)
+  // Hechizo Totalmente Cargado (Destello acÃºstico de liberaciÃ³n / flash)
   public playChargeReady() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-
-    // Tono alto armónico brillante
-    [659.25, 987.77].forEach((freq, idx) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.04);
-      gain.gain.setValueAtTime(0.18, now + idx * 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.28);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now + idx * 0.04);
-      osc.stop(now + idx * 0.04 + 0.28);
-    });
+    audioManager.playChargeRelease();
   }
 
-  // Explosión de Área / Detonación Contundente
+  // ExplosiÃ³n de Ãrea / DetonaciÃ³n Contundente
   public playAoEExplosion() {
     if (this.isMuted) return;
     this.initCtx();
@@ -590,7 +472,7 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.35, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.32);
   }
@@ -622,11 +504,11 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.12);
 
-    // Tintineo de cristal gélido
+    // Tintineo de cristal gÃ©lido
     const iceOsc = this.ctx.createOscillator();
     const iceGain = this.ctx.createGain();
     iceOsc.type = 'sine';
@@ -634,12 +516,12 @@ class ElementalSoundEngine {
     iceGain.gain.setValueAtTime(0.06, now);
     iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     iceOsc.connect(iceGain);
-    iceGain.connect(this.ctx.destination);
+    iceGain.connect(this.dest);
     iceOsc.start(now);
     iceOsc.stop(now + 0.08);
   }
 
-  // Éxito al 100% del Puzle de la Rueda (Acorde triunfal de cristales de hielo)
+  // Ã‰xito al 100% del Puzle de la Rueda (Acorde triunfal de cristales de hielo)
   public playWheelComplete() {
     if (this.isMuted) return;
     this.initCtx();
@@ -656,7 +538,7 @@ class ElementalSoundEngine {
       gain.gain.setValueAtTime(0.2, now + idx * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.45);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
       osc.start(now + idx * 0.06);
       osc.stop(now + idx * 0.06 + 0.45);
     });
@@ -678,11 +560,11 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.3, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.6);
 
-    // Chirrido metálico de rejas
+    // Chirrido metÃ¡lico de rejas
     const metalOsc = this.ctx.createOscillator();
     const metalGain = this.ctx.createGain();
     metalOsc.type = 'sawtooth';
@@ -691,12 +573,12 @@ class ElementalSoundEngine {
     metalGain.gain.setValueAtTime(0.12, now + 0.05);
     metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
     metalOsc.connect(metalGain);
-    metalGain.connect(this.ctx.destination);
+    metalGain.connect(this.dest);
     metalOsc.start(now + 0.05);
     metalOsc.stop(now + 0.55);
   }
 
-  // GESTIÓN DE SONIDO CONTINUO PARA ATAQUES CANALIZADOS (FUEGO Y HIELO)
+  // GESTIÃ“N DE SONIDO CONTINUO PARA ATAQUES CANALIZADOS (FUEGO Y HIELO)
   private activeStreamType: 'fire' | 'ice' | null = null;
   private streamOsc1: OscillatorNode | null = null;
   private streamOsc2: OscillatorNode | null = null;
@@ -739,7 +621,7 @@ class ElementalSoundEngine {
       this.streamOsc1.start(now);
       this.streamOsc2.start(now);
     } else {
-      // Silbido criogénico de ventisca y zumbido helado
+      // Silbido criogÃ©nico de ventisca y zumbido helado
       this.streamFilter = this.ctx.createBiquadFilter();
       this.streamFilter.type = 'bandpass';
       this.streamFilter.frequency.setValueAtTime(780, now);
@@ -763,7 +645,7 @@ class ElementalSoundEngine {
       this.streamOsc2.start(now);
     }
 
-    this.streamGain.connect(this.ctx.destination);
+    this.streamGain.connect(this.dest);
   }
 
   public stopContinuousStream() {
@@ -800,7 +682,7 @@ class ElementalSoundEngine {
     this.streamFilter = null;
   }
 
-  // Golpe periódico de daño del chorro
+  // Golpe periÃ³dico de daÃ±o del chorro
   public playContinuousTick(type: 'fire' | 'ice') {
     if (this.isMuted) return;
     this.initCtx();
@@ -824,14 +706,14 @@ class ElementalSoundEngine {
     }
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.05);
   }
 
   // --- CORONA INFERNAL (FUEGO + FUEGO) ---
 
-  // 1. Fase A: Ignición y acumulación de energía ígnea
+  // 1. Fase A: IgniciÃ³n y acumulaciÃ³n de energÃ­a Ã­gnea
   public playInfernalCrownIgnition() {
     if (this.isMuted) return;
     this.initCtx();
@@ -855,12 +737,12 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.36);
   }
 
-  // 2. Fase B: Expansión violenta de la onda de fuego
+  // 2. Fase B: ExpansiÃ³n violenta de la onda de fuego
   public playInfernalCrownExpand() {
     if (this.isMuted) return;
     this.initCtx();
@@ -877,19 +759,19 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.4);
   }
 
-  // 3. Fase D: Detonación Final Contundente (Impacto con sub-graves masivos)
+  // 3. Fase D: DetonaciÃ³n Final Contundente (Impacto con sub-graves masivos)
   public playInfernalCrownDetonation() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bajo sísmico profundo
+    // Sub-bajo sÃ­smico profundo
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
@@ -900,7 +782,7 @@ class ElementalSoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
 
     subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     subOsc.start(now);
     subOsc.stop(now + 0.55);
 
@@ -915,14 +797,14 @@ class ElementalSoundEngine {
     blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
 
     blastOsc.connect(blastGain);
-    blastGain.connect(this.ctx.destination);
+    blastGain.connect(this.dest);
     blastOsc.start(now);
     blastOsc.stop(now + 0.42);
   }
 
   // --- SOBRECARGA VOLTAICA (RAYO + RAYO) ---
 
-  // 1. Zumbido progresivo de acumulación eléctrica
+  // 1. Zumbido progresivo de acumulaciÃ³n elÃ©ctrica
   public playVoltaicChargeHum(ratio: number) {
     if (this.isMuted) return;
     this.initCtx();
@@ -948,20 +830,20 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
 
     osc.start(now);
     osc.stop(now + 0.08);
   }
 
-  // 2. Resonancia y chispazo de Carga Máxima alcanzada
+  // 2. Resonancia y chispazo de Carga MÃ¡xima alcanzada
   public playVoltaicMaxChargeReady() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Tono armónico agudo de sobrecarga
+    // Tono armÃ³nico agudo de sobrecarga
     const osc1 = this.ctx.createOscillator();
     const gain1 = this.ctx.createGain();
     osc1.type = 'sine';
@@ -970,11 +852,11 @@ class ElementalSoundEngine {
     gain1.gain.setValueAtTime(0.24, now);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc1.connect(gain1);
-    gain1.connect(this.ctx.destination);
+    gain1.connect(this.dest);
     osc1.start(now);
     osc1.stop(now + 0.22);
 
-    // Chispazo de arco estático
+    // Chispazo de arco estÃ¡tico
     const osc2 = this.ctx.createOscillator();
     const gain2 = this.ctx.createGain();
     osc2.type = 'square';
@@ -983,12 +865,12 @@ class ElementalSoundEngine {
     gain2.gain.setValueAtTime(0.18, now);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     osc2.connect(gain2);
-    gain2.connect(this.ctx.destination);
+    gain2.connect(this.dest);
     osc2.start(now);
     osc2.stop(now + 0.12);
   }
 
-  // 3. Liberación de la descarga principal
+  // 3. LiberaciÃ³n de la descarga principal
   public playVoltaicDischarge(isMaxCharge: boolean) {
     if (this.isMuted) return;
     this.initCtx();
@@ -1005,7 +887,7 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + (isMaxCharge ? 0.28 : 0.18));
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + (isMaxCharge ? 0.28 : 0.18));
   }
@@ -1020,7 +902,7 @@ class ElementalSoundEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
-    // Escala ascendente para dar sensación de salto encadenado rápido
+    // Escala ascendente para dar sensaciÃ³n de salto encadenado rÃ¡pido
     const baseFreq = 650 + (jumpIndex % 6) * 120;
     osc.frequency.setValueAtTime(baseFreq, now);
     osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, now + 0.1);
@@ -1029,12 +911,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.1);
   }
 
-  // 5. Trueno colosal celestial (Impacto de carga máxima y remate final)
+  // 5. Trueno colosal celestial (Impacto de carga mÃ¡xima y remate final)
   public playVoltaicThunderFinish() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1050,11 +932,11 @@ class ElementalSoundEngine {
     subGain.gain.setValueAtTime(0.42, now);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     subOsc.start(now);
     subOsc.stop(now + 0.45);
 
-    // Chasis de distorsión eléctrica
+    // Chasis de distorsiÃ³n elÃ©ctrica
     const crackOsc = this.ctx.createOscillator();
     const crackGain = this.ctx.createGain();
     crackOsc.type = 'sawtooth';
@@ -1063,23 +945,23 @@ class ElementalSoundEngine {
     crackGain.gain.setValueAtTime(0.3, now);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     crackOsc.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crackOsc.start(now);
     crackOsc.stop(now + 0.35);
   }
 
   // ==========================================
-  // ERUPCIÓN GLACIAL (HIELO + HIELO)
+  // ERUPCIÃ“N GLACIAL (HIELO + HIELO)
   // ==========================================
 
-  // 1. Invocación / Desate de la falla glacial
+  // 1. InvocaciÃ³n / Desate de la falla glacial
   public playGlacialEruptionCast(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Rugido subterráneo de permafrost fracturado
+    // Rugido subterrÃ¡neo de permafrost fracturado
     const rumbleOsc = this.ctx.createOscillator();
     const rumbleGain = this.ctx.createGain();
     rumbleOsc.type = 'triangle';
@@ -1090,11 +972,11 @@ class ElementalSoundEngine {
     rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
     rumbleOsc.connect(rumbleGain);
-    rumbleGain.connect(this.ctx.destination);
+    rumbleGain.connect(this.dest);
     rumbleOsc.start(now);
     rumbleOsc.stop(now + 0.38);
 
-    // Silbido de viento polar gélido
+    // Silbido de viento polar gÃ©lido
     const windOsc = this.ctx.createOscillator();
     const windGain = this.ctx.createGain();
     windOsc.type = 'sine';
@@ -1106,19 +988,19 @@ class ElementalSoundEngine {
     windGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
     windOsc.connect(windGain);
-    windGain.connect(this.ctx.destination);
+    windGain.connect(this.dest);
     windOsc.start(now);
     windOsc.stop(now + 0.3);
   }
 
-  // 2. Ruptura y emersión de cada púa de hielo gigante (escalonado)
+  // 2. Ruptura y emersiÃ³n de cada pÃºa de hielo gigante (escalonado)
   public playGlacialSpikeErupt(index: number) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Golpe sordo de tierra rompiéndose
+    // Golpe sordo de tierra rompiÃ©ndose
     const thudOsc = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thudOsc.type = 'triangle';
@@ -1129,7 +1011,7 @@ class ElementalSoundEngine {
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
     thudOsc.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thudOsc.start(now);
     thudOsc.stop(now + 0.14);
 
@@ -1145,12 +1027,12 @@ class ElementalSoundEngine {
     crystalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
     crystalOsc.connect(crystalGain);
-    crystalGain.connect(this.ctx.destination);
+    crystalGain.connect(this.dest);
     crystalOsc.start(now);
     crystalOsc.stop(now + 0.12);
   }
 
-  // 3. Impacto de congelación instantánea (bloque de hielo sólido)
+  // 3. Impacto de congelaciÃ³n instantÃ¡nea (bloque de hielo sÃ³lido)
   public playGlacialFreezeImpact() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1167,12 +1049,12 @@ class ElementalSoundEngine {
     snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
 
     snapOsc.connect(snapGain);
-    snapGain.connect(this.ctx.destination);
+    snapGain.connect(this.dest);
     snapOsc.start(now);
     snapOsc.stop(now + 0.16);
   }
 
-  // 4. Estallido y fragmentación de las púas glaciales (Shatter final)
+  // 4. Estallido y fragmentaciÃ³n de las pÃºas glaciales (Shatter final)
   public playGlacialShatter() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1198,10 +1080,10 @@ class ElementalSoundEngine {
   }
 
   // ==========================================
-  // PUÑO TECTÓNICO (TIERRA + TIERRA)
+  // PUÃ‘O TECTÃ“NICO (TIERRA + TIERRA)
   // ==========================================
 
-  // 1. Advertencia y rugido sísmico subterráneo
+  // 1. Advertencia y rugido sÃ­smico subterrÃ¡neo
   public playTectonicRumble(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
@@ -1219,12 +1101,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.24);
   }
 
-  // 2. Emergencia violenta y golpe ascendente (Uppercut telúrico)
+  // 2. Emergencia violenta y golpe ascendente (Uppercut telÃºrico)
   public playTectonicFistUppercut(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
@@ -1242,11 +1124,11 @@ class ElementalSoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     subOsc.start(now);
     subOsc.stop(now + 0.35);
 
-    // Ruptura de roca sólida y empuje ascendente
+    // Ruptura de roca sÃ³lida y empuje ascendente
     const crackOsc = this.ctx.createOscillator();
     const crackGain = this.ctx.createGain();
     crackOsc.type = 'square';
@@ -1257,12 +1139,12 @@ class ElementalSoundEngine {
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
     crackOsc.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crackOsc.start(now);
     crackOsc.stop(now + 0.22);
   }
 
-  // 3. Colapso del puño en escombros (Ápice y desprendimiento)
+  // 3. Colapso del puÃ±o en escombros (Ãpice y desprendimiento)
   public playTectonicCollapse() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1303,23 +1185,23 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.2);
   }
 
   // ==========================================
-  // RAYO CRIOGÉNICO (HIELO + RAYO)
+  // RAYO CRIOGÃ‰NICO (HIELO + RAYO)
   // ==========================================
 
-  // 1. Disparo / Ignición del haz plasma-gélido
+  // 1. Disparo / IgniciÃ³n del haz plasma-gÃ©lido
   public playCryoBeamStart(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Chispa eléctrica inicial aguda
+    // Chispa elÃ©ctrica inicial aguda
     const oscZ = this.ctx.createOscillator();
     const gainZ = this.ctx.createGain();
     oscZ.type = 'sawtooth';
@@ -1330,11 +1212,11 @@ class ElementalSoundEngine {
     gainZ.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
 
     oscZ.connect(gainZ);
-    gainZ.connect(this.ctx.destination);
+    gainZ.connect(this.dest);
     oscZ.start(now);
     oscZ.stop(now + 0.16);
 
-    // Silbido gélido de viento polar
+    // Silbido gÃ©lido de viento polar
     const oscW = this.ctx.createOscillator();
     const gainW = this.ctx.createGain();
     oscW.type = 'sine';
@@ -1345,19 +1227,19 @@ class ElementalSoundEngine {
     gainW.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
     oscW.connect(gainW);
-    gainW.connect(this.ctx.destination);
+    gainW.connect(this.dest);
     oscW.start(now);
     oscW.stop(now + 0.2);
   }
 
-  // 2. Pulso / Zumbido continuo durante la emisión (hielo + plasma voltaico)
+  // 2. Pulso / Zumbido continuo durante la emisiÃ³n (hielo + plasma voltaico)
   public playCryoBeamHum(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Zumbido eléctrico
+    // Zumbido elÃ©ctrico
     const oscE = this.ctx.createOscillator();
     const gainE = this.ctx.createGain();
     oscE.type = 'sawtooth';
@@ -1368,11 +1250,11 @@ class ElementalSoundEngine {
     gainE.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
     oscE.connect(gainE);
-    gainE.connect(this.ctx.destination);
+    gainE.connect(this.dest);
     oscE.start(now);
     oscE.stop(now + 0.09);
 
-    // Resonancia de cristal gélido
+    // Resonancia de cristal gÃ©lido
     const oscI = this.ctx.createOscillator();
     const gainI = this.ctx.createGain();
     oscI.type = 'triangle';
@@ -1383,12 +1265,12 @@ class ElementalSoundEngine {
     gainI.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
     oscI.connect(gainI);
-    gainI.connect(this.ctx.destination);
+    gainI.connect(this.dest);
     oscI.start(now);
     oscI.stop(now + 0.08);
   }
 
-  // 3. Salto de arco eléctrico a enemigo adyacente
+  // 3. Salto de arco elÃ©ctrico a enemigo adyacente
   public playCryoBeamArcJump() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1405,12 +1287,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.07);
   }
 
-  // 4. Detención y disipación del haz
+  // 4. DetenciÃ³n y disipaciÃ³n del haz
   public playCryoBeamEnd() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1427,16 +1309,16 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.14);
   }
 
   // =========================================================================
-  // BOMBARDEO VOLCÁNICO (FUEGO + TIERRA: RUGIDO SUBTERRÁNEO, COLUMNAS Y BOMBAS)
+  // BOMBARDEO VOLCÃNICO (FUEGO + TIERRA: RUGIDO SUBTERRÃNEO, COLUMNAS Y BOMBAS)
   // =========================================================================
 
-  // 1. Rugido sísmico y fractura magmática subterránea
+  // 1. Rugido sÃ­smico y fractura magmÃ¡tica subterrÃ¡nea
   public playVolcanicRumble(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
@@ -1461,11 +1343,11 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.38);
 
-    // Segundo oscilador con modulación de vibración para emular crujido de tierra
+    // Segundo oscilador con modulaciÃ³n de vibraciÃ³n para emular crujido de tierra
     const osc2 = this.ctx.createOscillator();
     const gain2 = this.ctx.createGain();
     osc2.type = 'sawtooth';
@@ -1481,12 +1363,12 @@ class ElementalSoundEngine {
 
     osc2.connect(filter2);
     filter2.connect(gain2);
-    gain2.connect(this.ctx.destination);
+    gain2.connect(this.dest);
     osc2.start(now);
     osc2.stop(now + 0.30);
   }
 
-  // 2. Erupción violenta de columna de magma y géiser de fuego
+  // 2. ErupciÃ³n violenta de columna de magma y gÃ©iser de fuego
   public playMagmaGeyser() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1511,7 +1393,7 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.28);
 
@@ -1536,7 +1418,7 @@ class ElementalSoundEngine {
 
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + 0.24);
   }
@@ -1558,11 +1440,11 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.16);
 
-    // Pequeño chisporroteo viscoso
+    // PequeÃ±o chisporroteo viscoso
     const bufferSize = this.ctx.sampleRate * 0.12;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -1577,23 +1459,23 @@ class ElementalSoundEngine {
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
     noise.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + 0.12);
   }
 
   // =========================================================================
-  // VÓRTICE DE CHOQUE TÉRMICO (FUEGO + HIELO: EXPANSIÓN DE VAPOR Y DETONACIÓN)
+  // VÃ“RTICE DE CHOQUE TÃ‰RMICO (FUEGO + HIELO: EXPANSIÃ“N DE VAPOR Y DETONACIÃ“N)
   // =========================================================================
 
-  // 1. Expansión explosiva de la onda de vapor y choque térmico
+  // 1. ExpansiÃ³n explosiva de la onda de vapor y choque tÃ©rmico
   public playThermalShockBlast(isCharged: boolean) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // A. Golpe sónico grave de descompresión
+    // A. Golpe sÃ³nico grave de descompresiÃ³n
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
@@ -1604,11 +1486,11 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.32);
 
-    // B. Ráfaga expansiva de vapor sibilante a alta presión (White noise con bandpass dinámico)
+    // B. RÃ¡faga expansiva de vapor sibilante a alta presiÃ³n (White noise con bandpass dinÃ¡mico)
     const bufferSize = Math.floor(this.ctx.sampleRate * 0.34);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -1630,12 +1512,12 @@ class ElementalSoundEngine {
 
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + 0.34);
   }
 
-  // 2. Fractura reactiva y detonación crítica sobre enemigo congelado
+  // 2. Fractura reactiva y detonaciÃ³n crÃ­tica sobre enemigo congelado
   public playThermalShatterCrit() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1653,11 +1535,11 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.18);
 
-    // Detonación sónica por vaporización súbita interna
+    // DetonaciÃ³n sÃ³nica por vaporizaciÃ³n sÃºbita interna
     const pop = this.ctx.createOscillator();
     const popGain = this.ctx.createGain();
     pop.type = 'sine';
@@ -1668,7 +1550,7 @@ class ElementalSoundEngine {
     popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
     pop.connect(popGain);
-    popGain.connect(this.ctx.destination);
+    popGain.connect(this.dest);
     pop.start(now);
     pop.stop(now + 0.15);
   }
@@ -1677,14 +1559,14 @@ class ElementalSoundEngine {
   // JAULA DE PILARES CONDUCTORES (RAYO + TIERRA)
   // =========================================================================
 
-  // 1. Erupción telúrica de monolitos conductores y activación de cuarzo resonante
+  // 1. ErupciÃ³n telÃºrica de monolitos conductores y activaciÃ³n de cuarzo resonante
   public playConductivePillarErupt(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-golpe telúrico de impacto en el suelo
+    // Sub-golpe telÃºrico de impacto en el suelo
     const thud = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thud.type = 'triangle';
@@ -1695,11 +1577,11 @@ class ElementalSoundEngine {
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
 
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + 0.28);
 
-    // Resonancia de cuarzo piezoeléctrico escalonada
+    // Resonancia de cuarzo piezoelÃ©ctrico escalonada
     [480, 720, 960].forEach((freq, idx) => {
       const delay = idx * 0.045;
       const osc = this.ctx!.createOscillator();
@@ -1718,14 +1600,14 @@ class ElementalSoundEngine {
     });
   }
 
-  // 2. Chispazo / descarga de alta tensión al cruzar la valla electrificada
+  // 2. Chispazo / descarga de alta tensiÃ³n al cruzar la valla electrificada
   public playConductiveFenceZap() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Chispa rápida cortante tipo taser/arco voltaico
+    // Chispa rÃ¡pida cortante tipo taser/arco voltaico
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
@@ -1736,19 +1618,19 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.09);
   }
 
-  // 3. Implosión final de sobrecarga y colapso gravitatorio/eléctrico
+  // 3. ImplosiÃ³n final de sobrecarga y colapso gravitatorio/elÃ©ctrico
   public playConductiveCageImplosion(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Descenso y compresión rápida de frecuencia inward
+    // Descenso y compresiÃ³n rÃ¡pida de frecuencia inward
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
@@ -1759,11 +1641,11 @@ class ElementalSoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
 
     subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     subOsc.start(now);
     subOsc.stop(now + 0.26);
 
-    // Crujido eléctrico y fractura de roca en el instante del colapso
+    // Crujido elÃ©ctrico y fractura de roca en el instante del colapso
     const crack = this.ctx.createOscillator();
     const crackGain = this.ctx.createGain();
     crack.type = 'sawtooth';
@@ -1774,23 +1656,23 @@ class ElementalSoundEngine {
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
     crack.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crack.start(now + 0.04);
     crack.stop(now + 0.22);
   }
 
   // =========================================================================
-  // PRISIÓN DE PERMAFROST (HIELO + TIERRA)
+  // PRISIÃ“N DE PERMAFROST (HIELO + TIERRA)
   // =========================================================================
 
-  // 1. Erupción telúrica de monolitos y cristalización de permafrost
+  // 1. ErupciÃ³n telÃºrica de monolitos y cristalizaciÃ³n de permafrost
   public playPermafrostErupt(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-golpe sísmico de emergencia de roca
+    // Sub-golpe sÃ­smico de emergencia de roca
     const thud = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thud.type = 'triangle';
@@ -1801,11 +1683,11 @@ class ElementalSoundEngine {
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
 
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + 0.26);
 
-    // Crujido agudo de congelación y permafrost
+    // Crujido agudo de congelaciÃ³n y permafrost
     const iceCrack = this.ctx.createOscillator();
     const iceGain = this.ctx.createGain();
     iceCrack.type = 'sawtooth';
@@ -1816,19 +1698,19 @@ class ElementalSoundEngine {
     iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
     iceCrack.connect(iceGain);
-    iceGain.connect(this.ctx.destination);
+    iceGain.connect(this.dest);
     iceCrack.start(now);
     iceCrack.stop(now + 0.2);
   }
 
-  // 2. Bloqueo e interceptación de proyectil contra el permafrost
+  // 2. Bloqueo e interceptaciÃ³n de proyectil contra el permafrost
   public playPermafrostBlock() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Golpe sordo de absorción
+    // Golpe sordo de absorciÃ³n
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
@@ -1839,7 +1721,7 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.1);
 
@@ -1854,12 +1736,12 @@ class ElementalSoundEngine {
     chinkGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
     chink.connect(chinkGain);
-    chinkGain.connect(this.ctx.destination);
+    chinkGain.connect(this.dest);
     chink.start(now);
     chink.stop(now + 0.08);
   }
 
-  // 3. Fragmentación explosiva y detonación de metralla de hielo y roca
+  // 3. FragmentaciÃ³n explosiva y detonaciÃ³n de metralla de hielo y roca
   public playPermafrostShatter(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
@@ -1877,11 +1759,11 @@ class ElementalSoundEngine {
     shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
     shatter.connect(shatterGain);
-    shatterGain.connect(this.ctx.destination);
+    shatterGain.connect(this.dest);
     shatter.start(now);
     shatter.stop(now + 0.22);
 
-    // Onda sónica de choque telúrica
+    // Onda sÃ³nica de choque telÃºrica
     const boom = this.ctx.createOscillator();
     const boomGain = this.ctx.createGain();
     boom.type = 'sine';
@@ -1892,7 +1774,7 @@ class ElementalSoundEngine {
     boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(now);
     boom.stop(now + 0.25);
   }
@@ -1908,7 +1790,7 @@ class ElementalSoundEngine {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Rugido de vórtice ígneo de aire caliente
+    // Rugido de vÃ³rtice Ã­gneo de aire caliente
     const whoosh = this.ctx.createOscillator();
     const whooshGain = this.ctx.createGain();
     whoosh.type = 'sawtooth';
@@ -1919,11 +1801,11 @@ class ElementalSoundEngine {
     whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     whoosh.connect(whooshGain);
-    whooshGain.connect(this.ctx.destination);
+    whooshGain.connect(this.dest);
     whoosh.start(now);
     whoosh.stop(now + 0.35);
 
-    // Zumbido eléctrico de alta frecuencia de plasma
+    // Zumbido elÃ©ctrico de alta frecuencia de plasma
     const zap = this.ctx.createOscillator();
     const zapGain = this.ctx.createGain();
     zap.type = 'sawtooth';
@@ -1934,12 +1816,12 @@ class ElementalSoundEngine {
     zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
 
     zap.connect(zapGain);
-    zapGain.connect(this.ctx.destination);
+    zapGain.connect(this.dest);
     zap.start(now);
     zap.stop(now + 0.28);
   }
 
-  // 2. Ionización y desintegración de proyectiles hostiles absorbidos
+  // 2. IonizaciÃ³n y desintegraciÃ³n de proyectiles hostiles absorbidos
   public playPlasmaDisintegrate() {
     if (this.isMuted) return;
     this.initCtx();
@@ -1956,19 +1838,19 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
     zap.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     zap.start(now);
     zap.stop(now + 0.09);
   }
 
-  // 3. Implosión y detonación terminal masiva de plasma
+  // 3. ImplosiÃ³n y detonaciÃ³n terminal masiva de plasma
   public playPlasmaTornadoDetonate(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bajo de implosión y compresión térmica
+    // Sub-bajo de implosiÃ³n y compresiÃ³n tÃ©rmica
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
@@ -1979,11 +1861,11 @@ class ElementalSoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
     subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     subOsc.start(now);
     subOsc.stop(now + 0.3);
 
-    // Explosión de plasma de alta tensión
+    // ExplosiÃ³n de plasma de alta tensiÃ³n
     const blast = this.ctx.createOscillator();
     const blastGain = this.ctx.createGain();
     blast.type = 'sawtooth';
@@ -1994,7 +1876,7 @@ class ElementalSoundEngine {
     blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
 
     blast.connect(blastGain);
-    blastGain.connect(this.ctx.destination);
+    blastGain.connect(this.dest);
     blast.start(now + 0.03);
     blast.stop(now + 0.28);
   }
@@ -2029,12 +1911,12 @@ class ElementalSoundEngine {
 
       noise.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
 
       noise.start(now);
       noise.stop(now + 0.16);
     } catch {
-      // Fallback con oscilador si buffers no están permitidos
+      // Fallback con oscilador si buffers no estÃ¡n permitidos
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
@@ -2043,20 +1925,20 @@ class ElementalSoundEngine {
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
       osc.start(now);
       osc.stop(now + 0.12);
     }
   }
 
-  // Triunfante disipación de la barrera de fuego (vapor profundo + campanada armónica)
+  // Triunfante disipaciÃ³n de la barrera de fuego (vapor profundo + campanada armÃ³nica)
   public playFireBarrierExtinguished() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // 1. Gran exhalación de vapor
+    // 1. Gran exhalaciÃ³n de vapor
     try {
       const bufferSize = Math.floor(this.ctx.sampleRate * 0.45);
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -2075,7 +1957,7 @@ class ElementalSoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
       noise.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
       noise.start(now);
       noise.stop(now + 0.45);
     } catch {
@@ -2094,13 +1976,13 @@ class ElementalSoundEngine {
       gain.gain.setValueAtTime(0.12, now + delay);
       gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.5);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
       osc.start(now + delay);
       osc.stop(now + delay + 0.5);
     });
   }
 
-  // Daño por quemadura al tocar físicamente la barrera de fuego
+  // DaÃ±o por quemadura al tocar fÃ­sicamente la barrera de fuego
   public playFireBurnHurt() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2117,20 +1999,20 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.1);
   }
 
-  // LLUVIA DEL INFIERNO (🔥🔥🔥)
-  // 1. Invocación cósmica y columna ígnea vertical
+  // LLUVIA DEL INFIERNO (ðŸ”¥ðŸ”¥ðŸ”¥)
+  // 1. InvocaciÃ³n cÃ³smica y columna Ã­gnea vertical
   public playHellRainCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Resonancia sub-grave de apertura de portal cósmico
+    // Resonancia sub-grave de apertura de portal cÃ³smico
     const drone = this.ctx.createOscillator();
     const droneGain = this.ctx.createGain();
     drone.type = 'sawtooth';
@@ -2141,7 +2023,7 @@ class ElementalSoundEngine {
     droneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
 
     drone.connect(droneGain);
-    droneGain.connect(this.ctx.destination);
+    droneGain.connect(this.dest);
     drone.start(now);
     drone.stop(now + 0.45);
 
@@ -2156,12 +2038,12 @@ class ElementalSoundEngine {
     whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
     whoosh.connect(whooshGain);
-    whooshGain.connect(this.ctx.destination);
+    whooshGain.connect(this.dest);
     whoosh.start(now);
     whoosh.stop(now + 0.38);
   }
 
-  // 2. Silbido aéreo de reentrada del meteorito cayendo a gran velocidad
+  // 2. Silbido aÃ©reo de reentrada del meteorito cayendo a gran velocidad
   public playHellMeteorWhistle() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2178,19 +2060,19 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     whistle.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     whistle.start(now);
     whistle.stop(now + 0.18);
   }
 
-  // 3. Impacto detonante y fractura sísmica de roca volcánica
+  // 3. Impacto detonante y fractura sÃ­smica de roca volcÃ¡nica
   public playHellMeteorExplosion(isColossal: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bass sísmico
+    // Sub-bass sÃ­smico
     const thud = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thud.type = 'sine';
@@ -2201,11 +2083,11 @@ class ElementalSoundEngine {
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.38 : 0.25));
 
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + (isColossal ? 0.38 : 0.25));
 
-    // Estallido de roca volcánica y fuego
+    // Estallido de roca volcÃ¡nica y fuego
     const blast = this.ctx.createOscillator();
     const blastGain = this.ctx.createGain();
     blast.type = 'sawtooth';
@@ -2216,12 +2098,12 @@ class ElementalSoundEngine {
     blastGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.32 : 0.22));
 
     blast.connect(blastGain);
-    blastGain.connect(this.ctx.destination);
+    blastGain.connect(this.dest);
     blast.start(now);
     blast.stop(now + (isColossal ? 0.32 : 0.22));
   }
 
-  // 4. Chisporroteo y burbujeo del magma fundido en el cráter
+  // 4. Chisporroteo y burbujeo del magma fundido en el crÃ¡ter
   public playMagmaCraterSizzle() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2238,23 +2120,23 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.08);
   }
 
   // =========================================================================
-  // SONIDOS DE TORMENTA CELESTIAL (RAYO + RAYO + RAYO - ⚡⚡⚡)
+  // SONIDOS DE TORMENTA CELESTIAL (RAYO + RAYO + RAYO - âš¡âš¡âš¡)
   // =========================================================================
 
-  // 1. Invocación de la tempestad e ionización atmosférica
+  // 1. InvocaciÃ³n de la tempestad e ionizaciÃ³n atmosfÃ©rica
   public playCelestialStormCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bass electromagnético
+    // Sub-bass electromagnÃ©tico
     const sub = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     sub.type = 'sine';
@@ -2263,11 +2145,11 @@ class ElementalSoundEngine {
     subGain.gain.setValueAtTime(isCharged ? 0.35 : 0.24, now);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     sub.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     sub.start(now);
     sub.stop(now + 0.22);
 
-    // Ionización ascendente de alta tensión
+    // IonizaciÃ³n ascendente de alta tensiÃ³n
     const surge = this.ctx.createOscillator();
     const surgeGain = this.ctx.createGain();
     surge.type = 'sawtooth';
@@ -2276,19 +2158,19 @@ class ElementalSoundEngine {
     surgeGain.gain.setValueAtTime(isCharged ? 0.25 : 0.18, now);
     surgeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
     surge.connect(surgeGain);
-    surgeGain.connect(this.ctx.destination);
+    surgeGain.connect(this.dest);
     surge.start(now);
     surge.stop(now + 0.24);
   }
 
-  // 2. Impacto fulminante de relámpago vertical y trueno seco
+  // 2. Impacto fulminante de relÃ¡mpago vertical y trueno seco
   public playCelestialLightningStrike(isColossal: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Chasquido de alta tensión (Snap)
+    // Chasquido de alta tensiÃ³n (Snap)
     const snap = this.ctx.createOscillator();
     const snapGain = this.ctx.createGain();
     snap.type = 'sawtooth';
@@ -2297,7 +2179,7 @@ class ElementalSoundEngine {
     snapGain.gain.setValueAtTime(isColossal ? 0.45 : 0.3, now);
     snapGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.05 : 0.035));
     snap.connect(snapGain);
-    snapGain.connect(this.ctx.destination);
+    snapGain.connect(this.dest);
     snap.start(now);
     snap.stop(now + (isColossal ? 0.05 : 0.035));
 
@@ -2310,11 +2192,11 @@ class ElementalSoundEngine {
     crackGain.gain.setValueAtTime(isColossal ? 0.5 : 0.35, now);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.24 : 0.16));
     crack.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crack.start(now);
     crack.stop(now + (isColossal ? 0.24 : 0.16));
 
-    // Estruendo sub-grave sísmico
+    // Estruendo sub-grave sÃ­smico
     const rumble = this.ctx.createOscillator();
     const rumbleGain = this.ctx.createGain();
     rumble.type = 'sine';
@@ -2323,12 +2205,12 @@ class ElementalSoundEngine {
     rumbleGain.gain.setValueAtTime(isColossal ? 0.6 : 0.4, now);
     rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isColossal ? 0.38 : 0.22));
     rumble.connect(rumbleGain);
-    rumbleGain.connect(this.ctx.destination);
+    rumbleGain.connect(this.dest);
     rumble.start(now);
     rumble.stop(now + (isColossal ? 0.38 : 0.22));
   }
 
-  // 3. Chisporroteo y zumbido residual de estática en charcos ionizados
+  // 3. Chisporroteo y zumbido residual de estÃ¡tica en charcos ionizados
   public playIonizedPuddleBuzz() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2343,19 +2225,19 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.065, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.065);
   }
 
-  // 4. Detonación electromagnética terminal de sobrecarga
+  // 4. DetonaciÃ³n electromagnÃ©tica terminal de sobrecarga
   public playCelestialTerminalDetonation() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Onda sónica electromagnética
+    // Onda sÃ³nica electromagnÃ©tica
     const blast = this.ctx.createOscillator();
     const blastGain = this.ctx.createGain();
     blast.type = 'sawtooth';
@@ -2364,7 +2246,7 @@ class ElementalSoundEngine {
     blastGain.gain.setValueAtTime(0.5, now);
     blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     blast.connect(blastGain);
-    blastGain.connect(this.ctx.destination);
+    blastGain.connect(this.dest);
     blast.start(now);
     blast.stop(now + 0.35);
 
@@ -2377,23 +2259,23 @@ class ElementalSoundEngine {
     boomGain.gain.setValueAtTime(0.65, now);
     boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(now);
     boom.stop(now + 0.45);
   }
 
   // =========================================================================
-  // SONIDOS DE GLACIAR DEVASTADOR (HIELO + HIELO + HIELO - ❄️❄️❄️)
+  // SONIDOS DE GLACIAR DEVASTADOR (HIELO + HIELO + HIELO - â„ï¸â„ï¸â„ï¸)
   // =========================================================================
 
-  // 1. Invocación de ventisca y pulso de frío absoluto
+  // 1. InvocaciÃ³n de ventisca y pulso de frÃ­o absoluto
   public playGlacierCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Viento gélido envolvente
+    // Viento gÃ©lido envolvente
     const wind = this.ctx.createOscillator();
     const windGain = this.ctx.createGain();
     wind.type = 'triangle';
@@ -2402,11 +2284,11 @@ class ElementalSoundEngine {
     windGain.gain.setValueAtTime(isCharged ? 0.35 : 0.24, now);
     windGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
     wind.connect(windGain);
-    windGain.connect(this.ctx.destination);
+    windGain.connect(this.dest);
     wind.start(now);
     wind.stop(now + 0.28);
 
-    // Tintineo de escarcha ártica
+    // Tintineo de escarcha Ã¡rtica
     const chime = this.ctx.createOscillator();
     const chimeGain = this.ctx.createGain();
     chime.type = 'sine';
@@ -2415,19 +2297,19 @@ class ElementalSoundEngine {
     chimeGain.gain.setValueAtTime(0.18, now);
     chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     chime.connect(chimeGain);
-    chimeGain.connect(this.ctx.destination);
+    chimeGain.connect(this.dest);
     chime.start(now);
     chime.stop(now + 0.22);
   }
 
-  // 2. Impacto de monolito de hielo prismático en el suelo
+  // 2. Impacto de monolito de hielo prismÃ¡tico en el suelo
   public playIceMonolithImpact() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Golpe contundente y peso sísmico
+    // Golpe contundente y peso sÃ­smico
     const thud = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thud.type = 'sine';
@@ -2436,11 +2318,11 @@ class ElementalSoundEngine {
     thudGain.gain.setValueAtTime(0.45, now);
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + 0.24);
 
-    // Crujido de hielo fracturado y fragmentación vítrea
+    // Crujido de hielo fracturado y fragmentaciÃ³n vÃ­trea
     const shatter = this.ctx.createOscillator();
     const shatterGain = this.ctx.createGain();
     shatter.type = 'sawtooth';
@@ -2449,19 +2331,19 @@ class ElementalSoundEngine {
     shatterGain.gain.setValueAtTime(0.32, now);
     shatterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
     shatter.connect(shatterGain);
-    shatterGain.connect(this.ctx.destination);
+    shatterGain.connect(this.dest);
     shatter.start(now);
     shatter.stop(now + 0.18);
   }
 
-  // 3. Erupción radial masiva de agujas glaciares (Remate)
+  // 3. ErupciÃ³n radial masiva de agujas glaciares (Remate)
   public playGlacialEruptionBurst(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Retumbar telúrico del permafrost quebrado
+    // Retumbar telÃºrico del permafrost quebrado
     const rumble = this.ctx.createOscillator();
     const rumbleGain = this.ctx.createGain();
     rumble.type = 'sine';
@@ -2470,11 +2352,11 @@ class ElementalSoundEngine {
     rumbleGain.gain.setValueAtTime(isCharged ? 0.6 : 0.45, now);
     rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.45 : 0.35));
     rumble.connect(rumbleGain);
-    rumbleGain.connect(this.ctx.destination);
+    rumbleGain.connect(this.dest);
     rumble.start(now);
     rumble.stop(now + (isCharged ? 0.45 : 0.35));
 
-    // Desgarro violento de púas de hielo
+    // Desgarro violento de pÃºas de hielo
     const spike = this.ctx.createOscillator();
     const spikeGain = this.ctx.createGain();
     spike.type = 'sawtooth';
@@ -2483,11 +2365,11 @@ class ElementalSoundEngine {
     spikeGain.gain.setValueAtTime(isCharged ? 0.5 : 0.38, now);
     spikeGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.38 : 0.28));
     spike.connect(spikeGain);
-    spikeGain.connect(this.ctx.destination);
+    spikeGain.connect(this.dest);
     spike.start(now);
     spike.stop(now + (isCharged ? 0.38 : 0.28));
 
-    // Resonancia de congelación cristalina
+    // Resonancia de congelaciÃ³n cristalina
     const freezeChord = [880, 1108.7, 1318.5]; // Acorde brillante
     freezeChord.forEach((freq, idx) => {
       if (!this.ctx) return;
@@ -2498,13 +2380,13 @@ class ElementalSoundEngine {
       fGain.gain.setValueAtTime(0.14, now + 0.04 * idx);
       fGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       fOsc.connect(fGain);
-      fGain.connect(this.ctx.destination);
+      fGain.connect(this.dest);
       fOsc.start(now + 0.04 * idx);
       fOsc.stop(now + 0.35);
     });
   }
 
-  // 4. Pulso suave de congelación y escarcha
+  // 4. Pulso suave de congelaciÃ³n y escarcha
   public playFrostSlowPulse() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2519,23 +2401,23 @@ class ElementalSoundEngine {
     gain.gain.setValueAtTime(0.07, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     ping.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     ping.start(now);
     ping.stop(now + 0.08);
   }
 
   // =========================================================================
-  // BARRERA TELÚRICA (TIERRA + TIERRA + TIERRA)
+  // BARRERA TELÃšRICA (TIERRA + TIERRA + TIERRA)
   // =========================================================================
 
-  // 1. Invocación de la Barrera Telúrica (Ruptura del suelo y emergencia de los 3 monolitos)
+  // 1. InvocaciÃ³n de la Barrera TelÃºrica (Ruptura del suelo y emergencia de los 3 monolitos)
   public playTelluricCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-golpe y resonancia sísmica de elevación
+    // Sub-golpe y resonancia sÃ­smica de elevaciÃ³n
     const rumble = this.ctx.createOscillator();
     const rumbleGain = this.ctx.createGain();
     rumble.type = 'triangle';
@@ -2544,11 +2426,11 @@ class ElementalSoundEngine {
     rumbleGain.gain.setValueAtTime(isCharged ? 0.55 : 0.42, now);
     rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.38 : 0.28));
     rumble.connect(rumbleGain);
-    rumbleGain.connect(this.ctx.destination);
+    rumbleGain.connect(this.dest);
     rumble.start(now);
     rumble.stop(now + (isCharged ? 0.38 : 0.28));
 
-    // Crujido de roca sedimentaria desgajándose del suelo
+    // Crujido de roca sedimentaria desgajÃ¡ndose del suelo
     const crack = this.ctx.createOscillator();
     const crackGain = this.ctx.createGain();
     crack.type = 'sawtooth';
@@ -2557,11 +2439,11 @@ class ElementalSoundEngine {
     crackGain.gain.setValueAtTime(isCharged ? 0.38 : 0.28, now);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     crack.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crack.start(now);
     crack.stop(now + 0.22);
 
-    // Vórtice gravitatorio de polvo y atracción orbital
+    // VÃ³rtice gravitatorio de polvo y atracciÃ³n orbital
     const noiseLen = isCharged ? 0.32 : 0.24;
     const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -2581,12 +2463,12 @@ class ElementalSoundEngine {
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
     noise.connect(filter);
     filter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + noiseLen);
   }
 
-  // 2. Intercepción y desvío de proyectil hostil por una roca orbital
+  // 2. IntercepciÃ³n y desvÃ­o de proyectil hostil por una roca orbital
   public playTelluricDeflect() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2602,11 +2484,11 @@ class ElementalSoundEngine {
     thudGain.gain.setValueAtTime(0.4, now);
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + 0.12);
 
-    // Chasquido de chispas y rechazo cinético
+    // Chasquido de chispas y rechazo cinÃ©tico
     const snap = this.ctx.createOscillator();
     const snapGain = this.ctx.createGain();
     snap.type = 'sawtooth';
@@ -2615,19 +2497,19 @@ class ElementalSoundEngine {
     snapGain.gain.setValueAtTime(0.25, now);
     snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     snap.connect(snapGain);
-    snapGain.connect(this.ctx.destination);
+    snapGain.connect(this.dest);
     snap.start(now);
     snap.stop(now + 0.08);
   }
 
-  // 3. Detonación contundente masiva de roca al impactar y pulverizarse contra enemigo
+  // 3. DetonaciÃ³n contundente masiva de roca al impactar y pulverizarse contra enemigo
   public playTelluricRockDetonation(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bass sísmico de aplastamiento
+    // Sub-bass sÃ­smico de aplastamiento
     const sub = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     sub.type = 'sine';
@@ -2636,11 +2518,11 @@ class ElementalSoundEngine {
     subGain.gain.setValueAtTime(isCharged ? 0.65 : 0.48, now);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + (isCharged ? 0.36 : 0.26));
     sub.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     sub.start(now);
     sub.stop(now + (isCharged ? 0.36 : 0.26));
 
-    // Trituración violenta de fragmentos de roca
+    // TrituraciÃ³n violenta de fragmentos de roca
     const crush = this.ctx.createOscillator();
     const crushGain = this.ctx.createGain();
     crush.type = 'sawtooth';
@@ -2649,11 +2531,11 @@ class ElementalSoundEngine {
     crushGain.gain.setValueAtTime(isCharged ? 0.45 : 0.34, now);
     crushGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     crush.connect(crushGain);
-    crushGain.connect(this.ctx.destination);
+    crushGain.connect(this.dest);
     crush.start(now);
     crush.stop(now + 0.22);
 
-    // Resonancia de runa telúrica dorada estallando
+    // Resonancia de runa telÃºrica dorada estallando
     if (isCharged) {
       const runeChime = this.ctx.createOscillator();
       const runeGain = this.ctx.createGain();
@@ -2663,13 +2545,13 @@ class ElementalSoundEngine {
       runeGain.gain.setValueAtTime(0.24, now + 0.02);
       runeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
       runeChime.connect(runeGain);
-      runeGain.connect(this.ctx.destination);
+      runeGain.connect(this.dest);
       runeChime.start(now + 0.02);
       runeChime.stop(now + 0.24);
     }
   }
 
-  // 4. Desmoronamiento pacífico de rocas al expirar los 20 segundos o consumirse la durabilidad
+  // 4. Desmoronamiento pacÃ­fico de rocas al expirar los 20 segundos o consumirse la durabilidad
   public playTelluricCrumble() {
     if (this.isMuted) return;
     this.initCtx();
@@ -2694,23 +2576,23 @@ class ElementalSoundEngine {
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
     noise.connect(filter);
     filter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + noiseLen);
   }
 
   // =========================================================================
-  // VOLCÁN DE OBSIDIANA (FUEGO + HIELO + TIERRA: ERUPCIÓN Y CUCHILLAS VÍTREAS)
+  // VOLCÃN DE OBSIDIANA (FUEGO + HIELO + TIERRA: ERUPCIÃ“N Y CUCHILLAS VÃTREAS)
   // =========================================================================
 
-  // 1. Invocación y fractura térmica subterránea (presión de vapor y magma ascendente)
+  // 1. InvocaciÃ³n y fractura tÃ©rmica subterrÃ¡nea (presiÃ³n de vapor y magma ascendente)
   public playObsidianCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Resonancia telúrica profunda
+    // Resonancia telÃºrica profunda
     const rumble = this.ctx.createOscillator();
     const rumbleGain = this.ctx.createGain();
     rumble.type = 'sawtooth';
@@ -2727,11 +2609,11 @@ class ElementalSoundEngine {
 
     rumble.connect(rumbleFilter);
     rumbleFilter.connect(rumbleGain);
-    rumbleGain.connect(this.ctx.destination);
+    rumbleGain.connect(this.dest);
     rumble.start(now);
     rumble.stop(now + 0.38);
 
-    // Escape de vapor a alta presión
+    // Escape de vapor a alta presiÃ³n
     const noiseLen = 0.28;
     const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -2753,19 +2635,19 @@ class ElementalSoundEngine {
 
     noise.connect(filter);
     filter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noise.start(now);
     noise.stop(now + noiseLen);
   }
 
-  // 2. Detonación piroclástica explosiva (choque de magma y descompresión)
+  // 2. DetonaciÃ³n piroclÃ¡stica explosiva (choque de magma y descompresiÃ³n)
   public playObsidianEruptionBurst(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-golpe sísmico explosivo
+    // Sub-golpe sÃ­smico explosivo
     const blast = this.ctx.createOscillator();
     const blastGain = this.ctx.createGain();
     blast.type = 'triangle';
@@ -2776,11 +2658,11 @@ class ElementalSoundEngine {
     blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
 
     blast.connect(blastGain);
-    blastGain.connect(this.ctx.destination);
+    blastGain.connect(this.dest);
     blast.start(now);
     blast.stop(now + 0.42);
 
-    // Crack cerámico volcánico
+    // Crack cerÃ¡mico volcÃ¡nico
     const crackLen = 0.25;
     const crackBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * crackLen), this.ctx.sampleRate);
     const cd = crackBuff.getChannelData(0);
@@ -2799,19 +2681,19 @@ class ElementalSoundEngine {
 
     crackSource.connect(crackFilter);
     crackFilter.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crackSource.start(now);
     crackSource.stop(now + crackLen);
   }
 
-  // 3. Vitrificación térmica instantánea (siseo extremo del choque térmico + cristalización)
+  // 3. VitrificaciÃ³n tÃ©rmica instantÃ¡nea (siseo extremo del choque tÃ©rmico + cristalizaciÃ³n)
   public playObsidianVitrifyHiss() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Siseo de choque térmico (quench)
+    // Siseo de choque tÃ©rmico (quench)
     const hissLen = 0.32;
     const hissBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * hissLen), this.ctx.sampleRate);
     const hd = hissBuff.getChannelData(0);
@@ -2832,11 +2714,11 @@ class ElementalSoundEngine {
 
     hissSource.connect(hissFilter);
     hissFilter.connect(hissGain);
-    hissGain.connect(this.ctx.destination);
+    hissGain.connect(this.dest);
     hissSource.start(now);
     hissSource.stop(now + hissLen);
 
-    // Tono vítreo metálico agudo
+    // Tono vÃ­treo metÃ¡lico agudo
     const ping = this.ctx.createOscillator();
     const pingGain = this.ctx.createGain();
     ping.type = 'sine';
@@ -2846,7 +2728,7 @@ class ElementalSoundEngine {
     pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
     ping.connect(pingGain);
-    pingGain.connect(this.ctx.destination);
+    pingGain.connect(this.dest);
     ping.start(now);
     ping.stop(now + 0.22);
   }
@@ -2868,19 +2750,19 @@ class ElementalSoundEngine {
     sliceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     slice.connect(sliceGain);
-    sliceGain.connect(this.ctx.destination);
+    sliceGain.connect(this.dest);
     slice.start(now);
     slice.stop(now + 0.05);
   }
 
-  // 5. Ruptura vítrea y desintegración del campo de obsidiana
+  // 5. Ruptura vÃ­trea y desintegraciÃ³n del campo de obsidiana
   public playObsidianShatter() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Acordes de cristal resquebrajándose
+    // Acordes de cristal resquebrajÃ¡ndose
     const frequencies = [1350, 1850, 2400, 3200];
     frequencies.forEach((freq, idx) => {
       const osc = this.ctx!.createOscillator();
@@ -2898,7 +2780,7 @@ class ElementalSoundEngine {
       osc.stop(now + idx * 0.025 + 0.22);
     });
 
-    // Crujido de grava vítrea
+    // Crujido de grava vÃ­trea
     const shatterLen = 0.24;
     const buff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * shatterLen), this.ctx.sampleRate);
     const data = buff.getChannelData(0);
@@ -2916,23 +2798,23 @@ class ElementalSoundEngine {
 
     source.connect(filter);
     filter.connect(sgain);
-    sgain.connect(this.ctx.destination);
+    sgain.connect(this.dest);
     source.start(now);
     source.stop(now + shatterLen);
   }
 
   // =========================================================================
-  // PRISIÓN CONDUCTORA (RAYO + HIELO + TIERRA: PILARES CRIOTÉCNICOS E IMPLOSIÓN)
+  // PRISIÃ“N CONDUCTORA (RAYO + HIELO + TIERRA: PILARES CRIOTÃ‰CNICOS E IMPLOSIÃ“N)
   // =========================================================================
 
-  // 1. Invocación y emergencia telúrica-crioconductora de los pilares
+  // 1. InvocaciÃ³n y emergencia telÃºrica-crioconductora de los pilares
   public playConductivePrisonCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-golpe de emergencia telúrica
+    // Sub-golpe de emergencia telÃºrica
     const thud = this.ctx.createOscillator();
     const thudGain = this.ctx.createGain();
     thud.type = 'triangle';
@@ -2943,11 +2825,11 @@ class ElementalSoundEngine {
     thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
 
     thud.connect(thudGain);
-    thudGain.connect(this.ctx.destination);
+    thudGain.connect(this.dest);
     thud.start(now);
     thud.stop(now + 0.32);
 
-    // Chispazo de ignición de alta tensión
+    // Chispazo de igniciÃ³n de alta tensiÃ³n
     const zap = this.ctx.createOscillator();
     const zapGain = this.ctx.createGain();
     zap.type = 'sawtooth';
@@ -2963,11 +2845,11 @@ class ElementalSoundEngine {
 
     zap.connect(zapFilter);
     zapFilter.connect(zapGain);
-    zapGain.connect(this.ctx.destination);
+    zapGain.connect(this.dest);
     zap.start(now);
     zap.stop(now + 0.24);
 
-    // Resonancia de cristal gélido
+    // Resonancia de cristal gÃ©lido
     const ice = this.ctx.createOscillator();
     const iceGain = this.ctx.createGain();
     ice.type = 'sine';
@@ -2978,12 +2860,12 @@ class ElementalSoundEngine {
     iceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
     ice.connect(iceGain);
-    iceGain.connect(this.ctx.destination);
+    iceGain.connect(this.dest);
     ice.start(now + 0.05);
     ice.stop(now + 0.3);
   }
 
-  // 2. Descarga perimetral al tocar la valla de relámpagos
+  // 2. Descarga perimetral al tocar la valla de relÃ¡mpagos
   public playConductivePrisonPerimeterShock() {
     if (this.isMuted) return;
     this.initCtx();
@@ -3006,12 +2888,12 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.07);
   }
 
-  // 3. Impacto absorbido por un pilar criotécnico
+  // 3. Impacto absorbido por un pilar criotÃ©cnico
   public playConductivePrisonPillarHit() {
     if (this.isMuted) return;
     this.initCtx();
@@ -3028,11 +2910,11 @@ class ElementalSoundEngine {
     rGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
 
     rock.connect(rGain);
-    rGain.connect(this.ctx.destination);
+    rGain.connect(this.dest);
     rock.start(now);
     rock.stop(now + 0.12);
 
-    // Resonancia de hielo quebrándose
+    // Resonancia de hielo quebrÃ¡ndose
     const ice = this.ctx.createOscillator();
     const iGain = this.ctx.createGain();
     ice.type = 'sine';
@@ -3042,19 +2924,19 @@ class ElementalSoundEngine {
     iGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
     ice.connect(iGain);
-    iGain.connect(this.ctx.destination);
+    iGain.connect(this.dest);
     ice.start(now);
     ice.stop(now + 0.14);
   }
 
-  // 4. Implosión reactiva terminal y colapso de la prisión
+  // 4. ImplosiÃ³n reactiva terminal y colapso de la prisiÃ³n
   public playConductivePrisonImplosion(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // 1. Tensión de succión hacia el centro (inward tension)
+    // 1. TensiÃ³n de succiÃ³n hacia el centro (inward tension)
     const suck = this.ctx.createOscillator();
     const suckGain = this.ctx.createGain();
     suck.type = 'sine';
@@ -3065,11 +2947,11 @@ class ElementalSoundEngine {
     suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     suck.connect(suckGain);
-    suckGain.connect(this.ctx.destination);
+    suckGain.connect(this.dest);
     suck.start(now);
     suck.stop(now + 0.18);
 
-    // 2. Detonación violenta en el epicentro (magna explosión electro-gélida)
+    // 2. DetonaciÃ³n violenta en el epicentro (magna explosiÃ³n electro-gÃ©lida)
     const boom = this.ctx.createOscillator();
     const boomGain = this.ctx.createGain();
     boom.type = 'triangle';
@@ -3080,7 +2962,7 @@ class ElementalSoundEngine {
     boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16 + 0.42);
 
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(now + 0.16);
     boom.stop(now + 0.16 + 0.42);
 
@@ -3103,23 +2985,23 @@ class ElementalSoundEngine {
 
     source.connect(filter);
     filter.connect(sGain);
-    sGain.connect(this.ctx.destination);
+    sGain.connect(this.dest);
     source.start(now + 0.16);
     source.stop(now + 0.16 + shatLen);
   }
 
   // =========================================================================
-  // NÚCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA: ARTEFACTO ESCALABLE Y SUPERNOVA)
+  // NÃšCLEO DE SOBRECARGA (FUEGO + RAYO + TIERRA: ARTEFACTO ESCALABLE Y SUPERNOVA)
   // =========================================================================
 
-  // 1. Lanzamiento y anclaje del artefacto magnético
+  // 1. Lanzamiento y anclaje del artefacto magnÃ©tico
   public playOverloadCoreDeploy(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Silbido magnético descendente
+    // Silbido magnÃ©tico descendente
     const whistle = this.ctx.createOscillator();
     const wGain = this.ctx.createGain();
     whistle.type = 'sine';
@@ -3129,11 +3011,11 @@ class ElementalSoundEngine {
     wGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     whistle.connect(wGain);
-    wGain.connect(this.ctx.destination);
+    wGain.connect(this.dest);
     whistle.start(now);
     whistle.stop(now + 0.18);
 
-    // Impacto sordo telúrico al anclarse
+    // Impacto sordo telÃºrico al anclarse
     const thud = this.ctx.createOscillator();
     const tGain = this.ctx.createGain();
     thud.type = 'triangle';
@@ -3143,12 +3025,12 @@ class ElementalSoundEngine {
     tGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     thud.connect(tGain);
-    tGain.connect(this.ctx.destination);
+    tGain.connect(this.dest);
     thud.start(now + 0.15);
     thud.stop(now + 0.35);
   }
 
-  // 2. Pulso radial periódico de daño y calor (escala con nivel 1, 2 y 3)
+  // 2. Pulso radial periÃ³dico de daÃ±o y calor (escala con nivel 1, 2 y 3)
   public playOverloadCorePulse(level: number) {
     if (this.isMuted) return;
     this.initCtx();
@@ -3171,12 +3053,12 @@ class ElementalSoundEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     osc.start(now);
     osc.stop(now + 0.08);
   }
 
-  // 3. Alarma electromagnética al alcanzar el Nivel 3 (Masa Crítica)
+  // 3. Alarma electromagnÃ©tica al alcanzar el Nivel 3 (Masa CrÃ­tica)
   public playOverloadCoreCriticalAlarm() {
     if (this.isMuted) return;
     this.initCtx();
@@ -3192,19 +3074,19 @@ class ElementalSoundEngine {
     aGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
     alarm.connect(aGain);
-    aGain.connect(this.ctx.destination);
+    aGain.connect(this.dest);
     alarm.start(now);
     alarm.stop(now + 0.14);
   }
 
-  // 4. Detonación masiva de supernova geológica (escala según nivel 1, 2 o 3 y si fue cargado)
+  // 4. DetonaciÃ³n masiva de supernova geolÃ³gica (escala segÃºn nivel 1, 2 o 3 y si fue cargado)
   public playOverloadCoreDetonation(level: number, isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // 1. Implosión previa instantánea (80ms)
+    // 1. ImplosiÃ³n previa instantÃ¡nea (80ms)
     const suck = this.ctx.createOscillator();
     const suckGain = this.ctx.createGain();
     suck.type = 'sine';
@@ -3215,11 +3097,11 @@ class ElementalSoundEngine {
     suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
     suck.connect(suckGain);
-    suckGain.connect(this.ctx.destination);
+    suckGain.connect(this.dest);
     suck.start(now);
     suck.stop(now + 0.09);
 
-    // 2. Estallido sísmico colosal (detonación de magma y relámpago)
+    // 2. Estallido sÃ­smico colosal (detonaciÃ³n de magma y relÃ¡mpago)
     const boomStart = now + 0.08;
     const boom = this.ctx.createOscillator();
     const boomGain = this.ctx.createGain();
@@ -3233,7 +3115,7 @@ class ElementalSoundEngine {
     boomGain.gain.exponentialRampToValueAtTime(0.001, boomStart + 0.45);
 
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(boomStart);
     boom.stop(boomStart + 0.45);
 
@@ -3256,23 +3138,23 @@ class ElementalSoundEngine {
 
     snapSource.connect(snapFilter);
     snapFilter.connect(snapGain);
-    snapGain.connect(this.ctx.destination);
+    snapGain.connect(this.dest);
     snapSource.start(boomStart);
     snapSource.stop(boomStart + snapLen);
   }
 
   // =========================================================================
-  // SONIDOS DE TORMENTA DE PLASMA GLACIAL (FUEGO + RAYO + HIELO - 🌪️❄️⚡)
+  // SONIDOS DE TORMENTA DE PLASMA GLACIAL (FUEGO + RAYO + HIELO - ðŸŒªï¸â„ï¸âš¡)
   // =========================================================================
 
-  // 1. Lanzamiento del vórtice tri-elemental (Fuego, Hielo y Rayo entrelazados)
+  // 1. Lanzamiento del vÃ³rtice tri-elemental (Fuego, Hielo y Rayo entrelazados)
   public playGlacialPlasmaStormLaunch(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // A. Silbido gélido de viento polar
+    // A. Silbido gÃ©lido de viento polar
     const noiseLen = isCharged ? 0.35 : 0.25;
     const noiseBuff = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * noiseLen), this.ctx.sampleRate);
     const nd = noiseBuff.getChannelData(0);
@@ -3290,11 +3172,11 @@ class ElementalSoundEngine {
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
     noiseSource.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(this.dest);
     noiseSource.start(now);
     noiseSource.stop(now + noiseLen);
 
-    // B. Vórtice de plasma ígneo ardiente
+    // B. VÃ³rtice de plasma Ã­gneo ardiente
     const fireOsc = this.ctx.createOscillator();
     const fireGain = this.ctx.createGain();
     fireOsc.type = 'sawtooth';
@@ -3307,11 +3189,11 @@ class ElementalSoundEngine {
     fireGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     fireOsc.connect(fireFilter);
     fireFilter.connect(fireGain);
-    fireGain.connect(this.ctx.destination);
+    fireGain.connect(this.dest);
     fireOsc.start(now);
     fireOsc.stop(now + 0.3);
 
-    // C. Arco eléctrico inicial de ignición
+    // C. Arco elÃ©ctrico inicial de igniciÃ³n
     const zapOsc = this.ctx.createOscillator();
     const zapGain = this.ctx.createGain();
     zapOsc.type = 'square';
@@ -3320,12 +3202,12 @@ class ElementalSoundEngine {
     zapGain.gain.setValueAtTime(isCharged ? 0.22 : 0.16, now);
     zapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     zapOsc.connect(zapGain);
-    zapGain.connect(this.ctx.destination);
+    zapGain.connect(this.dest);
     zapOsc.start(now);
     zapOsc.stop(now + 0.15);
   }
 
-  // 2. Chispazo / arco eléctrico entre objetivos encadenados en tránsito
+  // 2. Chispazo / arco elÃ©ctrico entre objetivos encadenados en trÃ¡nsito
   public playGlacialPlasmaArcZap() {
     if (this.isMuted) return;
     this.initCtx();
@@ -3342,12 +3224,12 @@ class ElementalSoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     zap.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.dest);
     zap.start(now);
     zap.stop(now + 0.05);
   }
 
-  // 3. Implosión de vacío gravitatorio (succión violenta hacia el centro)
+  // 3. ImplosiÃ³n de vacÃ­o gravitatorio (succiÃ³n violenta hacia el centro)
   public playGlacialPlasmaImplosion(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
@@ -3366,19 +3248,19 @@ class ElementalSoundEngine {
     suckGain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
 
     suck.connect(suckGain);
-    suckGain.connect(this.ctx.destination);
+    suckGain.connect(this.dest);
     suck.start(now);
     suck.stop(now + 0.19);
   }
 
-  // 4. Detonación expansiva y remate centrífugo (estallido térmico + dispersión gélida)
+  // 4. DetonaciÃ³n expansiva y remate centrÃ­fugo (estallido tÃ©rmico + dispersiÃ³n gÃ©lida)
   public playGlacialPlasmaDetonation(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // A. Sub-bass térmico masivo
+    // A. Sub-bass tÃ©rmico masivo
     const boom = this.ctx.createOscillator();
     const boomGain = this.ctx.createGain();
     boom.type = 'triangle';
@@ -3389,7 +3271,7 @@ class ElementalSoundEngine {
     boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(now);
     boom.stop(now + 0.38);
 
@@ -3409,7 +3291,7 @@ class ElementalSoundEngine {
 
     shatter.connect(shatterFilter);
     shatterFilter.connect(shatterGain);
-    shatterGain.connect(this.ctx.destination);
+    shatterGain.connect(this.dest);
     shatter.start(now);
     shatter.stop(now + 0.26);
   }
@@ -3418,7 +3300,7 @@ class ElementalSoundEngine {
   // CATACLISMO ELEMENTAL (FUEGO + RAYO + HIELO + TIERRA: SECUENCIA DE 4 FASES)
   // =========================================================================
 
-  // 0. Conjuración Inicial (Sintonía Tetra-Elemental)
+  // 0. ConjuraciÃ³n Inicial (SintonÃ­a Tetra-Elemental)
   public playCataclysmCast(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
@@ -3439,20 +3321,20 @@ class ElementalSoundEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.dest);
       osc.start(now);
       osc.stop(now + 0.38);
     });
   }
 
-  // 1. Fase 1: Fisura Tectónica (Tierra - Estruendo sísmico sordo y fractura)
+  // 1. Fase 1: Fisura TectÃ³nica (Tierra - Estruendo sÃ­smico sordo y fractura)
   public playCataclysmPhase1Earth(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bajo sísmico de fractura
+    // Sub-bajo sÃ­smico de fractura
     const sub = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     sub.type = 'sine';
@@ -3463,11 +3345,11 @@ class ElementalSoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
 
     sub.connect(subGain);
-    subGain.connect(this.ctx.destination);
+    subGain.connect(this.dest);
     sub.start(now);
     sub.stop(now + 0.55);
 
-    // Crujido tectónico de placas rocosas
+    // Crujido tectÃ³nico de placas rocosas
     const crack = this.ctx.createOscillator();
     const crackGain = this.ctx.createGain();
     crack.type = 'triangle';
@@ -3478,12 +3360,12 @@ class ElementalSoundEngine {
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
 
     crack.connect(crackGain);
-    crackGain.connect(this.ctx.destination);
+    crackGain.connect(this.dest);
     crack.start(now);
     crack.stop(now + 0.45);
   }
 
-  // 2. Fase 2: Erupción Ígnea (Fuego - Columnas de magma rugiente)
+  // 2. Fase 2: ErupciÃ³n Ãgnea (Fuego - Columnas de magma rugiente)
   public playCataclysmPhase2Fire(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
@@ -3507,19 +3389,19 @@ class ElementalSoundEngine {
 
     roar.connect(roarFilter);
     roarFilter.connect(roarGain);
-    roarGain.connect(this.ctx.destination);
+    roarGain.connect(this.dest);
     roar.start(now);
     roar.stop(now + 0.55);
   }
 
-  // 3. Fase 3: Onda Polar de Cero Absoluto (Hielo - Congelación instantánea y caída acústica)
+  // 3. Fase 3: Onda Polar de Cero Absoluto (Hielo - CongelaciÃ³n instantÃ¡nea y caÃ­da acÃºstica)
   public playCataclysmPhase3Ice(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Ping cristalino agudo de congelación absoluta
+    // Ping cristalino agudo de congelaciÃ³n absoluta
     const ping = this.ctx.createOscillator();
     const pingGain = this.ctx.createGain();
     ping.type = 'sine';
@@ -3530,7 +3412,7 @@ class ElementalSoundEngine {
     pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     ping.connect(pingGain);
-    pingGain.connect(this.ctx.destination);
+    pingGain.connect(this.dest);
     ping.start(now);
     ping.stop(now + 0.35);
 
@@ -3545,19 +3427,19 @@ class ElementalSoundEngine {
     chillGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
 
     chill.connect(chillGain);
-    chillGain.connect(this.ctx.destination);
+    chillGain.connect(this.dest);
     chill.start(now);
     chill.stop(now + 0.45);
   }
 
-  // 4. Fase 4: Relámpago Titánico y Detonación Radial (Rayo - Trueno colosal y shatter)
+  // 4. Fase 4: RelÃ¡mpago TitÃ¡nico y DetonaciÃ³n Radial (Rayo - Trueno colosal y shatter)
   public playCataclysmPhase4Lightning(isCharged: boolean = false) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // A. Azote del rayo celeste vertical (transiente de alta energía)
+    // A. Azote del rayo celeste vertical (transiente de alta energÃ­a)
     const bolt = this.ctx.createOscillator();
     const boltGain = this.ctx.createGain();
     bolt.type = 'sawtooth';
@@ -3568,11 +3450,11 @@ class ElementalSoundEngine {
     boltGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
     bolt.connect(boltGain);
-    boltGain.connect(this.ctx.destination);
+    boltGain.connect(this.dest);
     bolt.start(now);
     bolt.stop(now + 0.22);
 
-    // B. Explosión sub-bajo devastadora (sub-bass 35Hz que sacude la arena)
+    // B. ExplosiÃ³n sub-bajo devastadora (sub-bass 35Hz que sacude la arena)
     const boom = this.ctx.createOscillator();
     const boomGain = this.ctx.createGain();
     boom.type = 'triangle';
@@ -3583,7 +3465,7 @@ class ElementalSoundEngine {
     boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
 
     boom.connect(boomGain);
-    boomGain.connect(this.ctx.destination);
+    boomGain.connect(this.dest);
     boom.start(now);
     boom.stop(now + 0.75);
 
@@ -3603,11 +3485,12 @@ class ElementalSoundEngine {
 
     shatter.connect(shatterFilter);
     shatterFilter.connect(shatterGain);
-    shatterGain.connect(this.ctx.destination);
+    shatterGain.connect(this.dest);
     shatter.start(now + 0.05);
     shatter.stop(now + 0.35);
   }
 }
 
 export const elementalSound = new ElementalSoundEngine();
+
 
