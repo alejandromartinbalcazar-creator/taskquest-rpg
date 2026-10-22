@@ -255,16 +255,34 @@ export function updateThresholdCustodian(
   const dist = Math.hypot(dx, dy);
   boss.facingAngle = Math.atan2(dy, dx);
 
-  const speedMult = cs.currentPhase === 3 ? 1.35 : 1.0;
-  if (dist > 180 && cs.activeAttack === 'none') {
-    boss.x += (dx / dist) * boss.moveSpeed * speedMult;
-    boss.y += (dy / dist) * boss.moveSpeed * speedMult * 0.58;
-  }
-
   // 4. ANIMACIÓN FLOTANTE DE LOS GUANTELETES
   const now = performance.now();
   const gauntletHoverY = Math.sin(now * 0.005) * 8;
   const gauntletHoverX = Math.cos(now * 0.004) * 5;
+
+  // Si el jugador aún no ha alcanzado la arena (distancia > 850 y jefe intacto):
+  // El Custodio permanece levitando majestuosamente en su runa ancestral
+  if (dist > 850 && boss.hp === boss.maxHp) {
+    cs.activeAttack = 'none';
+    cs.leftGauntlet.targetX = boss.x - 70 + gauntletHoverX;
+    cs.leftGauntlet.targetY = boss.y - 15 + gauntletHoverY;
+    cs.rightGauntlet.targetX = boss.x + 70 - gauntletHoverX;
+    cs.rightGauntlet.targetY = boss.y - 15 - gauntletHoverY;
+    cs.leftGauntlet.x += (cs.leftGauntlet.targetX - cs.leftGauntlet.x) * 0.15;
+    cs.leftGauntlet.y += (cs.leftGauntlet.targetY - cs.leftGauntlet.y) * 0.15;
+    cs.rightGauntlet.x += (cs.rightGauntlet.targetX - cs.rightGauntlet.x) * 0.15;
+    cs.rightGauntlet.y += (cs.rightGauntlet.targetY - cs.rightGauntlet.y) * 0.15;
+    return;
+  }
+
+  const speedMult = cs.currentPhase === 3 ? 1.35 : 1.0;
+  if (dist > 180 && cs.activeAttack === 'none') {
+    boss.x += (dx / dist) * boss.moveSpeed * speedMult;
+    boss.y += (dy / dist) * boss.moveSpeed * speedMult * 0.58;
+    // Mantener al coloso confinado dentro de los límites de la arena
+    boss.x = Math.max(900, Math.min(1500, boss.x));
+    boss.y = Math.max(1050, Math.min(1950, boss.y));
+  }
 
   if (cs.activeAttack === 'none') {
     cs.leftGauntlet.targetX = boss.x - 70 + gauntletHoverX;

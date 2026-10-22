@@ -545,9 +545,12 @@ export class IsometricRenderer {
 
     ctx.restore(); // Fin del espacio transformado con Zoom
 
-    // 9. Barra de Salud Superior del Jefe (si hay un jefe activo en la sala)
+    // 9. Barra de Salud Superior del Jefe (si hay un jefe activo en la sala o cerca del jugador en mapa abierto)
     if (currentBoss && currentBoss.hp > 0) {
-      this.drawBossHUD(ctx, width, currentBoss);
+      const showHUD = !forestLevel || currentBoss.hp < currentBoss.maxHp || Math.hypot(currentBoss.x - wizard.x, currentBoss.y - wizard.y) < 1300;
+      if (showHUD) {
+        this.drawBossHUD(ctx, width, currentBoss);
+      }
     }
 
     ctx.restore(); // Fin de screen shake
@@ -2202,7 +2205,12 @@ export class IsometricRenderer {
 
     // 2. Renderizado Vectorial Procedural según afinidad y tipo del Bestiario
     if (enemy.bossType === 'threshold_custodian') {
+      ctx.restore();
+      ctx.save();
       drawThresholdCustodian(ctx, enemy, now);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
     } else if (enemy.bestiaryType === 'pyre_golem') {
       drawPyreGolem(ctx, enemy, now);
     } else if (enemy.bestiaryType === 'storm_stalker') {

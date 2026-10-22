@@ -517,6 +517,19 @@ export class EnemyManager {
       }
 
       // 3. IA TÁCTICA DEL BESTIARIO ELEMENTAL
+      // Rango de alerta/patrulla: si el jugador está a más de 750px (en otra sección del mapa extendido),
+      // el enemigo monta guardia en su sector sin desplazarse fuera de su área
+      if (distToPlayer > 750) {
+        e.vx *= 0.6;
+        e.vy *= 0.6;
+        e.isTelegraphing = false;
+        if (e.bestiaryType === 'frost_lurker') {
+          e.isSniping = false;
+          e.snipeTimer = 0;
+        }
+        continue;
+      }
+
       if (e.bestiaryType === 'pyre_golem') {
         e.facingAngle = Math.atan2(dy, dx);
 

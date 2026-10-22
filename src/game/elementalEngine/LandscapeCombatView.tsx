@@ -350,6 +350,46 @@ function triggerAoEExplosion(
   }
 }
 
+/**
+ * Inicializa las patrullas del Bestiario Elemental a lo largo del Sendero del Bosque y la Arena del Jefe.
+ * 100% Vectorial, IA táctica especializada y afinidades elementales estrictas.
+ */
+function createLevel1ForestEnemies(enemyManager: EnemyManager): GameEnemy[] {
+  return [
+    // Zona 1: Salida del Campamento (Y ~ 7450 - 7300)
+    // El jugador sale de la fogata e inmediatamente descubre el Bestiario Elemental
+    enemyManager.createPyreGolem('forest-golem-intro', 1130, 7420),
+    enemyManager.createStormStalker('forest-storm-intro', 1270, 7360),
+
+    // Zona 2: Curva Oeste del Sendero (Y ~ 6650 - 6380)
+    // Tanques ígneos flanqueados por un francotirador de escarcha
+    enemyManager.createPyreGolem('forest-golem-west-1', 1010, 6650),
+    enemyManager.createPyreGolem('forest-golem-west-2', 1110, 6520),
+    enemyManager.createFrostLurker('forest-lurker-west-1', 990, 6380),
+
+    // Zona 3: Curva Este del Sendero (Y ~ 5600 - 5240)
+    // Espectros de tormenta ágiles y acechador gélido a media distancia
+    enemyManager.createStormStalker('forest-storm-east-1', 1340, 5550),
+    enemyManager.createStormStalker('forest-storm-east-2', 1450, 5420),
+    enemyManager.createFrostLurker('forest-lurker-east-1', 1390, 5240),
+
+    // Zona 4: Checkpoint del Portón y Rueda Elemental de Hielo (Y ~ 4250 - 4120)
+    // Guardianes de élite protegiendo el mecanismo del portón
+    enemyManager.createPyreGolem('gate-golem-guard', 1100, 4240),
+    enemyManager.createStormStalker('gate-storm-guard', 1280, 4200),
+    enemyManager.createFrostLurker('gate-lurker-guard', 1190, 4120),
+
+    // Zona 5: Sendero Alto y Entrada Previa a la Arena (Y ~ 2800 - 2500)
+    // Última línea defensiva antes del coloso
+    enemyManager.createPyreGolem('arena-entry-golem', 1130, 2750),
+    enemyManager.createFrostLurker('arena-entry-lurker', 1270, 2640),
+    enemyManager.createStormStalker('arena-entry-storm', 1200, 2510),
+
+    // Zona 6: Arena Monumental - El Custodio del Umbral (Jefe Final del Nivel 1, Y = 1500)
+    createThresholdCustodian(1200, 1500),
+  ];
+}
+
 export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   player,
   floor,
@@ -551,110 +591,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.camera.y = 8100;
     g.terrainManager.obstacles = [...initialObstacles];
 
-    // Generar patrullas y jefes a lo largo del sendero
-    g.enemyManager.enemies = [
-      // Zona 2: Sendero - Grupo 1 (Y ~ 6800)
-      ...([0, 1, 2, 3].map((i) => ({
-        id: `forest-g1-${i}`,
-        name: 'Duende del Bosque',
-        archetype: 'chaser' as const,
-        x: 1040 + (i % 2 === 0 ? -60 : 60),
-        y: 6800 + i * 40,
-        vx: 0,
-        vy: 0,
-        radius: 15,
-        hp: 75,
-        maxHp: 75,
-        attackPower: 9,
-        moveSpeed: 0.95,
-        statuses: [],
-        color: '#16a34a',
-        avatar: '👺',
-        weakness: 'fire' as ElementType,
-        attackCooldown: 0,
-        attackMaxCooldown: 50,
-        telegraphTimer: 0,
-        telegraphMax: 25,
-        isTelegraphing: false,
-        hitFlash: 0,
-      }))),
-      // Zona 2: Sendero - Grupo 2 (Y ~ 5600)
-      ...([0, 1, 2].map((i) => ({
-        id: `forest-g2-chaser-${i}`,
-        name: 'Duende Emboscador',
-        archetype: 'chaser' as const,
-        x: 1380 + (i % 2 === 0 ? -50 : 50),
-        y: 5600 + i * 50,
-        vx: 0,
-        vy: 0,
-        radius: 15,
-        hp: 85,
-        maxHp: 85,
-        attackPower: 11,
-        moveSpeed: 1.0,
-        statuses: [],
-        color: '#dc2626',
-        avatar: '👹',
-        weakness: 'ice' as ElementType,
-        attackCooldown: 0,
-        attackMaxCooldown: 45,
-        telegraphTimer: 0,
-        telegraphMax: 20,
-        isTelegraphing: false,
-        hitFlash: 0,
-      }))),
-      {
-        id: 'forest-g2-shooter-1',
-        name: 'Espectro de las Sombras',
-        archetype: 'ranged' as const,
-        x: 1460,
-        y: 5500,
-        vx: 0,
-        vy: 0,
-        radius: 18,
-        hp: 110,
-        maxHp: 110,
-        attackPower: 14,
-        moveSpeed: 0.65,
-        statuses: [],
-        color: '#a855f7',
-        avatar: '👻',
-        weakness: 'lightning' as ElementType,
-        attackCooldown: 30,
-        attackMaxCooldown: 80,
-        telegraphTimer: 0,
-        telegraphMax: 30,
-        isTelegraphing: false,
-        hitFlash: 0,
-      },
-      // Zona 3: Checkpoint - Guardianes del Portón (Y ~ 4150)
-      ...([0, 1, 2].map((i) => ({
-        id: `gate-guard-${i}`,
-        name: 'Guardián del Portón',
-        archetype: 'chaser' as const,
-        x: 1100 + i * 90,
-        y: 4180,
-        vx: 0,
-        vy: 0,
-        radius: 18,
-        hp: 140,
-        maxHp: 140,
-        attackPower: 16,
-        moveSpeed: 0.85,
-        statuses: [],
-        color: '#0284c7',
-        avatar: '🗿',
-        weakness: 'lightning' as ElementType,
-        attackCooldown: 20,
-        attackMaxCooldown: 60,
-        telegraphTimer: 0,
-        telegraphMax: 25,
-        isTelegraphing: false,
-        hitFlash: 0,
-      }))),
-      // Zona 4: Arena Final - El Custodio del Umbral (Jefe Final del Nivel 1, Y ~ 1500)
-      createThresholdCustodian(1200, 1500),
-    ];
+    // Generar patrullas del Bestiario y jefe a lo largo del sendero
+    g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
     g.currentHp = player.currentHp;
@@ -788,6 +726,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.x = 1200;
         g.camera.y = 8100;
         g.terrainManager.obstacles = [...initialObstacles];
+        g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+        g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
       } else {
         g.forestLevel = null;
         g.wizard.x = 550;
@@ -5109,6 +5049,25 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           resolveCircleObstacleCollision(enemy, obs);
         });
       });
+
+      // Colisión de enemigos con troncos de árboles del bosque
+      if (g.forestLevel) {
+        const forestTrees = g.forestLevel.trees;
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          forestTrees.forEach((tree) => {
+            const tdx = enemy.x - tree.x;
+            const tdy = enemy.y - tree.y;
+            const tdist = Math.hypot(tdx, tdy);
+            const minDist = enemy.radius + tree.trunkRadius;
+            if (tdist > 0 && tdist < minDist) {
+              const overlap = minDist - tdist;
+              enemy.x += (tdx / tdist) * overlap;
+              enemy.y += (tdy / tdist) * overlap;
+            }
+          });
+        });
+      }
 
       // Colisión de enemigos contra Barreras de Fuego activas
       if (g.forestLevel && g.forestLevel.fireBarriers) {
