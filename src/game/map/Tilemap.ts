@@ -101,6 +101,10 @@ export class Tilemap {
     let bossCellsCount = 0;
     let bossSumX = 0;
     let bossSumY = 0;
+    let minBx = Infinity;
+    let maxBx = -Infinity;
+    let minBy = Infinity;
+    let maxBy = -Infinity;
 
     for (let r = 0; r < this.rows; r++) {
       const rowChars = layout[r] || '';
@@ -115,9 +119,10 @@ export class Tilemap {
           this.spawnPoint = { x: centerX, y: centerY, col: c, row: r };
           rowTiles.push(TileType.FLOOR);
         } else if (char === TileType.CHECKPOINT) {
+          const cpIdx = this.checkpoints.length + 1;
           this.checkpoints.push({
-            id: `checkpoint-ancient-step-${this.checkpoints.length + 1}`,
-            name: 'Altar de los Antiguos',
+            id: `checkpoint-trail-${cpIdx}`,
+            name: `Santuario del Sendero ${cpIdx}`,
             x: centerX,
             y: centerY,
             col: c,
@@ -167,6 +172,10 @@ export class Tilemap {
           bossCellsCount++;
           bossSumX += centerX;
           bossSumY += centerY;
+          minBx = Math.min(minBx, c * TILE_WIDTH);
+          maxBx = Math.max(maxBx, (c + 1) * TILE_WIDTH);
+          minBy = Math.min(minBy, r * TILE_HEIGHT);
+          maxBy = Math.max(maxBy, (r + 1) * TILE_HEIGHT);
           rowTiles.push(TileType.BOSS_ARENA);
         } else {
           rowTiles.push(char);
@@ -181,13 +190,14 @@ export class Tilemap {
         x: Math.round(bossSumX / bossCellsCount),
         y: Math.round(bossSumY / bossCellsCount),
       };
+      this.bossArenaBounds = { minX: minBx, maxX: maxBx, minY: minBy, maxY: maxBy };
     }
 
-    // Ubicar la rueda elemental cerca del portón para el puzle de hielo
+    // Ubicar la rueda elemental cerca del portón para el puzle de hielo en el sendero
     if (this.gate.col > 3) {
       this.puzzleWheel = {
         x: (this.gate.col - 3) * TILE_WIDTH + TILE_WIDTH / 2,
-        y: 2 * TILE_HEIGHT + TILE_HEIGHT / 2,
+        y: this.gate.row * TILE_HEIGHT + TILE_HEIGHT / 2,
         charge: 0,
         isCompleted: false,
         hitFlash: 0,
@@ -519,42 +529,126 @@ export class Tilemap {
     isArena: boolean,
     time: number
   ): void {
-    // 1. Color base de losas
-    ctx.fillStyle = isArena ? '#1a101f' : '#141724';
+    if (isArena) {
+      // 1. Color base de arena abisal del Custodio del Umbral
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
+
+      // Líneas de mortero con resplandor púrpura
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.28)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 1, y + 1, TILE_WIDTH - 2, TILE_HEIGHT - 2);
+
+      const seed = (col * 17 + row * 31) % 100;
+      if (seed < 22) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+        ctx.lineWidth = 1.2;
+        const rx = x + 16 + (seed % 32);
+        const ry = y + 16 + ((seed * 3) % 32);
+        ctx.beginPath();
+        ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
+
+    // --- Sendero Natural "La Ruta del Umbral" ---
+    // Tonos de tierra compactada y losas de piedra (#27272A y #3F3F46)
+    const baseHash = (col * 37 + row * 19) % 100;
+    ctx.fillStyle = baseHash % 2 === 0 ? '#27272a' : '#3f3f46';
     ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
-    // 2. Líneas de mortero y subdivisiones de baldosas de piedra (4 losas por celda)
-    ctx.strokeStyle = isArena ? 'rgba(88, 28, 135, 0.35)' : 'rgba(255, 255, 255, 0.05)';
+    // Losas de piedra desgastadas incrustadas en el sendero
+    ctx.strokeStyle = 'rgba(24, 24, 27, 0.4)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(x + 1, y + 1, TILE_WIDTH - 2, TILE_HEIGHT - 2);
+    ctx.strokeRect(x + 2, y + 2, TILE_WIDTH - 4, TILE_HEIGHT - 4);
 
-    ctx.beginPath();
-    ctx.moveTo(x + TILE_WIDTH / 2, y);
-    ctx.lineTo(x + TILE_WIDTH / 2, y + TILE_HEIGHT);
-    ctx.moveTo(x, y + TILE_HEIGHT / 2);
-    ctx.lineTo(x + TILE_WIDTH, y + TILE_HEIGHT / 2);
-    ctx.stroke();
-
-    // 3. Biselado sutil de iluminación en borde superior
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
-    ctx.fillRect(x + 2, y + 2, TILE_WIDTH - 4, 2);
-    ctx.fillRect(x + 2, y + 2, 2, TILE_HEIGHT - 4);
-
-    // 4. Glifos rúnicos arcanos aleatorios según semilla de celda
-    const seed = (col * 17 + row * 31) % 100;
-    if (seed < 16) {
-      ctx.save();
-      ctx.strokeStyle = isArena ? 'rgba(244, 63, 94, 0.28)' : 'rgba(56, 189, 248, 0.22)';
-      ctx.lineWidth = 1;
-      const rx = x + 16 + (seed % 32);
-      const ry = y + 16 + ((seed * 3) % 32);
+    // Guijarros y piedras dispersas (matemáticas procedurales)
+    if (baseHash < 40) {
+      ctx.fillStyle = '#52525b';
+      const px = x + 8 + (baseHash % 48);
+      const py = y + 8 + ((baseHash * 7) % 48);
       ctx.beginPath();
-      ctx.arc(rx, ry, 6, 0, Math.PI * 2);
-      ctx.moveTo(rx - 8, ry);
-      ctx.lineTo(rx + 8, ry);
-      ctx.stroke();
-      ctx.restore();
+      ctx.ellipse(px, py, 3.5, 2.2, baseHash * 0.1, 0, Math.PI * 2);
+      ctx.fill();
     }
+    if (baseHash > 60) {
+      ctx.fillStyle = '#71717a';
+      const px = x + 12 + ((baseHash * 3) % 40);
+      const py = y + 12 + ((baseHash * 5) % 40);
+      ctx.beginPath();
+      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Briznas de hierba silvestre natural en las juntas del sendero
+    if (baseHash % 3 === 0) {
+      ctx.strokeStyle = baseHash % 2 === 0 ? 'rgba(34, 197, 94, 0.45)' : 'rgba(22, 163, 74, 0.38)';
+      ctx.lineWidth = 1.2;
+      const gx = x + 10 + (baseHash % 44);
+      const gy = y + 16 + ((baseHash * 4) % 36);
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.quadraticCurveTo(gx - 3, gy - 7, gx - 5, gy - 10);
+      ctx.moveTo(gx + 2, gy);
+      ctx.quadraticCurveTo(gx + 3, gy - 8, gx + 6, gy - 11);
+      ctx.stroke();
+    }
+
+    // Faroles Rúnicos Guía: Cada 60 columnas a lo largo del sendero
+    if (col > 0 && col % 60 === 0 && (row === 4 || row === 7)) {
+      this.drawLanternWaypoint(ctx, x, y, col, row, time);
+    }
+  }
+
+  /**
+   * Dibuja faroles rúnicos protectores cada 60 tiles que guían al héroe hacia el este.
+   */
+  private drawLanternWaypoint(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    col: number,
+    row: number,
+    time: number
+  ): void {
+    const cx = x + TILE_WIDTH / 2;
+    const cy = y + TILE_HEIGHT / 2;
+
+    // Pedestal de piedra rúnica
+    ctx.fillStyle = '#1c1917';
+    ctx.fillRect(cx - 6, cy + 2, 12, 12);
+    ctx.strokeStyle = '#44403c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - 6, cy + 2, 12, 12);
+
+    // Poste vertical
+    ctx.fillStyle = '#292524';
+    ctx.fillRect(cx - 2, cy - 14, 4, 16);
+
+    // Farol rúnico etéreo con fuego azul celeste
+    const pulse = Math.sin(time * 3 + col) * 0.15 + 0.85;
+    const radGlow = ctx.createRadialGradient(cx, cy - 16, 2, cx, cy - 16, 22 * pulse);
+    radGlow.addColorStop(0, 'rgba(56, 189, 248, 0.65)');
+    radGlow.addColorStop(0.5, 'rgba(14, 165, 233, 0.25)');
+    radGlow.addColorStop(1, 'rgba(14, 165, 233, 0)');
+    ctx.fillStyle = radGlow;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 16, 22 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Núcleo de la llama rúnica
+    ctx.fillStyle = '#f0f9ff';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 16, 3 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Corona metálica del farol
+    ctx.strokeStyle = '#78716c';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(cx - 5, cy - 21, 10, 10);
   }
 
   private drawWallTile(
@@ -571,7 +665,7 @@ export class Tilemap {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fillRect(x - 2, y + TILE_HEIGHT - 4, TILE_WIDTH + 4, 10);
 
-    // 2. Cara frontal del bloque de piedra (Sombra/Relieve)
+    // 2. Base de mampostería de roca ancestral (Relieve 2.5D)
     ctx.fillStyle = '#171a28';
     ctx.fillRect(x, y + TILE_HEIGHT - wallHeight, TILE_WIDTH, wallHeight);
 
@@ -580,7 +674,7 @@ export class Tilemap {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y + TILE_HEIGHT - wallHeight, TILE_WIDTH, wallHeight);
 
-    // 3. Cara superior del muro (Iluminada y transitable visualmente por encima)
+    // 3. Cara superior del muro
     ctx.fillStyle = '#2b3147';
     ctx.fillRect(x, y - wallHeight, TILE_WIDTH, TILE_HEIGHT);
 
@@ -594,9 +688,43 @@ export class Tilemap {
     ctx.fillRect(x, y - wallHeight + TILE_HEIGHT - 2, TILE_WIDTH, 2);
     ctx.fillRect(x + TILE_WIDTH - 2, y - wallHeight, 2, TILE_HEIGHT);
 
-    // Grietas y runas antiguas grabadas en algunos bloques
+    // 4. Copas de árboles estilizadas (#14532D, #166534) y troncos oscuros
+    // Enmarcan el sendero en los bordes boscosos
     const seed = (col * 23 + row * 41) % 100;
-    if (seed < 22) {
+    const isPerimeter = row <= 2 || row >= this.rows - 3 || col === 0 || col === this.cols - 1;
+
+    if (isPerimeter || seed < 65) {
+      // Tronco de corteza oscura emergiendo de la piedra
+      ctx.fillStyle = '#1c1917';
+      const trunkW = 10;
+      const trunkX = x + TILE_WIDTH / 2 - trunkW / 2 + ((seed % 11) - 5);
+      const trunkY = y - wallHeight + 6;
+      ctx.fillRect(trunkX, trunkY, trunkW, 16);
+
+      // Follaje de la copa de árbol en capas (Verde Bosque Profundo y Esmeralda Oscuro)
+      const crownCx = x + TILE_WIDTH / 2 + ((seed % 15) - 7);
+      const crownCy = y - wallHeight + 2;
+
+      // Capa base de copa (Verde más oscuro #14532D)
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.arc(crownCx, crownCy, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Capa media iluminada (#166534)
+      ctx.fillStyle = '#166534';
+      ctx.beginPath();
+      ctx.arc(crownCx - 3, crownCy - 3, 15, 0, Math.PI * 2);
+      ctx.arc(crownCx + 4, crownCy - 2, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Toque de brillo superior (#15803d)
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.arc(crownCx - 2, crownCy - 6, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (seed < 85) {
+      // En monolitos internos de piedra, runas doradas ancestrales
       ctx.save();
       ctx.strokeStyle = '#f59e0b';
       ctx.shadowColor = '#f59e0b';

@@ -245,6 +245,16 @@ export class EnemyManager {
 
       if (e.hitFlash > 0) e.hitFlash--;
 
+      // 0. Dormant Culling en el sendero modular largo:
+      // Monstruos a más de 18 celdas (~1150px) permanecen inactivos para no saturar la CPU a 60 FPS
+      const distToPlayer = Math.hypot(wizard.x - e.x, wizard.y - e.y);
+      if (distToPlayer > 1150 && e.archetype !== 'boss' && !e.bossType) {
+        e.vx = 0;
+        e.vy = 0;
+        e.isTelegraphing = false;
+        continue;
+      }
+
       // 1. Efectos de estado elementales
       let isFrozen = false;
       let speedMult = 1.0;
@@ -298,7 +308,7 @@ export class EnemyManager {
 
       const dx = wizard.x - e.x;
       const dy = wizard.y - e.y;
-      const distToPlayer = Math.hypot(dx, dy);
+      // distToPlayer ya fue calculado al inicio del bucle para dormant culling
 
       // 2. IA DE JEFES ESPECÍFICOS
 

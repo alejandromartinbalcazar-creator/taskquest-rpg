@@ -1,13 +1,8 @@
-// level1Layout.ts — Matriz rectangular estructurada del Nivel 1: "El Paso de los Antiguos"
-// Layout: 80 columnas x 8 filas (80 x 64px = 5120px de ancho, 8 x 64px = 512px de alto)
+// level1Layout.ts — Matriz estructurada del Nivel 1: "La Ruta del Umbral" (Modular Segmented Trail)
+// 460 columnas x 12 filas (460 x 64px = 29,440px de ancho, 12 x 64px = 768px de alto)
 
-export const LEVEL_1_LAYOUT: string[] = [
-  "################################################################################",
-  "#P...#...........#.......3.....#...............#...............................#",
-  "#....#...........#.............#...............#...........BBBBBBBBB...........#",
-  "#........................###...#.......C.......D..........BBBBBBBBBBB..........#",
-  "#........................###...#...............#..........BBBBBBBBBBB..........#",
-  "#....#...........#.............#...............#...........BBBBBBBBB...........#",
-  "#....#.....1.....#.......2.....#...............#...............................#",
-  "################################################################################"
-];
+import { assembleLevel1Map, LEVEL_1_SEQUENCE } from './TrailMapManager';
+
+export const LEVEL_1_LAYOUT: string[] = assembleLevel1Map();
+
+export { assembleLevel1Map, LEVEL_1_SEQUENCE };
