@@ -217,12 +217,25 @@ export function drawWizardSprite({
 
   ctx.restore();
 
-  // Destello / Tinte elemental al castear (60ms Elemental Flash)
+  // Destello / Aura elemental al castear (60ms Elemental Flash sin artefactos rectangulares)
   if (castFlashColor) {
     ctx.save();
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = castFlashColor;
-    ctx.fillRect(-25 * scale, -35 * scale, 50 * scale, 55 * scale);
+    // Halo esférico difuminado centrado en el mago
+    const auraGrad = ctx.createRadialGradient(0, -6 * scale, 2 * scale, 0, -6 * scale, 24 * scale);
+    auraGrad.addColorStop(0, castFlashColor);
+    auraGrad.addColorStop(0.55, castFlashColor);
+    auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(0, -6 * scale, 24 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Micro-anillo sutil de onda expansiva
+    ctx.strokeStyle = castFlashColor;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.arc(0, -6 * scale, 19 * scale, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
