@@ -50,6 +50,7 @@ import {
   ForestLevelData,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
+import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
@@ -393,6 +394,28 @@ function createLevel1ForestEnemies(enemyManager: EnemyManager): GameEnemy[] {
   ];
 }
 
+/**
+ * Inicializa las patrullas del Bestiario y el jefe del Nivel 1 a partir de las celdas
+ * de spawn del Tilemap ('1' Pyre Golem, '2' Storm Stalker, '3' Frost Lurker, 'B' Custodio del Umbral).
+ */
+function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap): GameEnemy[] {
+  const enemies: GameEnemy[] = [];
+  tilemap.enemySpawns.forEach((spawn) => {
+    if (spawn.type === 'golem') {
+      enemies.push(enemyManager.createPyreGolem(spawn.id, spawn.x, spawn.y));
+    } else if (spawn.type === 'stalker') {
+      enemies.push(enemyManager.createStormStalker(spawn.id, spawn.x, spawn.y));
+    } else if (spawn.type === 'lurker') {
+      enemies.push(enemyManager.createFrostLurker(spawn.id, spawn.x, spawn.y));
+    }
+  });
+
+  if (tilemap.bossSpawn) {
+    enemies.push(createThresholdCustodian(tilemap.bossSpawn.x, tilemap.bossSpawn.y));
+  }
+  return enemies;
+}
+
 export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   player,
   floor,
@@ -576,6 +599,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     respawnFadeTimer: 0,
     lastCheckpointId: 'checkpoint-0-camp',
     forestLevel: null as ForestLevelData | null,
+    tilemap: null as Tilemap | null,
   });
 
   // Chequeo de orientación
@@ -616,37 +640,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // Ignorar error de sandbox / storage
     }
 
-    // Crear el nivel extendido del bosque (2400 x 8800)
-    const { levelData, initialObstacles } = createLevel1Forest();
-    g.forestLevel = levelData;
+    // Inicializar el Nivel 1 con motor de Tilemap procedural estructurado
+    const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
+    g.tilemap = tilemap;
+    g.forestLevel = null;
 
-    let spawnX = 350;
-    let spawnY = 1200;
+    let spawnX = tilemap.spawnPoint.x;
+    let spawnY = tilemap.spawnPoint.y;
 
-    if (savedCheckpointId && levelData.checkpoints) {
+    if (savedCheckpointId) {
       g.lastCheckpointId = savedCheckpointId;
-      const targetCp = levelData.checkpoints.find((c) => c.id === savedCheckpointId);
+      const targetCp = tilemap.checkpoints.find((c) => c.id === savedCheckpointId);
       if (targetCp) {
         spawnX = targetCp.respawnX;
         spawnY = targetCp.respawnY;
+        targetCp.isActive = true;
 
-        // Activar todos los puntos de control hasta el alcanzado
-        const targetIdx = levelData.checkpoints.findIndex((c) => c.id === savedCheckpointId);
-        for (let cIdx = 0; cIdx <= targetIdx; cIdx++) {
-          levelData.checkpoints[cIdx].isActive = true;
-        }
-
-        // Si ya había cruzado el portón (Checkpoint 2: Antesala del Umbral)
-        if (savedCheckpointId === 'checkpoint-2-threshold') {
-          levelData.puzzleWheel.isCompleted = true;
-          levelData.puzzleWheel.charge = 100;
-          levelData.gateDoor.isOpen = true;
-          levelData.gateDoor.openProgress = 1.0;
-          levelData.gateDoor.solid = false;
+        // Si el checkpoint está después del portón, mantener el portón abierto
+        if (targetCp.col >= tilemap.gate.col) {
+          tilemap.openGate();
         }
       }
     } else {
-      g.lastCheckpointId = 'checkpoint-0-camp';
+      g.lastCheckpointId = tilemap.checkpoints[0]?.id || 'checkpoint-0-start';
     }
 
     g.wizard.x = spawnX;
@@ -657,10 +673,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.camera.x = spawnX;
     g.camera.y = spawnY;
     g.cameraSystem.reset(spawnX, spawnY);
-    g.terrainManager.obstacles = [...initialObstacles];
+    g.terrainManager.obstacles = [];
 
-    // Generar patrullas del Bestiario y jefe a lo largo del sendero
-    g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+    // Generar patrullas del Bestiario y jefe a lo largo de las celdas del Tilemap
+    g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap);
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
     g.currentHp = player.currentHp;
@@ -867,30 +883,24 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.elementalCataclysms = [];
 
       if (nextIndex === 0) {
-        const { levelData, initialObstacles } = createLevel1Forest();
-        g.forestLevel = levelData;
+        const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
+        g.tilemap = tilemap;
+        g.forestLevel = null;
         let savedCpId: string | null = null;
         try {
           savedCpId = localStorage.getItem('taskquest_level1_last_checkpoint');
         } catch {}
-        let rx = 350;
-        let ry = 1200;
-        if (savedCpId && levelData.checkpoints) {
+        let rx = tilemap.spawnPoint.x;
+        let ry = tilemap.spawnPoint.y;
+        if (savedCpId) {
           g.lastCheckpointId = savedCpId;
-          const cp = levelData.checkpoints.find((c) => c.id === savedCpId);
+          const cp = tilemap.checkpoints.find((c) => c.id === savedCpId);
           if (cp) {
             rx = cp.respawnX;
             ry = cp.respawnY;
-            const tIdx = levelData.checkpoints.findIndex((c) => c.id === savedCpId);
-            for (let cIdx = 0; cIdx <= tIdx; cIdx++) {
-              levelData.checkpoints[cIdx].isActive = true;
-            }
-            if (savedCpId === 'checkpoint-2-threshold') {
-              levelData.puzzleWheel.isCompleted = true;
-              levelData.puzzleWheel.charge = 100;
-              levelData.gateDoor.isOpen = true;
-              levelData.gateDoor.openProgress = 1.0;
-              levelData.gateDoor.solid = false;
+            cp.isActive = true;
+            if (cp.col >= tilemap.gate.col) {
+              tilemap.openGate();
             }
           }
         }
@@ -902,10 +912,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.x = rx;
         g.camera.y = ry;
         g.cameraSystem.reset(rx, ry);
-        g.terrainManager.obstacles = [...initialObstacles];
-        g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+        g.terrainManager.obstacles = [];
+        g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
       } else {
+        g.tilemap = null;
         g.forestLevel = null;
         g.wizard.x = 550;
         g.wizard.y = 600;
@@ -3813,10 +3824,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
           if (g.respawnFadeTimer <= 0) {
             // 1. Obtener el último checkpoint alcanzado
-            const cpId = g.lastCheckpointId || 'checkpoint-0-camp';
-            const cp = g.forestLevel?.checkpoints?.find((c) => c.id === cpId) || g.forestLevel?.checkpoints?.[0];
-            const respawnX = cp ? cp.respawnX : 350;
-            const respawnY = cp ? cp.respawnY : 1200;
+            const cpId = g.lastCheckpointId || 'checkpoint-0-start';
+            let respawnX = 96;
+            let respawnY = 96;
+            let cpName = 'PUNTO DE CONTROL';
+
+            if (g.tilemap) {
+              const cp = g.tilemap.checkpoints.find((c) => c.id === cpId) || g.tilemap.checkpoints[0];
+              if (cp) {
+                respawnX = cp.respawnX;
+                respawnY = cp.respawnY;
+                cpName = cp.name;
+              } else {
+                respawnX = g.tilemap.spawnPoint.x;
+                respawnY = g.tilemap.spawnPoint.y;
+              }
+            } else if (g.forestLevel) {
+              const cp = g.forestLevel.checkpoints?.find((c) => c.id === cpId) || g.forestLevel.checkpoints?.[0];
+              respawnX = cp ? cp.respawnX : 350;
+              respawnY = cp ? cp.respawnY : 1200;
+              cpName = cp ? cp.name : 'CAMPAMENTO';
+            }
 
             // 2. Reubicar al jugador y cámara suavemente
             wizard.x = respawnX;
@@ -3862,14 +3890,18 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
-            g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+            if (g.tilemap) {
+              g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, g.tilemap);
+            } else {
+              g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
+            }
             g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
 
             g.floatingTexts.push({
               id: `respawn-chime-${Date.now()}`,
               x: wizard.x,
               y: wizard.y - 30,
-              text: `🛡️ ¡REAPARICIÓN EN ${cp ? cp.name.toUpperCase() : 'PUNTO DE CONTROL'}! [+1.5s INVULNERABLE]`,
+              text: `🛡️ ¡REAPARICIÓN EN ${cpName.toUpperCase()}! [+1.5s INVULNERABLE]`,
               color: '#38bdf8',
               fontSize: 14,
               opacity: 1,
@@ -4931,8 +4963,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // Restricción de límites del mundo
-      if (g.forestLevel) {
+      // Restricción de límites del mundo y resolución de colisiones del Tilemap
+      if (g.tilemap) {
+        const resolved = g.tilemap.resolveEntityCollision(wizard, 0, 0);
+        wizard.x = resolved.x;
+        wizard.y = resolved.y;
+      } else if (g.forestLevel) {
         wizard.x = Math.max(80, Math.min(LEVEL_WIDTH - 80, wizard.x));
         wizard.y = Math.max(80, Math.min(LEVEL_HEIGHT - 80, wizard.y));
       } else {
@@ -5057,8 +5093,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const cCanvas = canvasRef.current;
       const viewW = cCanvas ? cCanvas.width : 1100;
       const viewH = cCanvas ? cCanvas.height : 700;
-      const worldW = g.forestLevel ? LEVEL_WIDTH : 1100;
-      const worldH = g.forestLevel ? LEVEL_HEIGHT : 800;
+      const worldW = g.tilemap ? g.tilemap.width : g.forestLevel ? LEVEL_WIDTH : 1100;
+      const worldH = g.tilemap ? g.tilemap.height : g.forestLevel ? LEVEL_HEIGHT : 800;
       const actualVx = wizard.x - g.prevWizardX;
       const actualVy = wizard.y - g.prevWizardY;
 
@@ -5523,6 +5559,215 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // ACTUALIZAR MECÁNICAS DEL TILEMAP PROCEDURAL (Puzle de Hielo, Portón y Checkpoints)
+      if (g.tilemap) {
+        const tm = g.tilemap;
+        tm.update(dtSeconds);
+
+        // A. Puntos de control (Checkpoints)
+        tm.checkpoints.forEach((cp) => {
+          const distToCp = Math.hypot(wizard.x - cp.x, wizard.y - cp.y);
+          if (distToCp <= cp.activationRadius && !cp.isActive) {
+            cp.isActive = true;
+            g.lastCheckpointId = cp.id;
+            try {
+              localStorage.setItem('taskquest_level1_last_checkpoint', cp.id);
+            } catch {}
+
+            elementalSound.playRelicChestOpen();
+            g.screenShake = 3;
+
+            g.floatingTexts.push({
+              id: `tm-cp-active-${Date.now()}`,
+              x: cp.x,
+              y: cp.y - 45,
+              text: `✨ ¡ALTAR RÚNICO VINCULADO! (${cp.name})`,
+              color: '#f59e0b',
+              fontSize: 14,
+              opacity: 1,
+              vy: -1.4,
+              life: 55,
+            });
+
+            // Regeneración de vida faltante (50%)
+            const missingHp = g.maxHp - g.currentHp;
+            if (missingHp > 0) {
+              const healAmt = Math.round(missingHp * 0.5);
+              g.currentHp = Math.min(g.maxHp, g.currentHp + healAmt);
+              setCurrentHp(g.currentHp);
+              g.floatingTexts.push({
+                id: `tm-cp-heal-${Date.now()}`,
+                x: wizard.x,
+                y: wizard.y - 25,
+                text: `💚 +${healAmt} HP RESTAURADOS (50%)`,
+                color: '#4ade80',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.2,
+                life: 45,
+              });
+            }
+          }
+        });
+
+        // B. Rueda elemental de hielo del Tilemap
+        const wheel = tm.puzzleWheel;
+        if (!wheel.isCompleted) {
+          // 1. Proyectiles de hielo
+          g.projectiles.forEach((p) => {
+            if (p.isHostile || p.life <= 0) return;
+            const isIce = p.spellType === 'ice_shard' || p.spellType === 'ice_lance' || p.spellType === 'cryo_storm' || p.statusToApply === 'frozen';
+            if (!isIce) return;
+
+            const distToWheel = Math.hypot(p.x - wheel.x, p.y - wheel.y);
+            if (distToWheel <= p.radius + 36) {
+              p.life = 0;
+              const boost = p.spellType === 'ice_lance' ? 35 : 20;
+              wheel.charge = Math.min(100, wheel.charge + boost);
+              wheel.rotation += 0.55;
+              wheel.hitFlash = 8;
+              elementalSound.playWheelTurn(wheel.charge / 100);
+
+              g.floatingTexts.push({
+                id: `tm-wheel-hit-${frameNow}`,
+                x: wheel.x,
+                y: wheel.y - 30,
+                text: `+${boost}% ENGRANAJE GLACIAL ❄️`,
+                color: '#00f0ff',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.2,
+                life: 30,
+              });
+
+              if (wheel.charge >= 100) {
+                wheel.charge = 100;
+                wheel.isCompleted = true;
+                tm.openGate();
+                elementalSound.playWheelComplete();
+                elementalSound.playGateOpen();
+                g.screenShake = 10;
+                g.floatingTexts.push({
+                  id: `tm-gate-unlocked-${frameNow}`,
+                  x: tm.gate.col * 64 + 32,
+                  y: tm.gate.row * 64 + 32,
+                  text: '🔓 ¡PORTÓN DE HIELO DESBLOQUEADO!',
+                  color: '#38bdf8',
+                  fontSize: 16,
+                  opacity: 1,
+                  vy: -1.5,
+                  life: 60,
+                });
+              }
+            }
+          });
+
+          // 2. Chorro continuo de hielo canalizado
+          if (wizard.channeledStream.active && wizard.channeledStream.type === 'ice') {
+            const distToWheel = Math.hypot(wheel.x - wizard.x, wheel.y - wizard.y);
+            if (distToWheel <= wizard.channeledStream.range + 36) {
+              let angDiff = Math.abs(Math.atan2(wheel.y - wizard.y, wheel.x - wizard.x) - wizard.channeledStream.aimAngle);
+              while (angDiff > Math.PI) angDiff = Math.abs(angDiff - Math.PI * 2);
+              if (angDiff <= wizard.channeledStream.spreadAngle / 2 + 0.25) {
+                wheel.charge = Math.min(100, wheel.charge + dt * 0.08);
+                wheel.rotation += 0.05;
+                if (Math.random() < 0.2) {
+                  elementalSound.playWheelTurn(wheel.charge / 100);
+                }
+                if (wheel.charge >= 100) {
+                  wheel.charge = 100;
+                  wheel.isCompleted = true;
+                  tm.openGate();
+                  elementalSound.playWheelComplete();
+                  elementalSound.playGateOpen();
+                  g.screenShake = 10;
+                  g.floatingTexts.push({
+                    id: `tm-gate-unlocked-${frameNow}`,
+                    x: tm.gate.col * 64 + 32,
+                    y: tm.gate.row * 64 + 32,
+                    text: '🔓 ¡PORTÓN DE HIELO DESBLOQUEADO!',
+                    color: '#38bdf8',
+                    fontSize: 16,
+                    opacity: 1,
+                    vy: -1.5,
+                    life: 60,
+                  });
+                }
+              }
+            }
+          }
+
+          // 3. Rayo Criogénico continuo
+          g.cryoBeams.forEach((beam) => {
+            const bx1 = wizard.x + Math.cos(beam.aimAngle) * 16;
+            const by1 = wizard.y - 12 + Math.sin(beam.aimAngle) * 10;
+            const bx2 = bx1 + Math.cos(beam.aimAngle) * beam.range;
+            const by2 = by1 + Math.sin(beam.aimAngle) * beam.range * 0.72;
+            const bdx = bx2 - bx1;
+            const bdy = by2 - by1;
+            const blenSq = bdx * bdx + bdy * bdy;
+            const t = Math.max(0, Math.min(1, ((wheel.x - bx1) * bdx + (wheel.y - by1) * bdy) / (blenSq || 1)));
+            const px = bx1 + t * bdx;
+            const py = by1 + t * bdy;
+            if (Math.hypot(wheel.x - px, wheel.y - py) <= beam.width * 1.5 + 36) {
+              wheel.charge = Math.min(100, wheel.charge + dt * 0.12);
+              wheel.rotation += 0.08;
+              if (Math.random() < 0.25) {
+                elementalSound.playWheelTurn(wheel.charge / 100);
+              }
+              if (wheel.charge >= 100) {
+                wheel.charge = 100;
+                wheel.isCompleted = true;
+                tm.openGate();
+                elementalSound.playWheelComplete();
+                elementalSound.playGateOpen();
+                g.screenShake = 10;
+                g.floatingTexts.push({
+                  id: `tm-gate-unlocked-${frameNow}`,
+                  x: tm.gate.col * 64 + 32,
+                  y: tm.gate.row * 64 + 32,
+                  text: '🔓 ¡PORTÓN DE HIELO DESBLOQUEADO!',
+                  color: '#38bdf8',
+                  fontSize: 16,
+                  opacity: 1,
+                  vy: -1.5,
+                  life: 60,
+                });
+              }
+            }
+          });
+
+          // 4. Púas de Erupción Glacial
+          g.glacialEruptions.forEach((eruption) => {
+            eruption.segments.forEach((seg) => {
+              if (seg.emerged && Math.hypot(seg.x - wheel.x, seg.y - wheel.y) < 60) {
+                wheel.charge = Math.min(100, wheel.charge + dt * 0.18);
+                wheel.rotation += 0.15;
+                if (wheel.charge >= 100) {
+                  wheel.charge = 100;
+                  wheel.isCompleted = true;
+                  tm.openGate();
+                  elementalSound.playWheelComplete();
+                  elementalSound.playGateOpen();
+                  g.screenShake = 10;
+                  g.floatingTexts.push({
+                    id: `tm-gate-unlocked-${frameNow}`,
+                    x: tm.gate.col * 64 + 32,
+                    y: tm.gate.row * 64 + 32,
+                    text: '🔓 ¡PORTÓN DE HIELO DESBLOQUEADO!',
+                    color: '#38bdf8',
+                    fontSize: 16,
+                    opacity: 1,
+                    vy: -1.5,
+                    life: 60,
+                  });
+                }
+              }
+            });
+          });
+        }
+      }
+
       // 3. Actualizar IA de Enemigos
       g.enemyManager.update(
         wizard,
@@ -5543,6 +5788,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           resolveCircleObstacleCollision(enemy, obs);
         });
       });
+
+      // Colisión de enemigos con muros ancestrales del Tilemap
+      if (g.tilemap) {
+        const tm = g.tilemap;
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const resolved = tm.resolveEntityCollision(enemy, 0, 0);
+          enemy.x = resolved.x;
+          enemy.y = resolved.y;
+        });
+      }
 
       // Colisión de enemigos con troncos de árboles del bosque
       if (g.forestLevel) {
@@ -5677,6 +5933,44 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               life: 12,
             });
           }
+        }
+
+        // Comprobar colisión con muros ancestrales o portón cerrado del Tilemap
+        if (g.tilemap && g.tilemap.blocksProjectilesAt(p.x, p.y)) {
+          if (p.areaOfEffect) {
+            triggerAoEExplosion(
+              p,
+              enemies,
+              g.enemyManager,
+              g.terrainManager,
+              g.particles,
+              g.floatingTexts,
+              (amt) => {
+                g.screenShake = Math.max(g.screenShake, amt);
+              }
+            );
+          }
+          if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
+            g.screenShake = Math.max(g.screenShake, 6);
+          } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
+            g.terrainManager.spawnFrostPatch(p.x, p.y, 40);
+          }
+          for (let s = 0; s < 6; s++) {
+            const spkAng = Math.random() * Math.PI * 2;
+            g.particles.push({
+              id: `tm-wall-hit-${Date.now()}-${s}`,
+              x: p.x,
+              y: p.y,
+              vx: Math.cos(spkAng) * (1.5 + Math.random() * 2),
+              vy: Math.sin(spkAng) * (1.5 + Math.random() * 2),
+              radius: 2,
+              color: '#94a3b8',
+              alpha: 1,
+              life: 14,
+            });
+          }
+          g.projectiles.splice(pIdx, 1);
+          continue;
         }
 
         // Comprobar colisión con obstáculos (muros, rocas, estacas)
@@ -10502,7 +10796,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.overloadCores,
             g.glacialPlasmaStorms,
             g.elementalCataclysms,
-            g.forestLevel ?? undefined
+            g.forestLevel ?? undefined,
+            g.tilemap ?? undefined
           );
         }
       }

@@ -65,6 +65,7 @@ import {
   drawCustodianTelegraphs,
   drawCustodianHUD,
 } from './custodianRenderer';
+import { Tilemap } from '../map/Tilemap';
 
 export class IsometricRenderer {
   // Renderiza el frame completo del juego con CÁMARA CERCANA (Zoom 1.32x) y siluetas físicas únicas
@@ -124,7 +125,8 @@ export class IsometricRenderer {
     overloadCores: OverloadCoreEntity[] = [],
     glacialPlasmaStorms: GlacialPlasmaStormEntity[] = [],
     elementalCataclysms: ElementalCataclysmEntity[] = [],
-    forestLevel?: ForestLevelData
+    forestLevel?: ForestLevelData,
+    tilemap?: Tilemap
   ) {
     ctx.save();
 
@@ -149,8 +151,10 @@ export class IsometricRenderer {
 
     const frustum = getCameraFrustum(camera, width, height, zoom, 260);
 
-    // 2. Dibujar Suelo (Bosque Extendido 2.5D con Chunks o Suelo de Mazmorra clásica)
-    if (forestLevel) {
+    // 2. Dibujar Suelo (Tilemap procedural estructurado, o Bosque Extendido 2.5D, o Suelo de Mazmorra clásica)
+    if (tilemap) {
+      tilemap.renderFloor(ctx, frustum, performance.now());
+    } else if (forestLevel) {
       this.drawForestGround(ctx, frustum, forestLevel);
     } else {
       this.drawDungeonFloor(ctx, roomType);
@@ -263,12 +267,17 @@ export class IsometricRenderer {
 
     // Obstáculos físicos (Muros, Rocas, Cristales, Puertas, Estacas de Permafrost, Escombros Tectónicos)
     obstacles.forEach((obs) => {
-      if (forestLevel && !isInFrustum(obs.x, obs.y, obs.radius + 30, frustum)) return;
+      if ((forestLevel || tilemap) && !isInFrustum(obs.x, obs.y, obs.radius + 30, frustum)) return;
       renderList.push({
         y: obs.y,
         draw: () => this.drawObstacle(ctx, obs),
       });
     });
+
+    // Si hay un Tilemap activo: añadir muros de piedra ancestral 2.5D y el portón al Y-Sorting
+    if (tilemap) {
+      tilemap.addWallsToRenderList(ctx, frustum, renderList, performance.now());
+    }
 
     // Si hay nivel de bosque: añadir Troncos de Árboles, Rueda Elemental, Portón y Checkpoints al Y-Sorting
     if (forestLevel) {
@@ -508,7 +517,7 @@ export class IsometricRenderer {
 
     // Enemigos y Jefes (Frustum Culling optimizado con margen de seguridad de 100px)
     enemies.forEach((enemy) => {
-      if (forestLevel && !isInFrustum(enemy.x, enemy.y, enemy.radius + 100, frustum)) return;
+      if ((forestLevel || tilemap) && !isInFrustum(enemy.x, enemy.y, enemy.radius + 100, frustum)) return;
       renderList.push({
         y: enemy.y,
         draw: () => this.drawEnemy(ctx, enemy),
@@ -566,7 +575,7 @@ export class IsometricRenderer {
 
     // 9. Barra de Salud Superior del Jefe (si hay un jefe activo en la sala o cerca del jugador en mapa abierto)
     if (currentBoss && currentBoss.hp > 0) {
-      const showHUD = !forestLevel || currentBoss.hp < currentBoss.maxHp || Math.hypot(currentBoss.x - wizard.x, currentBoss.y - wizard.y) < 1300;
+      const showHUD = (!forestLevel && !tilemap) || currentBoss.hp < currentBoss.maxHp || Math.hypot(currentBoss.x - wizard.x, currentBoss.y - wizard.y) < 1300;
       if (showHUD) {
         this.drawBossHUD(ctx, width, currentBoss);
       }
