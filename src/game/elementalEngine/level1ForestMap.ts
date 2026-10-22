@@ -1,5 +1,6 @@
 // level1ForestMap.ts — Arquitectura de Nivel Extendido 2.5D Estilo Magicka
-// Corredor largo (2400 x 8800 px) con Frustum Culling, Chunks, Árboles con Canopy y Puzle de Rueda + Puerta
+// Corredor longitudinal horizontal/diagonal (8800 x 2400 px) de Izquierda a Derecha
+// Amplio campo de visión panorámico 16:9/20:9 con Frustum Culling, Chunks, Canopy y Puzle
 
 import {
   ForestLevelData,
@@ -13,8 +14,8 @@ import {
   LevelCheckpoint,
 } from './types';
 
-export const LEVEL_WIDTH = 2400;
-export const LEVEL_HEIGHT = 8800;
+export const LEVEL_WIDTH = 8800;
+export const LEVEL_HEIGHT = 2400;
 export const CHUNK_SIZE = 800;
 
 export interface FrustumBounds {
@@ -57,30 +58,30 @@ export function isInFrustum(
   );
 }
 
-// Genera la estructura completa del Nivel 1 del Bosque
+// Genera la estructura completa del Nivel 1 del Bosque en progresión horizontal (Oeste a Este)
 export function createLevel1Forest(): {
   levelData: ForestLevelData;
   initialObstacles: PhysicalObstacle[];
 } {
-  // 1. Chunks modulares del mundo (3 columnas x 11 filas = 33 chunks)
+  // 1. Chunks modulares del mundo (11 columnas x 3 filas = 33 chunks)
   const chunks: LevelChunk[] = [];
   const cols = Math.ceil(LEVEL_WIDTH / CHUNK_SIZE);
   const rows = Math.ceil(LEVEL_HEIGHT / CHUNK_SIZE);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const cy = r * CHUNK_SIZE;
+      const cx = c * CHUNK_SIZE;
       let zone: 'camp' | 'trail' | 'gate' | 'arena' = 'trail';
-      if (cy >= 7400) zone = 'camp';
-      else if (cy >= 3600 && cy < 4500) zone = 'gate';
-      else if (cy < 3600) zone = 'arena';
+      if (cx < 1400) zone = 'camp';
+      else if (cx >= 3800 && cx < 5200) zone = 'gate';
+      else if (cx >= 6400) zone = 'arena';
 
       chunks.push({
         id: `chunk-${c}-${r}`,
         indexX: c,
         indexY: r,
-        x: c * CHUNK_SIZE,
-        y: cy,
+        x: cx,
+        y: r * CHUNK_SIZE,
         width: CHUNK_SIZE,
         height: CHUNK_SIZE,
         zone,
@@ -88,27 +89,28 @@ export function createLevel1Forest(): {
     }
   }
 
-  // 2. Trazado del camino sinuoso (Waypoints de referencia para suelo y renderizado)
+  // 2. Trazado del camino sinuoso horizontal con ondulación suave (Oeste a Este)
   const trailWaypoints = [
-    { x: 1200, y: 8600, width: 380 },
-    { x: 1200, y: 7800, width: 350 }, // Campamento
-    { x: 1060, y: 7000, width: 280 }, // Curva Oeste
-    { x: 1040, y: 6400, width: 270 },
-    { x: 1400, y: 5600, width: 290 }, // Curva Este
-    { x: 1420, y: 5000, width: 280 },
-    { x: 1200, y: 4400, width: 320 }, // Centro hacia el Checkpoint
-    { x: 1200, y: 3980, width: 320 }, // Portón de Hierro
-    { x: 1200, y: 3200, width: 380 }, // Camino de piedra ascendente
-    { x: 1200, y: 2200, width: 700 }, // Entrada a la Arena
-    { x: 1200, y: 1500, width: 850 }, // Epicentro de la Arena del Jefe
-    { x: 1200, y: 700, width: 400 },  // Salida / Santuario
+    { x: 250,  y: 1200, width: 380 }, // Desembarco / Inicio
+    { x: 800,  y: 1200, width: 360 }, // Campamento Base
+    { x: 1500, y: 1020, width: 300 }, // Curva Norte 1
+    { x: 2300, y: 1380, width: 300 }, // Curva Sur 1 (Barrera de Fuego 1)
+    { x: 3100, y: 1040, width: 310 }, // Curva Norte 2
+    { x: 3600, y: 1250, width: 320 }, // Enfoque Manantial
+    { x: 4150, y: 1200, width: 350 }, // Checkpoint 1: El Manantial (Pre-Puzle)
+    { x: 4500, y: 1100, width: 320 }, // Plaza del Portón de Hierro
+    { x: 5200, y: 1250, width: 340 }, // Sendero Alto tras el Portón
+    { x: 6000, y: 1100, width: 350 }, // Desfiladero rocoso
+    { x: 6500, y: 1200, width: 500 }, // Checkpoint 2: La Antesala del Umbral
+    { x: 7400, y: 1200, width: 850 }, // Gran Arena del Custodio del Umbral
+    { x: 8350, y: 1200, width: 400 }, // Salida / Portal del Santuario
   ];
 
   // 3. Mecanismo de Rueda (`PuzzleWheel`) cerca del portón
   const puzzleWheel: PuzzleWheelEntity = {
     id: 'puzzle-wheel-main',
-    x: 960,
-    y: 4050,
+    x: 4320,
+    y: 1180,
     radius: 34,
     charge: 0,
     rotationAngle: 0,
@@ -122,15 +124,15 @@ export function createLevel1Forest(): {
   // 4. Portón Colosal de Hierro (`GateDoor`)
   const gateDoor: GateDoorEntity = {
     id: 'gate-door-main',
-    x: 1200,
-    y: 3980,
+    x: 4500,
+    y: 1100,
     width: 280,
     height: 44,
     isOpen: false,
     openProgress: 0,
     solid: true,
-    pillarLeftX: 1060,
-    pillarRightX: 1340,
+    pillarLeftX: 4360,
+    pillarRightX: 4640,
   };
 
   // 4.5 Función auxiliar para crear lengüetas de fuego animadas en las barreras
@@ -147,13 +149,13 @@ export function createLevel1Forest(): {
     return pillars;
   };
 
-  // 4.6 Barreras de Fuego del Bosque (Requieren Magia de Hielo para ser Extinguidas)
+  // 4.6 Barreras de Fuego del Bosque distribuidas horizontalmente a lo largo del camino
   const fireBarriers: FireBarrierEntity[] = [
-    // BARRERA 1: Curva Oeste del Sendero (Desfiladero tras salir del campamento)
+    // BARRERA 1: Desfiladero tras salir del campamento (X ~ 2300)
     {
       id: 'fire-barrier-1',
-      x: 1050,
-      y: 6450,
+      x: 2300,
+      y: 1380,
       width: 260,
       height: 44,
       flameHeight: 58,
@@ -165,11 +167,11 @@ export function createLevel1Forest(): {
       lastDamageTime: 0,
       flamePillars: createFlamePillars(260),
     },
-    // BARRERA 2: Sendero Este aproximándose al Checkpoint / Portón
+    // BARRERA 2: Aproximándose al Manantial / Checkpoint 1 (X ~ 3500)
     {
       id: 'fire-barrier-2',
-      x: 1320,
-      y: 5050,
+      x: 3500,
+      y: 1220,
       width: 270,
       height: 44,
       flameHeight: 58,
@@ -181,11 +183,11 @@ export function createLevel1Forest(): {
       lastDamageTime: 0,
       flamePillars: createFlamePillars(270),
     },
-    // BARRERA 3: Camino de piedra ascendente tras el portón hacia la Arena del Jefe
+    // BARRERA 3: Sendero alto de piedra hacia la Arena del Jefe (X ~ 5500)
     {
       id: 'fire-barrier-3',
-      x: 1200,
-      y: 3200,
+      x: 5500,
+      y: 1200,
       width: 300,
       height: 44,
       flameHeight: 62,
@@ -199,12 +201,11 @@ export function createLevel1Forest(): {
     },
   ];
 
-  // 5. Bosque de árboles densos con Tronco (Y-Sort) y Canopy Superior
+  // 5. Bosque de árboles densos en los límites norte y sur del mapa
   const trees: ForestTreeEntity[] = [];
   const treeColors = ['#1e3a1e', '#163319', '#244524', '#17361b'];
   const trunkColors = ['#3e2723', '#4e342e', '#2e1c14'];
 
-  // Función auxiliar para sembrar árboles de forma procedural controlada
   const addTree = (
     x: number,
     y: number,
@@ -230,69 +231,68 @@ export function createLevel1Forest(): {
     });
   };
 
-  // 5.1 Árboles densos en los bordes izquierdo (X: 100-750) y derecho (X: 1650-2300) a lo largo de todo el mapa
-  for (let y = 300; y < LEVEL_HEIGHT - 300; y += 140) {
-    // Franja izquierda
-    addTree(160 + (Math.sin(y * 0.01) * 60), y, y % 3 === 0 ? 'oak' : 'pine');
-    addTree(380 + (Math.cos(y * 0.015) * 80), y + 60, y % 4 === 0 ? 'ancient' : 'pine');
-    addTree(600 + (Math.sin(y * 0.02) * 70), y + 20, 'pine');
+  // 5.1 Límites boscosos densos en franjas norte (Y: 100 a 700) y sur (Y: 1700 a 2300)
+  for (let x = 150; x < LEVEL_WIDTH - 150; x += 135) {
+    // Franja norte
+    addTree(x + (Math.sin(x * 0.01) * 60), 220 + (Math.cos(x * 0.015) * 60), x % 3 === 0 ? 'oak' : 'pine');
+    addTree(x + 50, 430 + (Math.sin(x * 0.02) * 80), x % 4 === 0 ? 'ancient' : 'pine');
+    addTree(x + 90, 640 + (Math.cos(x * 0.01) * 70), 'pine');
 
-    // Franja derecha
-    addTree(1800 + (Math.sin(y * 0.018) * 70), y + 30, 'pine');
-    addTree(2020 + (Math.cos(y * 0.012) * 80), y + 80, y % 3 === 0 ? 'oak' : 'pine');
-    addTree(2240 + (Math.sin(y * 0.01) * 50), y, y % 5 === 0 ? 'ancient' : 'pine');
+    // Franja sur
+    addTree(x + (Math.sin(x * 0.018) * 70), 1780 + (Math.cos(x * 0.01) * 60), 'pine');
+    addTree(x + 60, 1990 + (Math.sin(x * 0.012) * 80), x % 3 === 0 ? 'oak' : 'pine');
+    addTree(x + 20, 2200 + (Math.cos(x * 0.015) * 50), x % 5 === 0 ? 'ancient' : 'pine');
   }
 
-  // 5.2 Árboles que enmarcan las curvas del Gran Sendero
+  // 5.2 Árboles que enmarcan las curvas y claros del sendero
   const trailBorderPoints = [
-    // Curva 1 (Y ~ 7000)
-    { x: 800, y: 7200 }, { x: 820, y: 7000 }, { x: 840, y: 6800 },
-    { x: 1300, y: 7300 }, { x: 1320, y: 7100 }, { x: 1340, y: 6900 },
-    // Curva 2 (Y ~ 5800)
-    { x: 1100, y: 6000 }, { x: 1120, y: 5800 }, { x: 1140, y: 5600 },
-    { x: 1650, y: 5900 }, { x: 1680, y: 5700 }, { x: 1660, y: 5500 },
-    // Enfoque Checkpoint (Y ~ 4400)
-    { x: 920, y: 4600 }, { x: 940, y: 4400 }, { x: 950, y: 4200 },
-    { x: 1460, y: 4600 }, { x: 1470, y: 4400 }, { x: 1480, y: 4200 },
+    // Curva Norte 1 (X ~ 1500)
+    { x: 1400, y: 840 }, { x: 1520, y: 820 }, { x: 1640, y: 850 },
+    { x: 1400, y: 1220 }, { x: 1520, y: 1240 }, { x: 1640, y: 1220 },
+    // Curva Sur 1 (X ~ 2300)
+    { x: 2180, y: 1180 }, { x: 2300, y: 1170 }, { x: 2420, y: 1190 },
+    { x: 2180, y: 1580 }, { x: 2300, y: 1600 }, { x: 2420, y: 1570 },
+    // Checkpoint 1 (X ~ 4200)
+    { x: 4000, y: 980 }, { x: 4160, y: 970 }, { x: 4320, y: 990 },
+    { x: 4000, y: 1420 }, { x: 4160, y: 1430 }, { x: 4320, y: 1410 },
   ];
   trailBorderPoints.forEach((pt) => {
     addTree(pt.x, pt.y, 'oak');
   });
 
-  // 6. Barreras de colisión estáticas adicionales (Rocas y acantilados naturales)
+  // 6. Barreras de colisión estáticas adicionales
   const boundaryColliders: Array<{ x: number; y: number; radius: number }> = [];
   trees.forEach((t) => {
     boundaryColliders.push({ x: t.x, y: t.y, radius: t.trunkRadius });
   });
 
-  // Muros de piedra ciclópea a la izquierda y derecha del portón en el Checkpoint
-  for (let bx = 300; bx <= 1040; bx += 50) {
-    boundaryColliders.push({ x: bx, y: 3980, radius: 28 });
+  // Muros de piedra ciclópea a la izquierda y derecha del portón
+  for (let bx = 4050; bx <= 4340; bx += 45) {
+    boundaryColliders.push({ x: bx, y: 1100, radius: 28 });
   }
-  for (let bx = 1360; bx <= 2100; bx += 50) {
-    boundaryColliders.push({ x: bx, y: 3980, radius: 28 });
+  for (let bx = 4660; bx <= 4950; bx += 45) {
+    boundaryColliders.push({ x: bx, y: 1100, radius: 28 });
   }
 
   // Rocas ciclópeas flanqueando los extremos laterales de cada Barrera de Fuego
-  // Barrera 1 (X: 1050, Y: 6450, W: 260)
-  boundaryColliders.push({ x: 1050 - 130 - 22, y: 6450, radius: 26 });
-  boundaryColliders.push({ x: 1050 + 130 + 22, y: 6450, radius: 26 });
-  // Barrera 2 (X: 1320, Y: 5050, W: 270)
-  boundaryColliders.push({ x: 1320 - 135 - 22, y: 5050, radius: 26 });
-  boundaryColliders.push({ x: 1320 + 135 + 22, y: 5050, radius: 26 });
-  // Barrera 3 (X: 1200, Y: 3200, W: 300)
-  boundaryColliders.push({ x: 1200 - 150 - 22, y: 3200, radius: 26 });
-  boundaryColliders.push({ x: 1200 + 150 + 22, y: 3200, radius: 26 });
+  boundaryColliders.push({ x: 2300 - 130 - 22, y: 1380, radius: 26 });
+  boundaryColliders.push({ x: 2300 + 130 + 22, y: 1380, radius: 26 });
 
-  // 7. Obstáculos físicos iniciales (Cajas, Barriles destructibles, Carpa, Hoguera)
+  boundaryColliders.push({ x: 3500 - 135 - 22, y: 1220, radius: 26 });
+  boundaryColliders.push({ x: 3500 + 135 + 22, y: 1220, radius: 26 });
+
+  boundaryColliders.push({ x: 5500 - 150 - 22, y: 1200, radius: 26 });
+  boundaryColliders.push({ x: 5500 + 150 + 22, y: 1200, radius: 26 });
+
+  // 7. Obstáculos físicos iniciales
   const initialObstacles: PhysicalObstacle[] = [];
 
-  // 7.1 ZONA INICIAL: CAMPAMENTO (Y ~ 8000)
+  // 7.1 ZONA INICIAL: CAMPAMENTO (X ~ 800, Y ~ 1200)
   // Carpa de expedición
   initialObstacles.push({
     id: 'camp-tent',
-    x: 1020,
-    y: 8140,
+    x: 680,
+    y: 1280,
     radius: 42,
     width: 84,
     height: 70,
@@ -308,8 +308,8 @@ export function createLevel1Forest(): {
   // Hoguera central del campamento
   initialObstacles.push({
     id: 'camp-fire',
-    x: 1200,
-    y: 8080,
+    x: 800,
+    y: 1200,
     radius: 20,
     width: 40,
     height: 40,
@@ -322,12 +322,12 @@ export function createLevel1Forest(): {
     meltable: false,
   });
 
-  // Cajas y Barriles de entrenamiento en el campamento
+  // Cajas y Barriles en el campamento
   initialObstacles.push(
     {
       id: 'camp-crate-1',
-      x: 1100,
-      y: 8180,
+      x: 740,
+      y: 1140,
       radius: 18,
       width: 36,
       height: 36,
@@ -341,8 +341,8 @@ export function createLevel1Forest(): {
     },
     {
       id: 'camp-barrel-1',
-      x: 1300,
-      y: 8140,
+      x: 890,
+      y: 1140,
       radius: 16,
       width: 32,
       height: 38,
@@ -356,8 +356,8 @@ export function createLevel1Forest(): {
     },
     {
       id: 'camp-barrel-2',
-      x: 1330,
-      y: 8180,
+      x: 890,
+      y: 1260,
       radius: 16,
       width: 32,
       height: 38,
@@ -373,12 +373,12 @@ export function createLevel1Forest(): {
 
   // 7.2 EL GRAN SENDERO: Barriles y rocas destructibles esparcidos por el camino
   const trailProps = [
-    { x: 1020, y: 6900, type: 'barrel' as const },
-    { x: 1060, y: 6860, type: 'crate' as const },
-    { x: 1380, y: 5700, type: 'barrel' as const },
-    { x: 1420, y: 5660, type: 'crate' as const },
-    { x: 1160, y: 4700, type: 'barrel' as const },
-    { x: 1240, y: 4680, type: 'barrel' as const },
+    { x: 1600, y: 1000, type: 'barrel' as const },
+    { x: 1650, y: 1040, type: 'crate' as const },
+    { x: 2850, y: 1200, type: 'barrel' as const },
+    { x: 2900, y: 1160, type: 'crate' as const },
+    { x: 3750, y: 1280, type: 'barrel' as const },
+    { x: 5300, y: 1220, type: 'barrel' as const },
   ];
 
   trailProps.forEach((p, idx) => {
@@ -403,8 +403,8 @@ export function createLevel1Forest(): {
   initialObstacles.push(
     {
       id: 'gate-pillar-left',
-      x: 1040,
-      y: 3980,
+      x: 4340,
+      y: 1100,
       radius: 30,
       width: 60,
       height: 60,
@@ -418,8 +418,8 @@ export function createLevel1Forest(): {
     },
     {
       id: 'gate-pillar-right',
-      x: 1360,
-      y: 3980,
+      x: 4660,
+      y: 1100,
       radius: 30,
       width: 60,
       height: 60,
@@ -433,14 +433,14 @@ export function createLevel1Forest(): {
     }
   );
 
-  // 7.4 ARENA DEL JEFE: Pilares basalticos perimetrales
+  // 7.4 ARENA DEL JEFE: Pilares basalticos perimetrales en círculo alrededor de (7400, 1200)
   const arenaPillars = [
-    { x: 880, y: 2200 },
-    { x: 1520, y: 2200 },
-    { x: 780, y: 1600 },
-    { x: 1620, y: 1600 },
-    { x: 880, y: 1000 },
-    { x: 1520, y: 1000 },
+    { x: 7400 - 380, y: 1200 - 240 },
+    { x: 7400 + 380, y: 1200 - 240 },
+    { x: 7400 - 460, y: 1200 },
+    { x: 7400 + 460, y: 1200 },
+    { x: 7400 - 380, y: 1200 + 240 },
+    { x: 7400 + 380, y: 1200 + 240 },
   ];
   arenaPillars.forEach((p, idx) => {
     initialObstacles.push({
@@ -460,11 +460,11 @@ export function createLevel1Forest(): {
     });
   });
 
-  // 7.5 SALIDA DEL NIVEL 1 / PORTAL AL SANTUARIO
+  // 7.5 SALIDA DEL NIVEL 1 / PORTAL AL SANTUARIO (Extremo derecho, X: 8350, Y: 1200)
   initialObstacles.push({
     id: 'forest-exit-portal',
-    x: 1200,
-    y: 720,
+    x: 8350,
+    y: 1200,
     radius: 36,
     width: 72,
     height: 72,
@@ -476,7 +476,7 @@ export function createLevel1Forest(): {
     blocksProjectiles: false,
     meltable: false,
     doorLocked: true,
-    doorDirection: 'north',
+    doorDirection: 'east',
   });
 
   // 8. Partículas ambientales ligeras (Pool máximo de 20 hojas flotantes con deriva suave)
@@ -486,10 +486,10 @@ export function createLevel1Forest(): {
   for (let i = 0; i < 20; i++) {
     ambientLeaves.push({
       id: `leaf-${i}`,
-      x: 1200 + (Math.random() - 0.5) * 1200,
-      y: 8000 + (Math.random() - 0.5) * 800,
-      vx: 0.6 + Math.random() * 0.8,
-      vy: 0.8 + Math.random() * 0.9,
+      x: 800 + (Math.random() - 0.5) * 1200,
+      y: 1200 + (Math.random() - 0.5) * 800,
+      vx: 0.8 + Math.random() * 0.9,
+      vy: 0.4 + (Math.random() - 0.5) * 0.6,
       size: 4 + Math.random() * 3,
       color: leafColors[i % leafColors.length],
       rotation: Math.random() * Math.PI * 2,
@@ -499,40 +499,40 @@ export function createLevel1Forest(): {
     });
   }
 
-  // 8.5 Puntos de Control Rúnicos (Checkpoints del Nivel 1)
+  // 8.5 Puntos de Control Rúnicos (Checkpoints del Nivel 1) orientados de Oeste a Este
   const checkpoints: LevelCheckpoint[] = [
     // Checkpoint 0: Zona de desembarco e inicio del bosque / campamento
     {
       id: 'checkpoint-0-camp',
       name: 'Campamento del Bosque',
-      x: 1080,
-      y: 8020,
-      respawnX: 1200,
-      respawnY: 8050,
+      x: 750,
+      y: 1200,
+      respawnX: 800,
+      respawnY: 1200,
       isActive: true, // Siempre activo al iniciar
-      activationRadius: 75,
+      activationRadius: 85,
     },
     // Checkpoint 1: El Manantial (Pre-Puzle), justo antes de la rueda y el portón de hielo
     {
       id: 'checkpoint-1-spring',
       name: 'El Manantial (Pre-Puzle)',
-      x: 1080,
-      y: 4420,
-      respawnX: 1200,
-      respawnY: 4420,
+      x: 4100,
+      y: 1200,
+      respawnX: 4150,
+      respawnY: 1200,
       isActive: false,
-      activationRadius: 75,
+      activationRadius: 85,
     },
     // Checkpoint 2: La Antesala del Umbral, tras cruzar el portón, antes de la arena del Jefe
     {
       id: 'checkpoint-2-threshold',
       name: 'La Antesala del Umbral',
-      x: 1080,
-      y: 2380,
-      respawnX: 1200,
-      respawnY: 2380,
+      x: 6450,
+      y: 1200,
+      respawnX: 6500,
+      respawnY: 1200,
       isActive: false,
-      activationRadius: 75,
+      activationRadius: 85,
     },
   ];
 

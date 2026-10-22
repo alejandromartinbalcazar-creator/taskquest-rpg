@@ -53,6 +53,7 @@ import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
+import { CameraSystem } from './Camera';
 import {
   TerrainManager,
   checkCircleCollision,
@@ -357,37 +358,37 @@ function triggerAoEExplosion(
  */
 function createLevel1ForestEnemies(enemyManager: EnemyManager): GameEnemy[] {
   return [
-    // Zona 1: Salida del Campamento (Y ~ 7450 - 7300)
+    // Zona 1: Salida del Campamento (X ~ 1400 - 1650)
     // El jugador sale de la fogata e inmediatamente descubre el Bestiario Elemental
-    enemyManager.createPyreGolem('forest-golem-intro', 1130, 7420),
-    enemyManager.createStormStalker('forest-storm-intro', 1270, 7360),
+    enemyManager.createPyreGolem('forest-golem-intro', 1450, 1100),
+    enemyManager.createStormStalker('forest-storm-intro', 1580, 1260),
 
-    // Zona 2: Curva Oeste del Sendero (Y ~ 6650 - 6380)
+    // Zona 2: Curva Sur del Sendero (X ~ 2150 - 2450)
     // Tanques ígneos flanqueados por un francotirador de escarcha
-    enemyManager.createPyreGolem('forest-golem-west-1', 1010, 6650),
-    enemyManager.createPyreGolem('forest-golem-west-2', 1110, 6520),
-    enemyManager.createFrostLurker('forest-lurker-west-1', 990, 6380),
+    enemyManager.createPyreGolem('forest-golem-west-1', 2150, 1320),
+    enemyManager.createPyreGolem('forest-golem-west-2', 2280, 1440),
+    enemyManager.createFrostLurker('forest-lurker-west-1', 2440, 1340),
 
-    // Zona 3: Curva Este del Sendero (Y ~ 5600 - 5240)
+    // Zona 3: Curva Norte del Sendero (X ~ 3000 - 3350)
     // Espectros de tormenta ágiles y acechador gélido a media distancia
-    enemyManager.createStormStalker('forest-storm-east-1', 1340, 5550),
-    enemyManager.createStormStalker('forest-storm-east-2', 1450, 5420),
-    enemyManager.createFrostLurker('forest-lurker-east-1', 1390, 5240),
+    enemyManager.createStormStalker('forest-storm-east-1', 3050, 1060),
+    enemyManager.createStormStalker('forest-storm-east-2', 3180, 1190),
+    enemyManager.createFrostLurker('forest-lurker-east-1', 3320, 1100),
 
-    // Zona 4: Checkpoint del Portón y Rueda Elemental de Hielo (Y ~ 4250 - 4120)
+    // Zona 4: Checkpoint del Portón y Rueda Elemental de Hielo (X ~ 4100 - 4450)
     // Guardianes de élite protegiendo el mecanismo del portón
-    enemyManager.createPyreGolem('gate-golem-guard', 1100, 4240),
-    enemyManager.createStormStalker('gate-storm-guard', 1280, 4200),
-    enemyManager.createFrostLurker('gate-lurker-guard', 1190, 4120),
+    enemyManager.createPyreGolem('gate-golem-guard', 4180, 1250),
+    enemyManager.createStormStalker('gate-storm-guard', 4300, 1120),
+    enemyManager.createFrostLurker('gate-lurker-guard', 4420, 1220),
 
-    // Zona 5: Sendero Alto y Entrada Previa a la Arena (Y ~ 2800 - 2500)
+    // Zona 5: Sendero Alto y Entrada Previa a la Arena (X ~ 5800 - 6250)
     // Última línea defensiva antes del coloso
-    enemyManager.createPyreGolem('arena-entry-golem', 1130, 2750),
-    enemyManager.createFrostLurker('arena-entry-lurker', 1270, 2640),
-    enemyManager.createStormStalker('arena-entry-storm', 1200, 2510),
+    enemyManager.createPyreGolem('arena-entry-golem', 5850, 1200),
+    enemyManager.createFrostLurker('arena-entry-lurker', 6020, 1100),
+    enemyManager.createStormStalker('arena-entry-storm', 6180, 1290),
 
-    // Zona 6: Arena Monumental - El Custodio del Umbral (Jefe Final del Nivel 1, Y = 1500)
-    createThresholdCustodian(1200, 1500),
+    // Zona 6: Arena Monumental - El Custodio del Umbral (Jefe Final del Nivel 1, X = 7400, Y = 1200)
+    createThresholdCustodian(7400, 1200),
   ];
 }
 
@@ -507,6 +508,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       } as ChanneledStreamState,
     },
     camera: { x: 550, y: 560 },
+    cameraSystem: new CameraSystem(550, 560),
+    prevWizardX: 550,
+    prevWizardY: 560,
     joystick: {
       active: false,
       touchId: null as number | null,
@@ -601,8 +605,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     const { levelData, initialObstacles } = createLevel1Forest();
     g.forestLevel = levelData;
 
-    let spawnX = 1200;
-    let spawnY = 8050;
+    let spawnX = 350;
+    let spawnY = 1200;
 
     if (savedCheckpointId && levelData.checkpoints) {
       g.lastCheckpointId = savedCheckpointId;
@@ -632,9 +636,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     g.wizard.x = spawnX;
     g.wizard.y = spawnY;
+    g.prevWizardX = spawnX;
+    g.prevWizardY = spawnY;
     g.wizard.invulnerableTimer = 1.0; // Gracia de 1.0s de i-frames al entrar al nivel
     g.camera.x = spawnX;
     g.camera.y = spawnY;
+    g.cameraSystem.reset(spawnX, spawnY);
     g.terrainManager.obstacles = [...initialObstacles];
 
     // Generar patrullas del Bestiario y jefe a lo largo del sendero
@@ -848,8 +855,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         try {
           savedCpId = localStorage.getItem('taskquest_level1_last_checkpoint');
         } catch {}
-        let rx = 1200;
-        let ry = 8050;
+        let rx = 350;
+        let ry = 1200;
         if (savedCpId && levelData.checkpoints) {
           g.lastCheckpointId = savedCpId;
           const cp = levelData.checkpoints.find((c) => c.id === savedCpId);
@@ -871,9 +878,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
         g.wizard.x = rx;
         g.wizard.y = ry;
+        g.prevWizardX = rx;
+        g.prevWizardY = ry;
         g.wizard.invulnerableTimer = 1.0;
         g.camera.x = rx;
         g.camera.y = ry;
+        g.cameraSystem.reset(rx, ry);
         g.terrainManager.obstacles = [...initialObstacles];
         g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
@@ -881,8 +891,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.forestLevel = null;
         g.wizard.x = 550;
         g.wizard.y = 600;
+        g.prevWizardX = 550;
+        g.prevWizardY = 600;
         g.camera.x = 550;
         g.camera.y = 600;
+        g.cameraSystem.reset(550, 600);
         const nextRoom = DUNGEON_ROOMS[nextIndex];
         g.terrainManager.setupRoomTerrain(nextRoom.roomType);
         g.enemyManager.spawnRoomEnemies(nextRoom.roomType);
@@ -3672,14 +3685,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             // 1. Obtener el último checkpoint alcanzado
             const cpId = g.lastCheckpointId || 'checkpoint-0-camp';
             const cp = g.forestLevel?.checkpoints?.find((c) => c.id === cpId) || g.forestLevel?.checkpoints?.[0];
-            const respawnX = cp ? cp.respawnX : 1200;
-            const respawnY = cp ? cp.respawnY : 8050;
+            const respawnX = cp ? cp.respawnX : 350;
+            const respawnY = cp ? cp.respawnY : 1200;
 
             // 2. Reubicar al jugador y cámara suavemente
             wizard.x = respawnX;
             wizard.y = respawnY;
+            g.prevWizardX = respawnX;
+            g.prevWizardY = respawnY;
             g.camera.x = respawnX;
             g.camera.y = respawnY;
+            g.cameraSystem.reset(respawnX, respawnY);
 
             // 3. Restaurar Vida Máxima al 100%
             g.currentHp = g.maxHp;
@@ -3771,6 +3787,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setAttackCooldownRatio(attackCdRatio);
         setAttackCooldownSec(Math.ceil(attackCdRemaining / 100) / 10);
       }
+
+      g.prevWizardX = wizard.x;
+      g.prevWizardY = wizard.y;
 
       if (wizard.isDashing) {
         wizard.x += wizard.dashVx;
@@ -4831,14 +4850,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             if (barrier.isExtinguished) return;
             const halfW = barrier.width / 2;
             const halfH = barrier.height / 2;
-            const inX = wizard.x >= barrier.x - halfW - 12 && wizard.x <= barrier.x + halfW + 12;
+            const inX = Math.abs(wizard.x - barrier.x) < halfW + wizard.radius;
             const inY = Math.abs(wizard.y - barrier.y) < halfH + wizard.radius;
             if (inX && inY) {
-              // Empuje físico para bloquear el paso
-              if (wizard.y > barrier.y) {
-                wizard.y = barrier.y + halfH + wizard.radius;
+              const overlapX = (halfW + wizard.radius) - Math.abs(wizard.x - barrier.x);
+              const overlapY = (halfH + wizard.radius) - Math.abs(wizard.y - barrier.y);
+              if (overlapX < overlapY) {
+                wizard.x = wizard.x > barrier.x ? barrier.x + halfW + wizard.radius : barrier.x - halfW - wizard.radius;
               } else {
-                wizard.y = barrier.y - halfH - wizard.radius;
+                wizard.y = wizard.y > barrier.y ? barrier.y + halfH + wizard.radius : barrier.y - halfH - wizard.radius;
               }
 
               // Daño por quemadura periódica al tocar físicamente las llamas
@@ -4862,23 +4882,31 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // SEGUIMIENTO DE CÁMARA CERCANA (con anticipación hacia la dirección del mago)
-      const leadX = Math.cos(wizard.facingAngle) * 35;
-      const leadY = Math.sin(wizard.facingAngle) * 25;
-      g.camera.x += (wizard.x + leadX - g.camera.x) * 0.12;
-      g.camera.y += (wizard.y + leadY - g.camera.y) * 0.12;
+      // SEGUIMIENTO DE CÁMARA CON ADELANTO DINÁMICO (Dynamic Lookahead / Lead Offset)
+      const cCanvas = canvasRef.current;
+      const viewW = cCanvas ? cCanvas.width : 1100;
+      const viewH = cCanvas ? cCanvas.height : 700;
+      const worldW = g.forestLevel ? LEVEL_WIDTH : 1100;
+      const worldH = g.forestLevel ? LEVEL_HEIGHT : 800;
+      const actualVx = wizard.x - g.prevWizardX;
+      const actualVy = wizard.y - g.prevWizardY;
 
-      // Mantener cámara dentro de los límites del escenario
-      if (g.forestLevel) {
-        const cCanvas = canvasRef.current;
-        const viewW = cCanvas ? cCanvas.width / 1.32 : 1100;
-        const viewH = cCanvas ? cCanvas.height / 1.32 : 700;
-        g.camera.x = Math.max(viewW / 2, Math.min(LEVEL_WIDTH - viewW / 2, g.camera.x));
-        g.camera.y = Math.max(viewH / 2, Math.min(LEVEL_HEIGHT - viewH / 2, g.camera.y));
-      } else {
-        g.camera.x = Math.max(340, Math.min(760, g.camera.x));
-        g.camera.y = Math.max(260, Math.min(520, g.camera.y));
-      }
+      g.cameraSystem.update(
+        wizard.x,
+        wizard.y,
+        actualVx,
+        actualVy,
+        wizard.facingAngle,
+        dt,
+        viewW,
+        viewH,
+        worldW,
+        worldH,
+        1.32
+      );
+
+      g.camera.x = g.cameraSystem.x;
+      g.camera.y = g.cameraSystem.y;
 
       if (g.screenShake > 0) g.screenShake *= 0.88;
       if (wizard.hitFlash > 0) wizard.hitFlash--;
@@ -5396,13 +5424,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           const halfH = barrier.height / 2;
           enemies.forEach((enemy) => {
             if (enemy.hp <= 0) return;
-            if (enemy.x >= barrier.x - halfW - enemy.radius && enemy.x <= barrier.x + halfW + enemy.radius) {
-              if (Math.abs(enemy.y - barrier.y) < halfH + enemy.radius) {
-                if (enemy.y > barrier.y) {
-                  enemy.y = barrier.y + halfH + enemy.radius;
-                } else {
-                  enemy.y = barrier.y - halfH - enemy.radius;
-                }
+            const inX = Math.abs(enemy.x - barrier.x) < halfW + enemy.radius;
+            const inY = Math.abs(enemy.y - barrier.y) < halfH + enemy.radius;
+            if (inX && inY) {
+              const overlapX = (halfW + enemy.radius) - Math.abs(enemy.x - barrier.x);
+              const overlapY = (halfH + enemy.radius) - Math.abs(enemy.y - barrier.y);
+              if (overlapX < overlapY) {
+                enemy.x = enemy.x > barrier.x ? barrier.x + halfW + enemy.radius : barrier.x - halfW - enemy.radius;
+              } else {
+                enemy.y = enemy.y > barrier.y ? barrier.y + halfH + enemy.radius : barrier.y - halfH - enemy.radius;
               }
             }
           });

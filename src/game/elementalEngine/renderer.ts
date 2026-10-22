@@ -506,8 +506,9 @@ export class IsometricRenderer {
       draw: () => this.drawWizard(ctx, wizard),
     });
 
-    // Enemigos y Jefes
+    // Enemigos y Jefes (Frustum Culling optimizado con margen de seguridad de 100px)
     enemies.forEach((enemy) => {
+      if (forestLevel && !isInFrustum(enemy.x, enemy.y, enemy.radius + 100, frustum)) return;
       renderList.push({
         y: enemy.y,
         draw: () => this.drawEnemy(ctx, enemy),
@@ -560,6 +561,9 @@ export class IsometricRenderer {
 
     ctx.restore(); // Fin del espacio transformado con Zoom
 
+    // 8.8 Indicadores de Peligro en el Borde de Pantalla (Off-Screen Danger Clamps)
+    this.drawOffScreenDangerClamps(ctx, camera, width, height, 1.32, wizard, projectiles, enemies);
+
     // 9. Barra de Salud Superior del Jefe (si hay un jefe activo en la sala o cerca del jugador en mapa abierto)
     if (currentBoss && currentBoss.hp > 0) {
       const showHUD = !forestLevel || currentBoss.hp < currentBoss.maxHp || Math.hypot(currentBoss.x - wizard.x, currentBoss.y - wizard.y) < 1300;
@@ -569,6 +573,148 @@ export class IsometricRenderer {
     }
 
     ctx.restore(); // Fin de screen shake
+  }
+
+  /**
+   * Indicadores de Advertencia Perimetral (Off-Screen Danger Clamps):
+   * Proyectiles rápidos y ataques telegrafiados fuera de pantalla se proyectan en el borde del Canvas
+   * con chevrons parpadeantes y badges de exclamación '!'.
+   * Desaparecen de inmediato cuando la amenaza entra al campo visual normal.
+   */
+  private static drawOffScreenDangerClamps(
+    ctx: CanvasRenderingContext2D,
+    camera: { x: number; y: number },
+    width: number,
+    height: number,
+    zoom: number,
+    wizard: { x: number; y: number },
+    projectiles: Projectile[],
+    enemies: GameEnemy[]
+  ): void {
+    const cx = width / 2;
+    const cy = height / 2;
+    const pad = 28;
+    const minX = pad;
+    const maxX = width - pad;
+    const minY = pad;
+    const maxY = height - pad;
+    const now = Date.now();
+    const pulse = 0.65 + 0.35 * Math.sin(now * 0.018);
+
+    // 1. Proyectiles hostiles fuera del encuadre
+    for (let i = 0; i < projectiles.length; i++) {
+      const p = projectiles[i];
+      if (!p.isHostile) continue;
+
+      const sx = (p.x - camera.x) * zoom + cx;
+      const sy = (p.y - camera.y) * zoom + cy;
+
+      // Si ya está visible en pantalla, no dibujar marcador
+      if (sx >= 14 && sx <= width - 14 && sy >= 14 && sy <= height - 14) continue;
+
+      // Distancia máxima de amenaza (~1300 px de mundo)
+      const dist = Math.hypot(p.x - wizard.x, p.y - wizard.y);
+      if (dist > 1300) continue;
+
+      const dx = sx - cx;
+      const dy = sy - cy;
+      if (dx === 0 && dy === 0) continue;
+
+      let tX = Infinity;
+      if (dx > 0) tX = (maxX - cx) / dx;
+      else if (dx < 0) tX = (minX - cx) / dx;
+
+      let tY = Infinity;
+      if (dy > 0) tY = (maxY - cy) / dy;
+      else if (dy < 0) tY = (minY - cy) / dy;
+
+      const t = Math.min(tX, tY);
+      const clampX = cx + t * dx;
+      const clampY = cy + t * dy;
+      const angle = Math.atan2(dy, dx);
+
+      ctx.save();
+      ctx.translate(clampX, clampY);
+      ctx.rotate(angle);
+
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = `rgba(239, 68, 68, ${pulse})`;
+
+      // Chevron afilado apuntando hacia la amenaza fuera de pantalla
+      ctx.beginPath();
+      ctx.moveTo(11, 0);
+      ctx.lineTo(-7, -8);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-7, 8);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 2. Ataques telegrafiados pesados fuera del encuadre
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (!e.isTelegraphing || e.hp <= 0) continue;
+
+      const sx = (e.x - camera.x) * zoom + cx;
+      const sy = (e.y - camera.y) * zoom + cy;
+
+      if (sx >= 14 && sx <= width - 14 && sy >= 14 && sy <= height - 14) continue;
+
+      const dist = Math.hypot(e.x - wizard.x, e.y - wizard.y);
+      if (dist > 1400) continue;
+
+      const dx = sx - cx;
+      const dy = sy - cy;
+      if (dx === 0 && dy === 0) continue;
+
+      let tX = Infinity;
+      if (dx > 0) tX = (maxX - cx) / dx;
+      else if (dx < 0) tX = (minX - cx) / dx;
+
+      let tY = Infinity;
+      if (dy > 0) tY = (maxY - cy) / dy;
+      else if (dy < 0) tY = (minY - cy) / dy;
+
+      const t = Math.min(tX, tY);
+      const clampX = cx + t * dx;
+      const clampY = cy + t * dy;
+      const angle = Math.atan2(dy, dx);
+
+      ctx.save();
+      ctx.translate(clampX, clampY);
+
+      // Chevron dorado/ámbar telegrafiado
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = `rgba(245, 158, 11, ${pulse})`;
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(-8, -9);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-8, 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Badge circular con '!' de peligro inminente (orientado verticalmente)
+      ctx.fillStyle = `rgba(239, 68, 68, ${pulse})`;
+      ctx.beginPath();
+      ctx.arc(0, -14, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', 0, -14);
+
+      ctx.restore();
+    }
   }
 
   // Suelo de baldosas de piedra con límites y ambientación según sala
@@ -4597,10 +4743,12 @@ export class IsometricRenderer {
       const p1 = waypoints[i];
       const p2 = waypoints[i + 1];
 
-      // Culling del segmento del sendero
+      // Culling bidimensional del segmento del sendero
+      const minX = Math.min(p1.x, p2.x) - 200;
+      const maxX = Math.max(p1.x, p2.x) + 200;
       const minY = Math.min(p1.y, p2.y) - 200;
       const maxY = Math.max(p1.y, p2.y) + 200;
-      if (maxY < frustum.top || minY > frustum.bottom) continue;
+      if (maxX < frustum.left || minX > frustum.right || maxY < frustum.top || minY > frustum.bottom) continue;
 
       // Base del sendero (suelo de tierra compacta)
       ctx.strokeStyle = '#453221';
@@ -4620,20 +4768,22 @@ export class IsometricRenderer {
       ctx.stroke();
     }
 
-    // 3. Plaza de Adoquines en el Checkpoint (Y ~ 3980)
-    if (frustum.bottom >= 3700 && frustum.top <= 4300) {
+    // 3. Plaza de Adoquines en el Checkpoint del Portón (dinámico alrededor de gateDoor)
+    const gx = levelData.gateDoor.x;
+    const gy = levelData.gateDoor.y;
+    if (isInFrustum(gx, gy, 400, frustum)) {
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(900, 3860, 600, 240);
+      ctx.fillRect(gx - 300, gy - 120, 600, 240);
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1.5;
-      for (let sy = 3880; sy < 4100; sy += 30) {
+      for (let sy = gy - 100; sy < gy + 120; sy += 30) {
         ctx.beginPath();
-        ctx.moveTo(920, sy);
-        ctx.lineTo(1480, sy);
+        ctx.moveTo(gx - 280, sy);
+        ctx.lineTo(gx + 280, sy);
         ctx.stroke();
       }
 
-      // Runa / Conducto Criogénico en el suelo entre la Rueda (960, 4050) y el Portón (1200, 3980)
+      // Runa / Conducto Criogénico en el suelo entre la Rueda y el Portón
       const wheel = levelData.puzzleWheel;
       const hasCharge = wheel.charge > 0;
       ctx.strokeStyle = hasCharge ? 'rgba(0, 240, 255, 0.75)' : 'rgba(56, 189, 248, 0.25)';
@@ -4661,12 +4811,11 @@ export class IsometricRenderer {
       }
     }
 
-    // 4. Gran Arena del Jefe / Santuario Megalítico (Y <= 2600)
-    if (frustum.top <= 2600) {
-      const arenaCenterX = 1200;
-      const arenaCenterY = 1600;
-      const arenaRadius = 420;
-
+    // 4. Gran Arena del Jefe / Santuario Megalítico (Epicentro X ~ 7400, Y ~ 1200)
+    const arenaCenterX = 7400;
+    const arenaCenterY = 1200;
+    const arenaRadius = 450;
+    if (isInFrustum(arenaCenterX, arenaCenterY, arenaRadius + 150, frustum)) {
       // Círculo exterior de piedra antigua
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
