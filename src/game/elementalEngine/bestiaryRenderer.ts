@@ -486,17 +486,32 @@ export function drawFrostLurker(ctx: CanvasRenderingContext2D, enemy: GameEnemy,
   ctx.restore();
 }
 
-// 4. BARRA DE SALUD SEGMENTADA CON ICONO DE DEBILIDAD ELEMENTAL
+// 4. BARRA DE SALUD SEGMENTADA CON ICONO DE DEBILIDAD ELEMENTAL (OPTIMIZADA PARA ENJAMBRES Y ESCUADRONES)
 export function drawEnemyHealthBar(ctx: CanvasRenderingContext2D, enemy: GameEnemy) {
   const r = enemy.radius;
   const barW = Math.max(34, r * 2.2);
   const barH = 5;
   const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
   const iconSize = 12;
+
+  // Escalonamiento vertical sutil basado en el ID para evitar solapamiento caótico entre escuadrones cercanos
+  const verticalStagger = (enemy.id.charCodeAt(enemy.id.length - 1) % 2 === 0) ? 0 : -3;
   const barX = -barW / 2 + iconSize * 0.5;
-  const barY = -r * 2 - 14;
+  const barY = -r * 1.8 - 14 + verticalStagger;
 
   ctx.save();
+
+  // Placa de contraste oscura para mantener legibilidad absoluta durante combates en enjambre
+  const plateX = barX - iconSize - 4;
+  const plateW = barW + iconSize + 6;
+  const plateH = barH + 6;
+  ctx.fillStyle = 'rgba(10, 15, 29, 0.88)';
+  ctx.strokeStyle = 'rgba(51, 65, 85, 0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(plateX, barY - 3, plateW, plateH, 3);
+  ctx.fill();
+  ctx.stroke();
 
   // A. Icono de Debilidad Elemental a la izquierda
   let weaknessIcon = '⚔️';
@@ -521,7 +536,7 @@ export function drawEnemyHealthBar(ctx: CanvasRenderingContext2D, enemy: GameEne
     weaknessBorder = '#eab308';
   }
 
-  const iconX = barX - iconSize - 2;
+  const iconX = barX - iconSize - 1;
   const iconY = barY + barH / 2;
 
   // Círculo base para el icono
@@ -529,12 +544,12 @@ export function drawEnemyHealthBar(ctx: CanvasRenderingContext2D, enemy: GameEne
   ctx.strokeStyle = weaknessBorder;
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.arc(iconX, iconY, iconSize * 0.6, 0, Math.PI * 2);
+  ctx.arc(iconX, iconY, iconSize * 0.55, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   // Glifo de debilidad
-  ctx.font = '9px sans-serif';
+  ctx.font = '8.5px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(weaknessIcon, iconX, iconY);

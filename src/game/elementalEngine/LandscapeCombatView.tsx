@@ -64,6 +64,7 @@ import {
 } from './physicsAndTerrain';
 import { EnemyManager } from './enemyAI';
 import { createThresholdCustodian } from './BossCustodian';
+import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
@@ -5796,6 +5797,41 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           resolveCircleObstacleCollision(enemy, obs);
         });
       });
+
+      // Repulsión física suave entre monstruos (Flocking / Soft Push) para evitar amontonamiento y superposición
+      const activeEnemiesCount = enemies.length;
+      for (let i = 0; i < activeEnemiesCount; i++) {
+        const e1 = enemies[i];
+        if (e1.hp <= 0) continue;
+        for (let j = i + 1; j < activeEnemiesCount; j++) {
+          const e2 = enemies[j];
+          if (e2.hp <= 0) continue;
+
+          const dx = e2.x - e1.x;
+          const dy = e2.y - e1.y;
+          const dist = Math.hypot(dx, dy);
+          const minSeparation = e1.radius + e2.radius + ENEMY_PHYSICS_CONFIG.minSeparationPadding;
+
+          if (dist < minSeparation && dist > 0.001) {
+            const overlap = minSeparation - dist;
+            const force = Math.min(overlap * ENEMY_PHYSICS_CONFIG.damping, ENEMY_PHYSICS_CONFIG.maxRepulsionForce);
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            e1.x -= nx * force * 0.5;
+            e1.y -= ny * force * 0.5;
+            e2.x += nx * force * 0.5;
+            e2.y += ny * force * 0.5;
+          } else if (dist <= 0.001) {
+            // Desplazar aleatoriamente si se inicializan exactamente en la misma coordenada
+            const angle = Math.random() * Math.PI * 2;
+            e1.x -= Math.cos(angle) * 4;
+            e1.y -= Math.sin(angle) * 4;
+            e2.x += Math.cos(angle) * 4;
+            e2.y += Math.sin(angle) * 4;
+          }
+        }
+      }
 
       // Colisión de enemigos con muros ancestrales del Tilemap
       if (g.tilemap) {

@@ -2,6 +2,7 @@ import { GameEnemy, Projectile, FloatingText, StatusEffectType, RoomType } from 
 import { checkCircleCollision } from './physicsAndTerrain';
 import { elementalSound } from './soundEngine';
 import { createThresholdCustodian, updateThresholdCustodian } from './BossCustodian';
+import { ENEMY_BASE_STATS } from './EnemyStats';
 
 export class EnemyManager {
   public enemies: GameEnemy[] = [];
@@ -13,29 +14,30 @@ export class EnemyManager {
   }
 
   public createPyreGolem(id: string, x: number, y: number): GameEnemy {
+    const stats = ENEMY_BASE_STATS.pyre_golem;
     return {
       id,
-      name: 'Gólem de Escoria Ígnea',
+      name: stats.name,
       archetype: 'brute',
       bestiaryType: 'pyre_golem',
       x,
       y,
       vx: 0,
       vy: 0,
-      radius: 24,
-      hp: 220,
-      maxHp: 220,
-      attackPower: 28, // Puñetazo telegrafiado pesado calibrado a ~28% del HP base
-      moveSpeed: 0.72,
+      radius: stats.radius,
+      hp: stats.maxHp,       // Rebalance de salud base: 320 HP
+      maxHp: stats.maxHp,    // Rebalance de salud base: 320 HP
+      attackPower: stats.attackPower,
+      moveSpeed: stats.moveSpeed,
       statuses: [],
       color: '#ea580c',
       avatar: '',
-      weakness: 'ice',
-      resistance: 'fire',
+      weakness: stats.weakness,
+      resistance: stats.resistance,
       attackCooldown: 0,
-      attackMaxCooldown: 110,
+      attackMaxCooldown: stats.attackMaxCooldown,
       telegraphTimer: 0,
-      telegraphMax: 35,
+      telegraphMax: stats.telegraphMax,
       isTelegraphing: false,
       hitFlash: 0,
       facingAngle: 0,
@@ -45,29 +47,30 @@ export class EnemyManager {
   }
 
   public createStormStalker(id: string, x: number, y: number): GameEnemy {
+    const stats = ENEMY_BASE_STATS.storm_stalker;
     return {
       id,
-      name: 'Espectro de Tormenta',
+      name: stats.name,
       archetype: 'ranged',
       bestiaryType: 'storm_stalker',
       x,
       y,
       vx: 0,
       vy: 0,
-      radius: 18,
-      hp: 130,
-      maxHp: 130,
-      attackPower: 14, // Orbe eléctrico calibrado a 14% del HP base
-      moveSpeed: 1.05,
+      radius: stats.radius,
+      hp: stats.maxHp,       // Rebalance de salud base: 160 HP
+      maxHp: stats.maxHp,    // Rebalance de salud base: 160 HP
+      attackPower: stats.attackPower,
+      moveSpeed: stats.moveSpeed,
       statuses: [],
       color: '#06b6d4',
       avatar: '',
-      weakness: 'earth',
-      resistance: 'lightning',
+      weakness: stats.weakness,
+      resistance: stats.resistance,
       attackCooldown: 0,
-      attackMaxCooldown: 140,
+      attackMaxCooldown: stats.attackMaxCooldown,
       telegraphTimer: 0,
-      telegraphMax: 30,
+      telegraphMax: stats.telegraphMax,
       isTelegraphing: false,
       hitFlash: 0,
       facingAngle: 0,
@@ -78,29 +81,30 @@ export class EnemyManager {
   }
 
   public createFrostLurker(id: string, x: number, y: number): GameEnemy {
+    const stats = ENEMY_BASE_STATS.frost_lurker;
     return {
       id,
-      name: 'Acechador de Escarcha',
+      name: stats.name,
       archetype: 'ranged',
       bestiaryType: 'frost_lurker',
       x,
       y,
       vx: 0,
       vy: 0,
-      radius: 20,
-      hp: 160,
-      maxHp: 160,
-      attackPower: 14, // Aguja de hielo calibrada a 14% del HP base
-      moveSpeed: 0.85,
+      radius: stats.radius,
+      hp: stats.maxHp,       // Rebalance de salud base: 180 HP
+      maxHp: stats.maxHp,    // Rebalance de salud base: 180 HP
+      attackPower: stats.attackPower,
+      moveSpeed: stats.moveSpeed,
       statuses: [],
       color: '#38bdf8',
       avatar: '',
-      weakness: 'fire',
-      resistance: 'ice',
+      weakness: stats.weakness,
+      resistance: stats.resistance,
       attackCooldown: 0,
-      attackMaxCooldown: 160,
+      attackMaxCooldown: stats.attackMaxCooldown,
       telegraphTimer: 0,
-      telegraphMax: 35,
+      telegraphMax: stats.telegraphMax,
       isTelegraphing: false,
       hitFlash: 0,
       facingAngle: 0,
