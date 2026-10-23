@@ -60,6 +60,10 @@ import {
   LightningRodPylonEntity,
   PlasmaHyperOrbEntity,
   CryoArcFlashEntity,
+  RollingMagmaBoulderEntity,
+  GlacialBastionEntity,
+  ResonantQuakeEntity,
+  ResonantQuakeWave,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
@@ -145,7 +149,10 @@ export class IsometricRenderer {
     superconductorBlizzards: SuperconductorBlizzardEntity[] = [],
     lightningRodPylons: LightningRodPylonEntity[] = [],
     plasmaHyperOrbs: PlasmaHyperOrbEntity[] = [],
-    cryoArcFlashes: CryoArcFlashEntity[] = []
+    cryoArcFlashes: CryoArcFlashEntity[] = [],
+    rollingMagmaBoulders: RollingMagmaBoulderEntity[] = [],
+    glacialBastions: GlacialBastionEntity[] = [],
+    resonantQuakes: ResonantQuakeEntity[] = []
   ) {
     ctx.save();
 
@@ -256,6 +263,12 @@ export class IsometricRenderer {
 
     // 3.890 Dibujar Escarcha Residual de Descarga Cero Absoluto (Rayo + Rayo + Hielo)
     this.drawCryoArcFlashGround(ctx, cryoArcFlashes);
+
+    // 3.891 Dibujar Glifo Rúnico de Bastión Glacial en el Suelo (Tierra + Tierra + Hielo)
+    this.drawGlacialBastionGround(ctx, glacialBastions);
+
+    // 3.892 Dibujar Fisuras Tectónicas y Chispas en el Suelo de Fisura Resonante (Tierra + Tierra + Rayo)
+    this.drawResonantQuakeGround(ctx, resonantQuakes);
 
     // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
     if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
@@ -600,6 +613,26 @@ export class IsometricRenderer {
       }
     });
 
+    // Megalito Volcánico Rodante (Tierra + Tierra + Fuego) integrado en Depth Sorting
+    rollingMagmaBoulders.forEach((boulder) => {
+      if (!boulder.finished) {
+        renderList.push({
+          y: boulder.currentY,
+          draw: () => this.drawRollingMagmaBoulder(ctx, boulder),
+        });
+      }
+    });
+
+    // Fortaleza Glacial de Picos (Tierra + Tierra + Hielo) integrada en Depth Sorting
+    glacialBastions.forEach((bastion) => {
+      if (!bastion.finished) {
+        renderList.push({
+          y: bastion.centerY,
+          draw: () => this.drawGlacialBastionSpikes(ctx, bastion),
+        });
+      }
+    });
+
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
@@ -658,6 +691,9 @@ export class IsometricRenderer {
 
     // 6.9 Dibujar Rayos Dentados y Esquirlas de Descarga Cero Absoluto (Rayo + Rayo + Hielo)
     this.drawCryoArcFlashVortex(ctx, cryoArcFlashes);
+
+    // 6.91 Dibujar Crestas Concéntricas y Relámpagos de Fisura Resonante (Tierra + Tierra + Rayo)
+    this.drawResonantQuakeArches(ctx, resonantQuakes);
 
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
@@ -5080,6 +5116,351 @@ export class IsometricRenderer {
         ctx.fillRect(sx - 2, sy - 2, 4, 4);
         ctx.fillRect(sx - 1, sy - 3, 2, 6);
       }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // MEGALITO VOLCÁNICO RODANTE (TIERRA + TIERRA + FUEGO: BASALTO Y LAVA RODANTE)
+  // =========================================================================
+  private static drawRollingMagmaBoulder(
+    ctx: CanvasRenderingContext2D,
+    boulder: RollingMagmaBoulderEntity
+  ) {
+    const bx = Math.round(boulder.currentX);
+    const by = Math.round(boulder.currentY);
+
+    ctx.save();
+
+    if (!boulder.exploded) {
+      // 1. Sombra elíptica en el suelo (#0F172A)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+      ctx.fillRect(bx - 22, by + 12, 44, 14);
+
+      // 2. Esfera poligonal de roca en bloques de basalto gris (#3F3F46 / #27272A)
+      ctx.translate(bx, by);
+      ctx.rotate(boulder.rollAngle);
+
+      const r = boulder.radius; // 28px
+      const halfR = Math.round(r);
+
+      // Contorno exterior pixel art (#18181B)
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-halfR, -halfR + 4, halfR * 2, (halfR - 4) * 2);
+      ctx.fillRect(-halfR + 4, -halfR, (halfR - 4) * 2, halfR * 2);
+      ctx.fillRect(-halfR + 2, -halfR + 2, (halfR - 2) * 2, (halfR - 2) * 2);
+
+      // Cuerpo de basalto (#3f3f46)
+      ctx.fillStyle = '#3f3f46';
+      ctx.fillRect(-halfR + 2, -halfR + 6, (halfR - 2) * 2, (halfR - 6) * 2);
+      ctx.fillRect(-halfR + 6, -halfR + 2, (halfR - 6) * 2, (halfR - 2) * 2);
+
+      // Facetas sombreadas (#27272a)
+      ctx.fillStyle = '#27272a';
+      ctx.fillRect(-halfR + 2, 0, halfR, halfR - 2);
+      ctx.fillRect(0, halfR - 8, halfR - 4, 6);
+
+      // Facetas iluminadas (#52525b)
+      ctx.fillStyle = '#52525b';
+      ctx.fillRect(-halfR + 6, -halfR + 3, halfR, 5);
+      ctx.fillRect(-halfR + 4, -halfR + 7, 6, 8);
+
+      // 3. Grietas de lava encendida (#EA580C y #FDE047)
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(-12, -4, 24, 6);
+      ctx.fillRect(-4, -14, 8, 28);
+      ctx.fillRect(-14, 6, 12, 5);
+      ctx.fillRect(4, -12, 10, 5);
+
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(-8, -2, 16, 3);
+      ctx.fillRect(-2, -10, 4, 20);
+      ctx.fillRect(-10, 8, 6, 2);
+      ctx.fillRect(6, -10, 6, 2);
+
+      // Núcleos blancos incandescentes
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-2, -1, 4, 2);
+      ctx.fillRect(-1, -6, 2, 4);
+    } else {
+      // Supernova de basalto y fragmentos de lava al estallar (radio 65px)
+      const prog = boulder.explosionProgress;
+      const alpha = Math.max(0, 1 - prog);
+      ctx.globalAlpha = alpha;
+
+      const curRad = Math.round(boulder.explosionRadius * Math.sin(prog * Math.PI / 2));
+      const squish = 0.58;
+
+      ctx.translate(bx, by);
+
+      // Anillo de fragmentos proyectados hacia afuera
+      const shardCount = 16;
+      for (let i = 0; i < shardCount; i++) {
+        const ang = (i / shardCount) * Math.PI * 2;
+        const dist = curRad * (0.8 + 0.3 * ((i % 3) / 2));
+        const sx = Math.round(Math.cos(ang) * dist);
+        const sy = Math.round(Math.sin(ang) * dist * squish);
+        const size = (i % 2 === 0) ? 6 : 4;
+
+        // Fragmento de roca volcánica
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(sx - 1, sy - 1, size + 2, size + 2);
+        ctx.fillStyle = i % 2 === 0 ? '#ea580c' : '#3f3f46';
+        ctx.fillRect(sx, sy, size, size);
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(sx + 1, sy + 1, 2, 2);
+      }
+
+      // Destello central ígneo inicial
+      if (prog < 0.35) {
+        ctx.fillStyle = '#fde047';
+        const cSize = Math.round(20 * (1 - prog / 0.35));
+        ctx.fillRect(-Math.round(cSize / 2), -Math.round(cSize * squish / 2), cSize, Math.round(cSize * squish));
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-Math.round(cSize / 4), -Math.round(cSize * squish / 4), Math.round(cSize / 2), Math.round(cSize * squish / 2));
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // FORTALEZA GLACIAL DE PICOS (TIERRA + TIERRA + HIELO: GLIFO RÚNICO EN SUELO)
+  // =========================================================================
+  private static drawGlacialBastionGround(
+    ctx: CanvasRenderingContext2D,
+    bastions: GlacialBastionEntity[]
+  ) {
+    if (!bastions || bastions.length === 0) return;
+
+    bastions.forEach((bastion) => {
+      if (bastion.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - bastion.elapsedMs / bastion.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const cx = Math.round(bastion.centerX);
+      const cy = Math.round(bastion.centerY);
+      const rad = bastion.radius; // 110px
+      const squish = 0.58;
+
+      // 1. Sombra tenue bajo el bastión
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      ctx.fillRect(cx - rad + 10, cy - Math.round((rad - 10) * squish), (rad - 10) * 2, Math.round((rad - 10) * squish * 2));
+
+      // 2. Glifo rúnico octogonal tenue en el piso
+      const sides = 8;
+      ctx.fillStyle = '#1e293b';
+      for (let i = 0; i < sides; i++) {
+        const a1 = (i / sides) * Math.PI * 2 + bastion.elapsedMs * 0.001;
+        const a2 = ((i + 1) / sides) * Math.PI * 2 + bastion.elapsedMs * 0.001;
+        const x1 = Math.round(cx + Math.cos(a1) * (rad * 0.85));
+        const y1 = Math.round(cy + Math.sin(a1) * (rad * 0.85) * squish);
+        const x2 = Math.round(cx + Math.cos(a2) * (rad * 0.85));
+        const y2 = Math.round(cy + Math.sin(a2) * (rad * 0.85) * squish);
+
+        // Segmento pixelado entre nodos octogonales
+        ctx.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1) + 2, 2);
+        ctx.fillRect(Math.min(x1, x2), Math.min(y1, y2), 2, Math.abs(y2 - y1) + 2);
+
+        // Nodo rúnico en azul glaciar (#7DD3FC)
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillRect(x1 - 2, y1 - 2, 5, 4);
+      }
+
+      // Runa central bajo los pies
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillRect(cx - 6, cy - 2, 12, 4);
+      ctx.fillRect(cx - 2, cy - 6, 4, 12);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 2, cy - 2, 4, 4);
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // FORTALEZA GLACIAL DE PICOS (TIERRA + TIERRA + HIELO: PÚAS EN 360° EN DEPTH SORTING)
+  // =========================================================================
+  private static drawGlacialBastionSpikes(
+    ctx: CanvasRenderingContext2D,
+    bastion: GlacialBastionEntity
+  ) {
+    if (bastion.spikeProgress <= 0.05) return;
+
+    const cx = Math.round(bastion.centerX);
+    const cy = Math.round(bastion.centerY);
+    const rad = bastion.radius; // 110px
+    const squish = 0.58;
+    const maxSpikeH = 36;
+    const curH = Math.round(maxSpikeH * bastion.spikeProgress);
+
+    const remainingRatio = Math.max(0, 1 - bastion.elapsedMs / bastion.durationMs);
+    const alpha = Math.min(1, remainingRatio * 1.5);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // 16 púas triangulares escalonadas en 360°
+    const spikeCount = 16;
+    for (let i = 0; i < spikeCount; i++) {
+      const ang = (i / spikeCount) * Math.PI * 2;
+      const px = Math.round(cx + Math.cos(ang) * rad);
+      const py = Math.round(cy + Math.sin(ang) * rad * squish);
+
+      // Dibujar púa triangular escalonada
+      const steps = 6;
+      const stepH = Math.max(2, Math.round(curH / steps));
+      const baseW = 12;
+
+      for (let s = 0; s < steps; s++) {
+        const sy = py - (s + 1) * stepH;
+        const prog = s / steps;
+        const curW = Math.max(2, Math.round(baseW * (1 - prog * 0.8)));
+
+        // Contorno (#0F172A)
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(px - Math.round(curW / 2) - 1, sy, curW + 2, stepH);
+
+        // Base de piedra oscura (#1E293B)
+        if (prog < 0.4) {
+          ctx.fillStyle = '#1e293b';
+        } else {
+          // Aristas superiores en azul ártico (#7DD3FC)
+          ctx.fillStyle = '#7dd3fc';
+        }
+        ctx.fillRect(px - Math.round(curW / 2), sy, curW, stepH);
+
+        // Punta filosa superior en blanco nieve (#FFFFFF)
+        if (prog >= 0.7) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(px - 1, sy, 3, stepH);
+        }
+      }
+
+      // Ápice blanco
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px - 1, py - curH - 2, 3, 3);
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // FISURA SÍSMICA RESONANTE (TIERRA + TIERRA + RAYO: SUELO Y GRIETAS TECTÓNICAS)
+  // =========================================================================
+  private static drawResonantQuakeGround(
+    ctx: CanvasRenderingContext2D,
+    quakes: ResonantQuakeEntity[]
+  ) {
+    if (!quakes || quakes.length === 0) return;
+
+    quakes.forEach((quake) => {
+      if (quake.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - quake.elapsedMs / quake.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const ox = Math.round(quake.originX);
+      const oy = Math.round(quake.originY);
+      const cone = quake.coneAngle; // 90°
+      const squish = 0.58;
+
+      // Dibujar las 3 fisuras tectónicas concéntricas en el suelo
+      quake.waves.forEach((wave) => {
+        if (quake.elapsedMs < wave.delayMs) return;
+
+        const wDist = wave.distance;
+        const arcSteps = 12;
+
+        for (let i = 0; i <= arcSteps; i++) {
+          const a = quake.aimAngle - cone / 2 + (i / arcSteps) * cone;
+          const fx = Math.round(ox + Math.cos(a) * wDist);
+          const fy = Math.round(oy + Math.sin(a) * wDist * squish);
+
+          // Hendidura de tierra profunda (#451A03)
+          ctx.fillStyle = '#451a03';
+          ctx.fillRect(fx - 4, fy - 2, 8, 4);
+
+          // Borde de roca fracturada (#78350F)
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(fx - 3, fy - 3, 6, 2);
+          ctx.fillRect(fx - 3, fy + 1, 6, 2);
+
+          // Chispas de relámpago amarillas (#FACC15) zigzagüeando entre grietas
+          if (wave.discharged && Math.random() < 0.45) {
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(fx - 2, fy - 1, 4, 3);
+          }
+        }
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // FISURA SÍSMICA RESONANTE (TIERRA + TIERRA + RAYO: CRESTAS ELEVADAS Y RELÁMPAGOS)
+  // =========================================================================
+  private static drawResonantQuakeArches(
+    ctx: CanvasRenderingContext2D,
+    quakes: ResonantQuakeEntity[]
+  ) {
+    if (!quakes || quakes.length === 0) return;
+
+    quakes.forEach((quake) => {
+      if (quake.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - quake.elapsedMs / quake.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const ox = Math.round(quake.originX);
+      const oy = Math.round(quake.originY);
+      const cone = quake.coneAngle; // 90°
+      const squish = 0.58;
+
+      quake.waves.forEach((wave) => {
+        if (!wave.discharged) return;
+
+        const wDist = wave.distance;
+        const arcSteps = 10;
+
+        for (let i = 0; i < arcSteps; i++) {
+          const a = quake.aimAngle - cone / 2 + (i / (arcSteps - 1)) * cone;
+          const px = Math.round(ox + Math.cos(a) * wDist);
+          const py = Math.round(oy + Math.sin(a) * wDist * squish);
+
+          // Losa elevada en bloques de tierra (#78350F / #92400E)
+          const slabH = 8;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(px - 5, py - slabH - 1, 10, slabH + 2);
+
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(px - 4, py - slabH, 8, slabH);
+
+          ctx.fillStyle = '#92400e';
+          ctx.fillRect(px - 4, py - slabH, 8, 2);
+
+          // Chispas de relámpago amarillas y blancas (#FACC15 / #FFFFFF)
+          if (i % 2 === 0) {
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(px - 2, py - slabH - 4, 4, 3);
+            ctx.fillRect(px - 1, py - slabH - 6, 2, 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(px, py - slabH - 3, 2, 2);
+          }
+        }
+      });
 
       ctx.restore();
     });

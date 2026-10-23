@@ -58,6 +58,10 @@ import {
   LightningRodPylonEntity,
   PlasmaHyperOrbEntity,
   CryoArcFlashEntity,
+  RollingMagmaBoulderEntity,
+  GlacialBastionEntity,
+  ResonantQuakeEntity,
+  ResonantQuakeWave,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
@@ -725,6 +729,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     lightningRodPylons: [] as LightningRodPylonEntity[],
     plasmaHyperOrbs: [] as PlasmaHyperOrbEntity[],
     cryoArcFlashes: [] as CryoArcFlashEntity[],
+    rollingMagmaBoulders: [] as RollingMagmaBoulderEntity[],
+    glacialBastions: [] as GlacialBastionEntity[],
+    resonantQuakes: [] as ResonantQuakeEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1066,6 +1073,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.lightningRodPylons = [];
       g.plasmaHyperOrbs = [];
       g.cryoArcFlashes = [];
+      g.rollingMagmaBoulders = [];
+      g.glacialBastions = [];
+      g.resonantQuakes = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -3994,6 +4004,142 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 30,
         });
       }
+      // MEGALITO VOLCÁNICO RODANTE (TIERRA + TIERRA + FUEGO):
+      // Proyectil masivo de 28px de radio que rueda 320px arrollando y estalla en 65px
+      else if (recipe.id === 'rolling_magma_boulder') {
+        g.screenShake = Math.max(g.screenShake, 8);
+        elementalSound.playEarthToss();
+        elementalSound.playFireShot();
+        const baseDmg = Math.round((recipe.damage + statBonus) * chargeMultiplier);
+        const speed = 4.2;
+
+        g.rollingMagmaBoulders.push({
+          id: `boulder-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          currentX: wizard.x,
+          currentY: wizard.y,
+          vx: Math.cos(aimAngle) * speed,
+          vy: Math.sin(aimAngle) * speed * 0.58,
+          angle: aimAngle,
+          rollAngle: 0,
+          radius: 28,
+          travelDist: 0,
+          maxDist: 320,
+          damage: baseDmg,
+          exploded: false,
+          explosionRadius: 65,
+          explosionProgress: 0,
+          explosionDurationMs: 320,
+          elapsedMs: 0,
+          hitEnemyIds: new Set<string>(),
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `boulder-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 55,
+          y: wizard.y + Math.sin(aimAngle) * 55 - 25,
+          text: '🪨 Megalito Rodante',
+          color: '#ea580c',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // FORTALEZA GLACIAL DE PICOS (TIERRA + TIERRA + HIELO):
+      // Erupción radial de púas petrificadas en 360° (110px), escudo de absorción de 2s y 40% slow
+      else if (recipe.id === 'glacial_bastion') {
+        g.screenShake = Math.max(g.screenShake, 8);
+        elementalSound.playEarthToss();
+        elementalSound.playGlacialFreezeImpact();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.35) * chargeMultiplier);
+        const bastionRadius = 110;
+
+        // Otorga mitigación/escudo temporal por 2 segundos (120 frames)
+        wizard.invulnerableTimer = Math.max(wizard.invulnerableTimer || 0, 120);
+
+        g.glacialBastions.push({
+          id: `bastion-${now}-${Math.random()}`,
+          centerX: wizard.x,
+          centerY: wizard.y,
+          radius: bastionRadius,
+          durationMs: 1200,
+          elapsedMs: 0,
+          damage: baseDmg,
+          spikeProgress: 0,
+          finished: false,
+        });
+
+        // Golpe radial y rechazo frontal a todos los atacantes en 110px
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const d = Math.hypot(enemy.x - wizard.x, (enemy.y - wizard.y) / 0.58);
+          if (d <= bastionRadius + enemy.radius) {
+            const kAng = Math.atan2(enemy.y - wizard.y, enemy.x - wizard.x);
+            enemy.x += Math.cos(kAng) * 26;
+            enemy.y += Math.sin(kAng) * 15;
+            applyDamageToEnemy(enemy, baseDmg, 'earth', g.floatingTexts, wizard.x, wizard.y);
+            enemy.hitFlash = 10;
+            g.enemyManager.applyStatus(enemy, 'slowed', 120); // 40% slow por 2 segundos
+          }
+        });
+
+        g.floatingTexts.push({
+          id: `bastion-cast-${now}`,
+          x: wizard.x,
+          y: wizard.y - 45,
+          text: '🏰 Bastión Glacial (🛡️ Escudo 2s)',
+          color: '#7dd3fc',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 35,
+        });
+      }
+      // FISURA SÍSMICA RESONANTE (TIERRA + TIERRA + RAYO):
+      // 3 ondas de choque sucesivas en abanico frontal (90° hasta 240px) con micro-aturdimiento (0.4s) y quiebre de escudos
+      else if (recipe.id === 'resonant_quake') {
+        g.screenShake = Math.max(g.screenShake, 9);
+        elementalSound.playEarthToss();
+        elementalSound.playLightningBolt();
+        const waveDmg = Math.round((recipe.damage * 0.45 + statBonus * 0.25) * chargeMultiplier);
+        const coneAngle = Math.PI / 2; // 90°
+        const maxRange = 240;
+
+        const waves: ResonantQuakeWave[] = [
+          { distance: 80, delayMs: 0, discharged: false, hitEnemyIds: new Set<string>() },
+          { distance: 160, delayMs: 140, discharged: false, hitEnemyIds: new Set<string>() },
+          { distance: 240, delayMs: 280, discharged: false, hitEnemyIds: new Set<string>() },
+        ];
+
+        g.resonantQuakes.push({
+          id: `quake-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          coneAngle,
+          maxRange,
+          durationMs: 800,
+          elapsedMs: 0,
+          damagePerWave: waveDmg,
+          waves,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `quake-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 75,
+          y: wizard.y + Math.sin(aimAngle) * 75 - 25,
+          text: '⚡🌍 Fisura Resonante',
+          color: '#facc15',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4590,6 +4736,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.lightningRodPylons = [];
             g.plasmaHyperOrbs = [];
             g.cryoArcFlashes = [];
+            g.rollingMagmaBoulders = [];
+            g.glacialBastions = [];
+            g.resonantQuakes = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -12028,6 +12177,161 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.994 Actualizar Megalito Volcánico Rodante (Tierra + Tierra + Fuego: radio 28px, 320px, arrolla y estalla en 65px)
+      for (let bIdx = g.rollingMagmaBoulders.length - 1; bIdx >= 0; bIdx--) {
+        const boulder = g.rollingMagmaBoulders[bIdx];
+
+        if (!boulder.exploded) {
+          boulder.currentX += boulder.vx;
+          boulder.currentY += boulder.vy;
+          boulder.rollAngle += 0.14;
+          boulder.travelDist += Math.hypot(boulder.vx, boulder.vy / 0.58);
+
+          // Estela de cenizas y ascuas cuadradas en el suelo
+          if (Math.random() < 0.6) {
+            g.particles.push({
+              id: `boulder-tr-${frameNow}-${Math.random()}`,
+              x: boulder.currentX + (Math.random() - 0.5) * 16,
+              y: boulder.currentY + (Math.random() - 0.5) * 10,
+              vx: -boulder.vx * 0.15 + (Math.random() - 0.5),
+              vy: -boulder.vy * 0.15 + (Math.random() - 0.5),
+              radius: 2.2,
+              color: Math.random() > 0.4 ? '#ea580c' : '#3f3f46',
+              alpha: 0.8,
+              life: 16,
+            });
+          }
+
+          // Arrolla y empuja a todos los enemigos a su paso
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const ed = Math.hypot(enemy.x - boulder.currentX, (enemy.y - boulder.currentY) / 0.58);
+            if (ed <= boulder.radius + enemy.radius) {
+              // Empuje frontal
+              enemy.x += Math.cos(boulder.angle) * 14;
+              enemy.y += Math.sin(boulder.angle) * 8;
+              if (!boulder.hitEnemyIds.has(enemy.id)) {
+                boulder.hitEnemyIds.add(enemy.id);
+                applyDamageToEnemy(enemy, Math.round(boulder.damage * 0.45), 'earth', g.floatingTexts, boulder.currentX, boulder.currentY);
+                enemy.hitFlash = 8;
+                g.screenShake = Math.max(g.screenShake, 4);
+              }
+            }
+          });
+
+          // Choque con obstáculos sólidos o límite de alcance (320px)
+          let hitObstacle = boulder.travelDist >= boulder.maxDist;
+          if (!hitObstacle) {
+            for (const obs of g.terrainManager.obstacles) {
+              if (obs.blocksProjectiles) {
+                const od = Math.hypot(obs.x - boulder.currentX, (obs.y - boulder.currentY) / 0.58);
+                if (od <= boulder.radius + obs.radius) {
+                  hitObstacle = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (hitObstacle) {
+            boulder.exploded = true;
+            g.screenShake = Math.max(g.screenShake, 9);
+            elementalSound.playAoEExplosion();
+
+            // Daño ígneo en área al estallar (radio 65px)
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const ed = Math.hypot(enemy.x - boulder.currentX, (enemy.y - boulder.currentY) / 0.58);
+              if (ed <= boulder.explosionRadius + enemy.radius) {
+                applyDamageToEnemy(enemy, boulder.damage, 'fire', g.floatingTexts, boulder.currentX, boulder.currentY);
+                enemy.hitFlash = 12;
+                g.enemyManager.applyStatus(enemy, 'burning', 120);
+              }
+            });
+
+            // Fragmentos de roca y bloques naranjas proyectados hacia afuera
+            for (let p = 0; p < 16; p++) {
+              const pAng = (p / 16) * Math.PI * 2;
+              const spd = 3.0 + Math.random() * 3.5;
+              g.particles.push({
+                id: `bld-sh-${frameNow}-${p}`,
+                x: boulder.currentX,
+                y: boulder.currentY,
+                vx: Math.cos(pAng) * spd,
+                vy: Math.sin(pAng) * spd * 0.58,
+                radius: 3.0,
+                color: p % 2 === 0 ? '#ea580c' : '#3f3f46',
+                alpha: 1,
+                life: 18,
+              });
+            }
+          }
+        } else {
+          boulder.elapsedMs += dt;
+          boulder.explosionProgress = Math.min(1.0, boulder.elapsedMs / boulder.explosionDurationMs);
+          if (boulder.explosionProgress >= 1.0) {
+            boulder.finished = true;
+            g.rollingMagmaBoulders.splice(bIdx, 1);
+          }
+        }
+      }
+
+      // 4.995 Actualizar Fortaleza Glacial de Picos (Tierra + Tierra + Hielo: 110px radio, erupción y repliegue de púas)
+      for (let fIdx = g.glacialBastions.length - 1; fIdx >= 0; fIdx--) {
+        const bastion = g.glacialBastions[fIdx];
+        bastion.elapsedMs += dt;
+        if (bastion.elapsedMs < 200) {
+          bastion.spikeProgress = bastion.elapsedMs / 200;
+        } else if (bastion.elapsedMs > bastion.durationMs - 300) {
+          bastion.spikeProgress = Math.max(0, (bastion.durationMs - bastion.elapsedMs) / 300);
+        } else {
+          bastion.spikeProgress = 1.0;
+        }
+
+        if (bastion.elapsedMs >= bastion.durationMs) {
+          bastion.finished = true;
+          g.glacialBastions.splice(fIdx, 1);
+        }
+      }
+
+      // 4.996 Actualizar Fisura Sísmica Resonante (Tierra + Tierra + Rayo: 3 ondas concéntricas en 90° con micro-stun 0.4s)
+      for (let qIdx = g.resonantQuakes.length - 1; qIdx >= 0; qIdx--) {
+        const quake = g.resonantQuakes[qIdx];
+        quake.elapsedMs += dt;
+
+        quake.waves.forEach((wave) => {
+          if (quake.elapsedMs >= wave.delayMs && !wave.discharged) {
+            wave.discharged = true;
+            g.screenShake = Math.max(g.screenShake, 5);
+            elementalSound.playLightningBolt();
+
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0 || wave.hitEnemyIds.has(enemy.id)) return;
+              const dx = enemy.x - quake.originX;
+              const dy = (enemy.y - quake.originY) / 0.58;
+              const dist = Math.hypot(dx, dy);
+              if (Math.abs(dist - wave.distance) <= 40 + enemy.radius) {
+                const enemyAng = Math.atan2(dy, dx);
+                const diff = Math.atan2(Math.sin(enemyAng - quake.aimAngle), Math.cos(enemyAng - quake.aimAngle));
+                if (Math.abs(diff) <= quake.coneAngle / 2) {
+                  wave.hitEnemyIds.add(enemy.id);
+                  applyDamageToEnemy(enemy, quake.damagePerWave, 'earth', g.floatingTexts, quake.originX, quake.originY);
+                  enemy.hitFlash = 8;
+                  enemy.stunnedTimer = 24; // micro-aturdimiento 0.4s (24 frames)
+                  enemy.shieldBrokenTimer = 60; // quiebre de escudo
+                  g.enemyManager.applyStatus(enemy, 'shocked', 60);
+                }
+              }
+            });
+          }
+        });
+
+        if (quake.elapsedMs >= quake.durationMs) {
+          quake.finished = true;
+          g.resonantQuakes.splice(qIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -12156,7 +12460,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.superconductorBlizzards,
             g.lightningRodPylons,
             g.plasmaHyperOrbs,
-            g.cryoArcFlashes
+            g.cryoArcFlashes,
+            g.rollingMagmaBoulders,
+            g.glacialBastions,
+            g.resonantQuakes
           );
         }
       }

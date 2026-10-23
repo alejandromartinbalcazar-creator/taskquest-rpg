@@ -68,6 +68,10 @@ export type SpellCastType =
   | 'lightning_rod_pylon'    // Rayo + Rayo + Tierra (⚡⚡🌍) - Pilón de Pararrayos
   | 'plasma_hyper_orb'       // Rayo + Rayo + Fuego (⚡⚡🔥) - Bomba de Plasma Inestable
   | 'cryo_arc_flash'         // Rayo + Rayo + Hielo (⚡⚡❄️) - Descarga de Cero Absoluto
+  // Triples Mixtas - Dominancia Tierra
+  | 'rolling_magma_boulder'  // Tierra + Tierra + Fuego (🌍🌍🔥) - Megalito Volcánico Rodante
+  | 'glacial_bastion'        // Tierra + Tierra + Hielo (🌍🌍❄️) - Fortaleza Glacial de Picos
+  | 'resonant_quake'         // Tierra + Tierra + Rayo (🌍🌍⚡) - Fisura Sísmica Resonante
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -519,6 +523,65 @@ export interface CryoArcFlashEntity {
   elapsedMs: number;
   damage: number;
   freezeDurationFrames: number; // 90 frames (1.5s)
+  finished: boolean;
+}
+
+// Megalito Volcánico Rodante (Tierra + Tierra + Fuego)
+export interface RollingMagmaBoulderEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  currentX: number;
+  currentY: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  rollAngle: number;
+  radius: number; // 28px
+  travelDist: number;
+  maxDist: number; // 320px
+  damage: number;
+  exploded: boolean;
+  explosionRadius: number; // 65px
+  explosionProgress: number; // 0..1
+  explosionDurationMs: number; // ~300ms
+  elapsedMs: number;
+  hitEnemyIds: Set<string>;
+  finished: boolean;
+}
+
+// Fortaleza Glacial de Picos (Tierra + Tierra + Hielo)
+export interface GlacialBastionEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number; // 110px
+  durationMs: number; // 1200ms
+  elapsedMs: number;
+  damage: number;
+  spikeProgress: number; // 0..1
+  finished: boolean;
+}
+
+// Fisura Sísmica Resonante (Tierra + Tierra + Rayo)
+export interface ResonantQuakeWave {
+  distance: number;
+  delayMs: number;
+  discharged: boolean;
+  hitEnemyIds: Set<string>;
+}
+
+export interface ResonantQuakeEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  coneAngle: number; // 90° (Math.PI / 2)
+  maxRange: number; // 240px
+  durationMs: number; // ~800ms
+  elapsedMs: number;
+  damagePerWave: number;
+  waves: ResonantQuakeWave[];
   finished: boolean;
 }
 

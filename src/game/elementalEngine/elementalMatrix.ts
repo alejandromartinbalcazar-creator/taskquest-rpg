@@ -445,7 +445,13 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'superconductor_blizzard'
   )
     return 'ice';
-  if (spellType === 'obsidian_volcano') return 'earth';
+  if (
+    spellType === 'obsidian_volcano' ||
+    spellType === 'rolling_magma_boulder' ||
+    spellType === 'glacial_bastion' ||
+    spellType === 'resonant_quake'
+  )
+    return 'earth';
   if (spellType === 'conductive_prison') return 'lightning';
   if (spellType === 'overload_core') return 'lightning';
   if (spellType === 'glacial_plasma_storm') return 'ice';

@@ -415,6 +415,47 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // TRIPLES MIXTAS - DOMINANCIA TIERRA (Cooldown: 0)
+  rolling_magma_boulder: {
+    id: 'rolling_magma_boulder',
+    name: 'Megalito Rodante',
+    elements: ['earth', 'earth', 'fire'],
+    description: 'Rueda un megalito masivo de basalto y lava de 28px de radio hasta 320px que arrolla enemigos y estalla en un radio de 65px.',
+    icon: '🪨🔥',
+    color: '#ea580c',
+    secondaryColor: '#3f3f46',
+    damage: 88,
+    knockback: 7.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  glacial_bastion: {
+    id: 'glacial_bastion',
+    name: 'Bastión Glacial',
+    elements: ['earth', 'earth', 'ice'],
+    description: 'Erupción radial de púas petrificadas y permafrost en 360° (radio 110px) que repele enemigos, ralentiza un 40% y mitiga daño durante 2s.',
+    icon: '🏰❄️',
+    color: '#7dd3fc',
+    secondaryColor: '#1e293b',
+    damage: 54,
+    knockback: 6.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  resonant_quake: {
+    id: 'resonant_quake',
+    name: 'Fisura Resonante',
+    elements: ['earth', 'earth', 'lightning'],
+    description: 'Genera 3 ondas de choque sucesivas en abanico frontal de 90° hasta 240px que agrietan el suelo con descargas estáticas, micro-aturdiendo 0.4s y quebrando escudos.',
+    icon: '⚡🌍',
+    color: '#facc15',
+    secondaryColor: '#78350f',
+    damage: 62,
+    knockback: 3.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -494,6 +535,11 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (count('lightning') === 2 && count('earth') === 1) return RECIPES.lightning_rod_pylon;
   if (count('lightning') === 2 && count('fire') === 1) return RECIPES.plasma_hyper_orb;
   if (count('lightning') === 2 && count('ice') === 1) return RECIPES.cryo_arc_flash;
+
+  // 2.8 Triples Mixtas - Dominancia Tierra (cooldown: 0)
+  if (count('earth') === 2 && count('fire') === 1) return RECIPES.rolling_magma_boulder;
+  if (count('earth') === 2 && count('ice') === 1) return RECIPES.glacial_bastion;
+  if (count('earth') === 2 && count('lightning') === 1) return RECIPES.resonant_quake;
 
   // 3. Las 6 Combinaciones Prioritarias de 2 Elementos
   if (hasFire && hasIce) {
