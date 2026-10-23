@@ -34,6 +34,9 @@ export function drawWizardSprite({
   time = Date.now() / 1000,
 }: WizardRenderOptions) {
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  (ctx as any).webkitImageSmoothingEnabled = false;
+  (ctx as any).mozImageSmoothingEnabled = false;
   ctx.translate(x, y);
 
   // 1. Cinemática Procedimental: Run Bobbing, Respiración Idle y Sombra Dinámica
@@ -125,17 +128,14 @@ export function drawWizardSprite({
   ctx.fillStyle = '#0f172a'; // Oscuridad bajo la capucha
   ctx.fill();
 
-  // Ojos Brillantes Místicos (Tipo Black Mage)
+  // Ojos Brillantes Místicos (Estilo Black Mage 16-Bit)
   const eyeColor = activeElement === 'fire' ? '#fde047' : '#67e8f9';
   const eyeOffset = Math.sin(facingAngle) * 2 * scale;
   ctx.fillStyle = eyeColor;
-  ctx.shadowColor = eyeColor;
-  ctx.shadowBlur = 6 * scale;
-  ctx.beginPath();
-  ctx.arc(-3 * scale + eyeOffset, -6 * scale, 1.8 * scale, 0, Math.PI * 2);
-  ctx.arc(3 * scale + eyeOffset, -6 * scale, 1.8 * scale, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0; // reset
+  const eyeW = Math.max(2, Math.round(3.2 * scale));
+  const eyeH = Math.max(2, Math.round(2.2 * scale));
+  ctx.fillRect(Math.round(-4.5 * scale + eyeOffset), Math.round(-7 * scale), eyeW, eyeH);
+  ctx.fillRect(Math.round(1.5 * scale + eyeOffset), Math.round(-7 * scale), eyeW, eyeH);
 
   // 5. Sombrero de Mago Puntiagudo
   // Ala del sombrero

@@ -1,36 +1,230 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
 @import "tailwindcss";
 
 @layer base {
   :root {
     --bg-dark: #090a10;
-    --card-dark: #121420;
-    --border-dark: #22263d;
+    --card-dark: #1e293b;
+    --border-dark: #18181b;
   }
   
   body {
     background-color: var(--bg-dark);
-    color: #e2e8f0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    color: #f1f5f9;
+    font-family: 'VT323', 'Courier New', monospace;
+    font-size: 19px;
+    letter-spacing: 0.3px;
+    line-height: 1.25;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Press Start 2P', monospace;
+    letter-spacing: -0.5px;
+  }
 }
 
-/* Custom Scrollbars */
+/* 16-Bit Pixel Art Rendering Engine */
+.pixelated, canvas, img.pixelated, svg.pixelated {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Tipografías Utilitarias */
+.font-pixel-title {
+  font-family: 'Press Start 2P', monospace;
+}
+
+.font-pixel-text {
+  font-family: 'VT323', 'Courier New', monospace;
+}
+
+/* ============================================================== */
+/* SISTEMA DE DISEÑO PIXEL ART 16-BIT (Bordes de Piedra, Metal y Oro) */
+/* ============================================================== */
+
+/* Tarjeta Clásica de Fantasía (Piedra y Metal) */
+.retro-box-stone {
+  background-color: #1e293b;
+  border: 3px solid #18181b;
+  outline: 2px solid #3f3f46;
+  outline-offset: -2px;
+  box-shadow: 4px 4px 0px 0px #000000;
+  border-radius: 0px !important;
+}
+
+/* Tarjeta Dorada de Recompensa / Deuda de Honor */
+.retro-box-gold {
+  background-color: #1c1917;
+  border: 3px solid #18181b;
+  outline: 2px solid #f59e0b;
+  outline-offset: -2px;
+  box-shadow: 4px 4px 0px 0px #000000;
+  border-radius: 0px !important;
+}
+
+/* Tarjeta Roja de Peligro / Vencida / Deleveling */
+.retro-box-danger {
+  background-color: #450a0a;
+  border: 3px solid #18181b;
+  outline: 2px solid #ef4444;
+  outline-offset: -2px;
+  box-shadow: 4px 4px 0px 0px #000000;
+  border-radius: 0px !important;
+}
+
+/* Marco de Piedra con Relieve para Avatar de Héroe */
+.retro-frame-hero {
+  background-color: #0f172a;
+  border: 4px solid #18181b;
+  outline: 2px solid #475569;
+  outline-offset: -2px;
+  box-shadow: 4px 4px 0px 0px #000000;
+  border-radius: 0px !important;
+}
+
+/* Barra de Progreso Rectangular por Bloques */
+.retro-bar-container {
+  background-color: #0f172a;
+  border: 2px solid #18181b;
+  outline: 1px solid #334155;
+  outline-offset: -1px;
+  padding: 2px;
+  box-shadow: inset 2px 2px 0px 0px rgba(0, 0, 0, 0.7);
+  border-radius: 0px !important;
+}
+
+.retro-bar-fill {
+  height: 100%;
+  border-radius: 0px !important;
+  image-rendering: pixelated;
+  background-size: 12px 100%;
+}
+
+/* Botones 3D de 16-Bit con Volumen y Depresión al Pulsar */
+.retro-btn-gold {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  line-height: 1;
+  background-color: #d97706;
+  color: #ffffff;
+  border-top: 3px solid #fde047;
+  border-left: 3px solid #fde047;
+  border-right: 3px solid #78350f;
+  border-bottom: 3px solid #78350f;
+  box-shadow: 3px 3px 0px 0px #000000;
+  border-radius: 0px !important;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.retro-btn-gold:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px 0px #000000;
+  border-top: 3px solid #78350f;
+  border-left: 3px solid #78350f;
+  border-right: 3px solid #fde047;
+  border-bottom: 3px solid #fde047;
+}
+
+.retro-btn-emerald {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  line-height: 1;
+  background-color: #059669;
+  color: #ffffff;
+  border-top: 3px solid #6ee7b7;
+  border-left: 3px solid #6ee7b7;
+  border-right: 3px solid #064e3b;
+  border-bottom: 3px solid #064e3b;
+  box-shadow: 3px 3px 0px 0px #000000;
+  border-radius: 0px !important;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.retro-btn-emerald:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px 0px #000000;
+  border-top: 3px solid #064e3b;
+  border-left: 3px solid #064e3b;
+  border-right: 3px solid #6ee7b7;
+  border-bottom: 3px solid #6ee7b7;
+}
+
+.retro-btn-stone {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 1;
+  background-color: #334155;
+  color: #f1f5f9;
+  border-top: 2px solid #64748b;
+  border-left: 2px solid #64748b;
+  border-right: 2px solid #0f172a;
+  border-bottom: 2px solid #0f172a;
+  box-shadow: 2px 2px 0px 0px #000000;
+  border-radius: 0px !important;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.retro-btn-stone:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px 0px #000000;
+  border-top: 2px solid #0f172a;
+  border-left: 2px solid #0f172a;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+}
+
+.retro-btn-danger {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 1;
+  background-color: #991b1b;
+  color: #fecaca;
+  border-top: 2px solid #ef4444;
+  border-left: 2px solid #ef4444;
+  border-right: 2px solid #450a0a;
+  border-bottom: 2px solid #450a0a;
+  box-shadow: 2px 2px 0px 0px #000000;
+  border-radius: 0px !important;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.retro-btn-danger:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px 0px #000000;
+  border-top: 2px solid #450a0a;
+  border-left: 2px solid #450a0a;
+  border-right: 2px solid #ef4444;
+  border-bottom: 2px solid #ef4444;
+}
+
+/* Insignias de Píxeles (Badges) */
+.retro-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  line-height: 1;
+  padding: 3px 6px;
+  border: 1px solid #18181b;
+  box-shadow: 1px 1px 0px 0px #000000;
+  border-radius: 0px !important;
+}
+
+/* Custom Scrollbars Pixelados */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d0f17;
+  background: #090a10;
+  border: 1px solid #18181b;
 }
 ::-webkit-scrollbar-thumb {
-  background: #272c47;
-  border-radius: 9999px;
+  background: #334155;
+  border: 1px solid #64748b;
+  box-shadow: 1px 1px 0px 0px #000000;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b4269;
+  background: #475569;
 }
 
 /* Animations */
@@ -41,19 +235,13 @@
 
 @keyframes float-hero {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-@keyframes slash-hit {
-  0% { transform: scale(0.8) rotate(-15deg); opacity: 0; }
-  50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); opacity: 0; }
+  50% { transform: translateY(-4px); }
 }
 
 @keyframes damage-shake {
   0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-5px); }
-  40%, 80% { transform: translateX(5px); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
 }
 
 .animate-pulse-slow {
@@ -66,24 +254,4 @@
 
 .animate-damage {
   animation: damage-shake 0.4s ease-in-out;
-}
-
-/* Glow effects */
-.glow-fire {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.45);
-}
-.glow-lightning {
-  box-shadow: 0 0 20px rgba(234, 179, 8, 0.45);
-}
-.glow-earth {
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.45);
-}
-.glow-ice {
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
-}
-.glow-plasma {
-  box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
-}
-.glow-magma {
-  box-shadow: 0 0 25px rgba(249, 115, 22, 0.6);
 }

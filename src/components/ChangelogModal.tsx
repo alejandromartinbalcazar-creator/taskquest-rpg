@@ -103,23 +103,23 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none animate-in fade-in zoom-in-95">
-      <div className="bg-[#0f111a] border-2 border-stone-800 rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
+      <div className="retro-box-stone max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
         {/* Cabecera del Modal */}
-        <div className="p-4 sm:p-5 pb-3 border-b border-stone-800/80 flex items-center justify-between bg-gradient-to-r from-[#171a29] via-[#10121d] to-[#171a29]">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-amber-950/80 border border-amber-600/40 text-amber-400 shadow-md">
-              <Terminal className="w-5 h-5" />
+        <div className="p-3 sm:p-4 border-b-2 border-[#18181b] flex items-center justify-between bg-[#131522]">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-amber-950 border border-amber-600 text-amber-400 shadow-[2px_2px_0px_#000]">
+              <Terminal className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-stone-100 tracking-wider">
+                <h3 className="font-pixel-title text-xs text-stone-100 tracking-wider">
                   DEV CHANGELOG
                 </h3>
-                <span className="text-[10px] font-bold text-amber-400 bg-amber-950/90 px-2 py-0.5 rounded-full border border-amber-600/40 font-mono">
+                <span className="retro-badge bg-amber-950 text-amber-400 border-amber-600">
                   v{currentVersion}
                 </span>
               </div>
-              <p className="text-[11px] text-stone-400">
+              <p className="font-pixel-text text-sm text-stone-300">
                 Historial de versiones, compilaciones y notas de lanzamiento.
               </p>
             </div>

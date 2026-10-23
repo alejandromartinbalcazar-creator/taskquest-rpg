@@ -51,35 +51,35 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
     );
   }
 
-  // Vista de selección de pisos de la mazmorra con estética de piedra y ladrillo
+  // Vista de selección de pisos de la mazmorra con estética 16-bit de piedra y metal
   return (
     <div className="max-w-xl mx-auto px-3 py-4 pb-24 space-y-4">
       {/* Banner de Mazmorra */}
-      <div className="bg-gradient-to-br from-[#1c1917] via-[#12131a] to-[#1c1917] p-4 rounded-3xl border border-stone-700 shadow-xl flex items-center justify-between">
+      <div className="retro-box-stone p-3 flex items-center justify-between">
         <div>
-          <h3 className="font-bold text-sm text-stone-200 flex items-center gap-1.5">
-            <Castle className="w-4 h-4 text-amber-500" />
-            Mazmorras de Acción en Tiempo Real
+          <h3 className="font-pixel-title text-xs text-amber-400 flex items-center gap-1.5 uppercase">
+            <Castle className="w-4 h-4 text-amber-400" />
+            Mazmorras en Tiempo Real
           </h3>
-          <p className="text-[11px] text-stone-400 mt-0.5">
-            Controla a tu mago, esquiva a los monstruos y prueba tus 10 habilidades mágicas.
+          <p className="font-pixel-text text-sm text-stone-300 mt-0.5">
+            Controla a tu mago, esquiva monstruos y desata tus hechizos elementales.
           </p>
         </div>
-        <div className="flex items-center gap-1.5 bg-amber-950/60 px-3 py-1.5 rounded-2xl border border-amber-600/40 shrink-0">
-          <Key className="w-4 h-4 text-amber-400 animate-bounce" />
-          <span className="font-black text-amber-300 text-sm">{player.dungeonKeys}</span>
+        <div className="flex items-center gap-1.5 bg-[#0f172a] px-2.5 py-1 border-2 border-[#18181b] shadow-[2px_2px_0px_#000] shrink-0">
+          <Key className="w-3.5 h-3.5 text-amber-400" />
+          <span className="font-pixel-title text-[9px] text-amber-300">{player.dungeonKeys}</span>
         </div>
       </div>
 
       {/* Botón Destacado: Prueba Directa en Navegador / Modo Práctica */}
-      <div className="bg-gradient-to-r from-purple-950/80 via-[#1b1938] to-purple-950/80 p-4 rounded-3xl border-2 border-purple-500/60 flex items-center justify-between shadow-2xl">
+      <div className="retro-box-gold p-3 flex items-center justify-between">
         <div className="space-y-0.5">
-          <div className="text-xs font-black text-purple-200 flex items-center gap-1.5">
-            <span>✨ PROBAR NUEVO MOTOR DE MAGIA</span>
-            <span className="text-[9px] bg-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-full border border-purple-400/40 font-mono">CHROME / PC</span>
+          <div className="font-pixel-title text-[9px] text-amber-300 flex items-center gap-1.5">
+            <span>⚔️ PROBAR MOTOR DE COMBATE</span>
+            <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500">PC / MOBILE</span>
           </div>
-          <div className="text-[11px] text-slate-300">
-            Entra gratis al combate para probar los 10 hechizos, la esquiva [Espacio/Dash] y el ataque cargado.
+          <div className="font-pixel-text text-sm text-stone-200">
+            Entra gratis al combate para probar los hechizos, el dash y el ataque cargado.
           </div>
         </div>
         <button
@@ -106,18 +106,18 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
             };
             setActiveFloor(floorToUse);
           }}
-          className="px-4 py-2.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:brightness-110 active:scale-95 text-white font-black text-xs rounded-2xl border border-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)] shrink-0 transition"
+          className="retro-btn-gold px-3 py-2 shrink-0 flex items-center gap-1 text-[8px]"
         >
-          ⚔️ PROBAR AHORA
+          <span>PROBAR AHORA</span>
         </button>
       </div>
 
       {/* Advertencia de Salud Baja */}
       {player.currentHp <= 25 && (
-        <div className="bg-red-950/60 border border-red-500/50 p-3 rounded-2xl text-xs text-red-200 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-          <span>
-            <strong>¡Salud baja!</strong> Si procrastinas y tu HP llega a 0 no podrás entrar al combate. Completa tareas para regenerarte.
+        <div className="retro-box-danger p-2.5 text-xs text-red-200 flex items-center gap-2 animate-pulse">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+          <span className="font-pixel-text text-sm">
+            <strong className="font-pixel-title text-[8px] text-red-300">¡Salud baja!</strong> Si procrastinas y tu HP llega a 0 no podrás entrar al combate. Completa tareas para regenerarte.
           </span>
         </div>
       )}
@@ -127,33 +127,33 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         {dungeons.map((floor) => (
           <div
             key={floor.floorNumber}
-            className={`p-4 rounded-3xl border transition-all relative overflow-hidden ${
+            className={`${
               floor.cleared
-                ? 'bg-[#10141f] border-emerald-500/40'
-                : 'bg-[#151722] border-stone-700/60 hover:border-amber-500/50 shadow-md'
-            }`}
+                ? 'retro-box-stone outline-emerald-500'
+                : 'retro-box-stone'
+            } p-3`}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="text-3xl p-2.5 bg-[#1f2233] rounded-2xl border border-stone-700">
+                <span className="text-2xl p-2 bg-[#0f172a] border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
                   {floor.enemy.avatar}
                 </span>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800">
+                    <span className="retro-badge bg-amber-950 text-amber-300 border-amber-600">
                       Piso {floor.floorNumber}
                     </span>
-                    <h4 className="font-bold text-sm text-stone-100">{floor.name}</h4>
+                    <h4 className="font-pixel-title text-[9px] text-stone-100">{floor.name}</h4>
                   </div>
-                  <p className="text-xs text-stone-400 mt-1">{floor.description}</p>
+                  <p className="font-pixel-text text-sm text-stone-300 mt-0.5">{floor.description}</p>
                 </div>
               </div>
 
               <button
                 onClick={() => handleStartFloor(floor)}
-                className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold text-xs rounded-xl shadow-lg active:scale-95 transition shrink-0"
+                className="retro-btn-gold px-3 py-1.5 flex items-center gap-1 text-[8px] shrink-0"
               >
-                <Sword className="w-3.5 h-3.5" />
+                <Sword className="w-3 h-3" />
                 <span>Luchar</span>
               </button>
             </div>

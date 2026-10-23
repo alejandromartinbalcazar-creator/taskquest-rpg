@@ -571,6 +571,10 @@ export const MagickaDungeon: React.FC<MagickaDungeonProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    ctx.imageSmoothingEnabled = false;
+    (ctx as any).webkitImageSmoothingEnabled = false;
+    (ctx as any).mozImageSmoothingEnabled = false;
+
     let animId: number;
 
     const loop = () => {
@@ -1126,7 +1130,7 @@ export const MagickaDungeon: React.FC<MagickaDungeonProps> = ({
 
       {/* ÁREA DE JUEGO (CANVAS CON CÁMARA MÓVIL Y JOYSTICK INDEPENDIENTE) */}
       <div
-        className="relative w-full aspect-square bg-[#0a0b12] rounded-3xl overflow-hidden border-2 border-stone-800 shadow-2xl touch-none"
+        className="relative w-full aspect-square bg-[#0a0b12] retro-box-stone overflow-hidden touch-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -1135,7 +1139,7 @@ export const MagickaDungeon: React.FC<MagickaDungeonProps> = ({
           ref={canvasRef}
           width={400}
           height={400}
-          className="w-full h-full block"
+          className="w-full h-full block pixelated"
         />
 
         {/* JOYSTICK VIRTUAL */}

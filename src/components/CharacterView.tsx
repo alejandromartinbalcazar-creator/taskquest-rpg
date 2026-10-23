@@ -91,43 +91,43 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
 
   return (
     <div className="max-w-xl mx-auto px-3 py-4 pb-24 space-y-4">
-      {/* TARJETA DEL HÉROE CON SPRITE DEL MAGO DIBUJADO EN VIVO */}
-      <div className="bg-gradient-to-b from-[#181a26] to-[#111219] border-2 border-stone-700/80 rounded-3xl p-5 shadow-2xl relative overflow-hidden text-center">
+      {/* TARJETA DEL HÉROE CON SPRITE DEL MAGO DIBUJADO EN VIVO (16-BIT) */}
+      <div className="retro-box-stone p-4 text-center relative overflow-hidden">
         {/* Decoración de enredaderas en las esquinas */}
-        <div className="absolute top-2 left-2 text-[10px] text-emerald-600 font-bold tracking-widest uppercase">
+        <div className="absolute top-2 left-2 font-pixel-title text-[7px] text-emerald-400 tracking-wider uppercase">
           🌿 Refugio del Mago
         </div>
 
         {/* SPRITE DE MAGO INTERACTIVO */}
-        <div className="my-1">
+        <div className="my-1 flex justify-center">
           <WizardAvatar
-            size={150}
-            scale={2.6}
+            size={130}
+            scale={2.4}
             activeElement={getActiveElement()}
             isAnimated={true}
           />
         </div>
 
         {/* Nombre y Título del Mago */}
-        <div className="flex items-center justify-center gap-2 mt-1">
+        <div className="flex items-center justify-center gap-2 mt-2">
           {isEditing ? (
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
-                className="bg-[#1b2035] border border-cyan-500 rounded-lg px-2.5 py-1 text-xs text-white text-center"
+                className="bg-[#090a10] border-2 border-[#18181b] outline-1 outline-[#334155] px-2 py-1 font-pixel-title text-xs text-white text-center"
               />
               <button
                 onClick={handleSaveName}
-                className="p-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500"
+                className="retro-btn-emerald p-1.5 text-white"
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <h3 className="font-black text-xl text-stone-100">{player.name}</h3>
+              <h3 className="font-pixel-title text-sm text-stone-100 drop-shadow-[2px_2px_0px_#000]">{player.name}</h3>
               <button
                 onClick={() => setIsEditing(true)}
                 className="text-stone-400 hover:text-white"
@@ -139,31 +139,31 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
           )}
         </div>
 
-        <p className="text-xs text-purple-400 font-bold mt-0.5">{player.title}</p>
+        <p className="font-pixel-title text-[8px] text-purple-400 font-bold mt-1 uppercase">{player.title}</p>
 
         {/* Estado del Héroe y Efectos de Castigo */}
-        <div className="mt-3 flex items-center justify-center gap-1.5 flex-wrap">
+        <div className="mt-2.5 flex items-center justify-center gap-1.5 flex-wrap">
           {player.isAgony && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950 border border-red-500 text-[11px] text-red-200 animate-pulse">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+            <div className="retro-badge bg-red-950 text-red-200 border-red-500 animate-pulse flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3 text-red-400" />
               <span>En Agonía / Bancarrota (Piso Nivel 1)</span>
             </div>
           )}
           {player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-950/90 border border-purple-500/70 text-[11px] text-purple-200">
-              <Skull className="w-3.5 h-3.5 text-purple-400" />
-              <span>Maldición (-15% EXP en mazmorras)</span>
+            <div className="retro-badge bg-purple-950 text-purple-200 border-purple-500 flex items-center gap-1">
+              <Skull className="w-3 h-3 text-purple-400" />
+              <span>Maldición (-15% EXP)</span>
             </div>
           )}
           {player.currentHp <= 25 ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950/70 border border-red-500/50 text-[11px] text-red-200">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+            <div className="retro-badge bg-red-950 text-red-200 border-red-500 flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3 text-red-400" />
               <span>Debilitado ({player.currentHp} HP)</span>
             </div>
           ) : !player.isAgony && !(player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now) && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-500/40 text-[11px] text-emerald-300">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Enfoque Óptimo ({player.cleanStreakDays} días de racha)</span>
+            <div className="retro-badge bg-emerald-950 text-emerald-300 border-emerald-500 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>Enfoque Óptimo ({player.cleanStreakDays} días)</span>
             </div>
           )}
         </div>
@@ -173,29 +173,29 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
           <div className="mt-3">
             <button
               onClick={onOpenProgressModal}
-              className="w-full py-2 px-3 rounded-2xl bg-gradient-to-r from-amber-950/70 via-stone-900 to-amber-950/70 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition shadow-md active:scale-98"
+              className="w-full py-2 px-3 retro-btn-gold flex items-center justify-center gap-2 text-[8px]"
             >
-              <Trophy className="w-4 h-4 text-amber-400" />
+              <Trophy className="w-3.5 h-3.5 text-amber-200" />
               <span>Ver Hitos del Héroe & Progresión Directa</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* ATRIBUTOS DEL MAGO (LIMPIO Y FÁCIL DE ENTENDER) */}
-      <div className="space-y-2.5">
+      {/* ATRIBUTOS DEL MAGO (16-BIT RETRO) */}
+      <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
-          <h4 className="text-xs font-bold text-stone-300 uppercase tracking-wider">
+          <h4 className="font-pixel-title text-[9px] text-stone-300 uppercase tracking-wider">
             Atributos de tu Vida Real
           </h4>
           {player.skillPoints > 0 && (
-            <span className="text-xs font-bold text-amber-400 bg-amber-950/70 px-2.5 py-0.5 rounded-full border border-amber-600/40 animate-pulse">
+            <span className="retro-badge bg-amber-950 text-amber-300 border-amber-500 animate-pulse">
               +{player.skillPoints} Puntos disponibles
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-2">
           {statDetails.map((stat) => {
             const Icon = stat.icon;
             const canLevelUp = player.skillPoints > 0;
@@ -203,29 +203,29 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
             return (
               <div
                 key={stat.id}
-                className="bg-[#13151f] border border-stone-800 p-3 rounded-2xl flex flex-col justify-between shadow-md"
+                className="retro-box-stone p-2.5 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
-                      <div className={`p-1.5 rounded-lg border ${stat.color}`}>
-                        <Icon className="w-3.5 h-3.5" />
+                      <div className={`p-1 border ${stat.color}`}>
+                        <Icon className="w-3 h-3" />
                       </div>
-                      <span className="font-bold text-xs text-stone-200">{stat.name}</span>
+                      <span className="font-pixel-title text-[8px] text-stone-200">{stat.name}</span>
                     </div>
 
-                    <span className="font-mono font-black text-sm text-stone-100">
+                    <span className="font-pixel-title text-xs text-amber-400">
                       {stat.value}
                     </span>
                   </div>
 
-                  <p className="text-[10px] text-stone-400 mt-1 leading-snug">{stat.desc}</p>
+                  <p className="font-pixel-text text-xs text-stone-300 mt-0.5 leading-snug">{stat.desc}</p>
                 </div>
 
                 {canLevelUp && (
                   <button
                     onClick={() => onAllocateStat(stat.id)}
-                    className={`mt-2 w-full py-1 text-white font-bold text-[11px] rounded-xl transition shadow ${stat.btnColor}`}
+                    className="mt-2 w-full py-1.5 retro-btn-emerald text-[8px]"
                   >
                     +1 {stat.name}
                   </button>
@@ -237,52 +237,52 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
       </div>
 
       {/* REGISTRO DE CASTIGO: HISTORIAL DE DELEVELING */}
-      <div className="bg-[#121420] border-2 border-stone-800 rounded-3xl p-4 shadow-xl space-y-3">
+      <div className="retro-box-danger p-3 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-red-950/70 border border-red-500/40 text-red-400">
-              <TrendingDown className="w-4 h-4" />
+            <div className="p-1 bg-red-950 border border-red-500 text-red-400">
+              <TrendingDown className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h4 className="text-xs font-black text-stone-200 uppercase tracking-wide">
+              <h4 className="font-pixel-title text-[8px] text-stone-200 uppercase tracking-wide">
                 Consecuencias Reales: Deleveling
               </h4>
-              <p className="text-[10px] text-stone-400">
+              <p className="font-pixel-text text-xs text-stone-300">
                 Pérdidas de nivel y degradación de poder por tareas expiradas.
               </p>
             </div>
           </div>
 
           <div className="text-right">
-            <span className="text-[11px] font-black text-red-400 bg-red-950 px-2.5 py-1 rounded-full border border-red-800">
+            <span className="retro-badge bg-red-950 text-red-300 border-red-700">
               {player.totalDelevelsSuffered || 0} Niveles Perdidos
             </span>
           </div>
         </div>
 
         {player.delevelHistory && player.delevelHistory.length > 0 ? (
-          <div className="space-y-2 pt-1">
+          <div className="space-y-1.5 pt-1">
             {player.delevelHistory.slice(0, 5).map((record) => (
               <div
                 key={record.id}
-                className="bg-[#161825] border border-red-950 p-2.5 rounded-2xl flex items-center justify-between text-xs"
+                className="bg-[#161825] border-2 border-[#18181b] p-2 flex items-center justify-between text-xs"
               >
                 <div>
-                  <div className="font-bold text-stone-200 flex items-center gap-1.5">
+                  <div className="font-pixel-title text-[8px] text-stone-200 flex items-center gap-1.5">
                     <Skull className="w-3 h-3 text-red-400 shrink-0" />
                     <span>{record.taskTitle}</span>
                   </div>
-                  <div className="text-[10px] text-stone-400 flex items-center gap-2 mt-0.5">
+                  <div className="font-pixel-text text-xs text-stone-300 flex items-center gap-2 mt-0.5">
                     <span>{new Date(record.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     <span>•</span>
-                    <span className="text-red-400 font-bold font-mono">Nv. {record.previousLevel} ➔ Nv. {record.newLevel}</span>
+                    <span className="text-red-400 font-bold">Nv. {record.previousLevel} ➔ Nv. {record.newLevel}</span>
                     <span>•</span>
-                    <span className="text-stone-400 font-mono">-{record.hpLost} Max HP</span>
+                    <span className="text-stone-300">-{record.hpLost} Max HP</span>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <span className="text-[10px] font-black text-red-300 bg-red-900/60 border border-red-700/60 px-2 py-0.5 rounded-lg">
+                  <span className="retro-badge bg-red-900 text-red-200 border-red-700">
                     -{record.levelsLost} {record.levelsLost === 1 ? 'Nivel' : 'Niveles'}
                   </span>
                 </div>
@@ -290,8 +290,8 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
             ))}
           </div>
         ) : (
-          <div className="text-center py-4 bg-[#0d0f17] rounded-2xl border border-dashed border-stone-800">
-            <p className="text-xs text-stone-400">
+          <div className="text-center py-3 bg-[#0d0f17] border border-stone-800">
+            <p className="font-pixel-text text-sm text-stone-400">
               ✨ Tu récord está impecable. No has sufrido deleveling por incumplimiento.
             </p>
           </div>

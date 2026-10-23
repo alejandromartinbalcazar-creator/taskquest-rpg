@@ -365,6 +365,10 @@ export const ActionDungeon: React.FC<ActionDungeonProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    ctx.imageSmoothingEnabled = false;
+    (ctx as any).webkitImageSmoothingEnabled = false;
+    (ctx as any).mozImageSmoothingEnabled = false;
+
     let animId: number;
 
     const gameLoop = () => {
@@ -751,7 +755,7 @@ export const ActionDungeon: React.FC<ActionDungeonProps> = ({
 
       {/* ÁREA DE JUEGO (CANVAS INTERACTIVO) */}
       <div
-        className="relative w-full aspect-square bg-[#0b0c12] rounded-3xl overflow-hidden border-2 border-stone-800 shadow-2xl touch-none"
+        className="relative w-full aspect-square bg-[#0b0c12] retro-box-stone overflow-hidden touch-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -760,7 +764,7 @@ export const ActionDungeon: React.FC<ActionDungeonProps> = ({
           ref={canvasRef}
           width={400}
           height={400}
-          className="w-full h-full block"
+          className="w-full h-full block pixelated"
         />
 
         {/* JOYSTICK VIRTUAL MÓVIL EN PANTALLA (Abajo a la Izquierda) */}

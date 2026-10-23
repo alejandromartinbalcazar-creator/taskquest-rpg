@@ -34,18 +34,18 @@ export const HeroProgressModal: React.FC<HeroProgressModalProps> = ({ player, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-gradient-to-b from-[#161824] via-[#10121c] to-[#0a0b12] border-2 border-stone-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-lg retro-box-stone shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* ENCABEZADO */}
-        <div className="relative px-5 py-4 border-b border-stone-800 flex items-center justify-between bg-[#131522]/90">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-amber-950/70 border border-amber-500/50 text-amber-400">
-              <Trophy className="w-5 h-5" />
+        <div className="relative px-4 py-3 border-b-2 border-[#18181b] flex items-center justify-between bg-[#131522]">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-amber-950 border border-amber-500 text-amber-400">
+              <Trophy className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-black text-amber-300 tracking-wide">
+              <h3 className="font-pixel-title text-xs text-amber-300 tracking-wide">
                 PROGRESIÓN DIRECTA & HITOS
               </h3>
-              <p className="text-[11px] text-stone-400">
+              <p className="font-pixel-text text-sm text-stone-300">
                 Poder forjado con tus acciones reales. Sin tiendas ni microgestión.
               </p>
             </div>

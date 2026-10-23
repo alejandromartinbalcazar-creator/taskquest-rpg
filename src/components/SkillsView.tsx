@@ -412,22 +412,22 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
 
   return (
     <div className="max-w-xl mx-auto px-3 py-3 pb-24 space-y-3 select-none">
-      {/* Cabecera del Árbol Radial */}
-      <div className="bg-[#121420] border-2 border-stone-800 rounded-3xl p-3.5 shadow-xl flex items-center justify-between">
+      {/* Cabecera del Árbol Radial 16-Bit */}
+      <div className="retro-box-stone p-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-purple-950 border border-purple-500/50 flex items-center justify-center text-amber-300">
+          <div className="w-8 h-8 bg-purple-950 border-2 border-purple-500 flex items-center justify-center text-amber-300">
             <Sparkles className="w-4 h-4 animate-pulse" />
           </div>
           <div>
-            <h3 className="font-black text-sm text-stone-100">Árbol de Habilidades Radial</h3>
-            <p className="text-[10px] text-stone-400">
-              Expande las ramas desde el núcleo central y desbloquea poderes y fusiones.
+            <h3 className="font-pixel-title text-xs text-amber-400">Árbol de Habilidades</h3>
+            <p className="font-pixel-text text-sm text-stone-300">
+              Expande las ramas desde el núcleo y desbloquea hechizos y fusiones.
             </p>
           </div>
         </div>
 
         <div className="text-right shrink-0">
-          <span className="text-xs font-black text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-full border border-amber-600/40">
+          <span className="retro-badge bg-amber-950 text-amber-300 border-amber-500">
             {player.skillPoints} SP
           </span>
         </div>
@@ -436,9 +436,9 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
       {/* ============================================================== */}
       {/* EL ÁRBOL RADIAL SVG (CENTRO CON RAMAS EXPANDIÉNDOSE HACIA AFUERA) */}
       {/* ============================================================== */}
-      <div className="bg-gradient-to-b from-[#131522] via-[#0b0c14] to-[#131522] border-2 border-stone-800 rounded-3xl p-2 shadow-2xl relative overflow-hidden flex items-center justify-center">
+      <div className="retro-box-stone p-2 relative overflow-hidden flex items-center justify-center">
         {/* Guías circulares concéntricas de fondo (los 3 anillos del árbol) */}
-        <svg viewBox="0 0 400 400" className="w-full max-w-[390px] aspect-square block">
+        <svg viewBox="0 0 400 400" className="w-full max-w-[390px] aspect-square block pixelated">
           <defs>
             {/* Gradientes para las ramas */}
             <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
@@ -622,44 +622,44 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 3. PANEL DE DETALLES DEL NODO SELECCIONADO */}
+      {/* 3. PANEL DE DETALLES DEL NODO SELECCIONADO (16-BIT) */}
       {/* ============================================================== */}
-      <div className="bg-[#121420] border-2 border-stone-800 rounded-3xl p-4 shadow-xl">
+      <div className="retro-box-stone p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
-              className="w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl shrink-0 shadow-inner bg-black/60"
-              style={{ borderColor: selectedNode.color }}
+              className="w-12 h-12 border-2 border-[#18181b] flex items-center justify-center text-xl shrink-0 bg-[#0f172a] shadow-[2px_2px_0px_#000]"
+              style={{ outline: `2px solid ${selectedNode.color}` }}
             >
               {selectedNode.icon}
             </div>
 
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-black text-sm text-stone-100">{selectedNode.name}</h4>
+                <h4 className="font-pixel-title text-xs text-stone-100">{selectedNode.name}</h4>
                 {selectedNode.isFusion && (
-                  <span className="text-[9px] font-black text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-600/50">
+                  <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500">
                     FUSIÓN
                   </span>
                 )}
                 {isSelectedUnlocked && (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 )}
               </div>
 
-              <p className="text-xs text-stone-300 mt-0.5 leading-snug">
+              <p className="font-pixel-text text-sm text-stone-200 mt-0.5 leading-snug">
                 {selectedNode.description}
               </p>
 
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] text-amber-300 font-bold bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
+                <span className="retro-badge bg-stone-900 text-amber-300 border-amber-500">
                   {selectedNode.bonus}
                 </span>
-                <span className="text-[10px] text-stone-400 font-semibold bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
-                  Requiere Nivel {selectedNodeReqLevel}
+                <span className="retro-badge bg-stone-900 text-stone-300 border-stone-600">
+                  Req. Nivel {selectedNodeReqLevel}
                 </span>
                 {!isSelectedUnlocked && selectedNode.id !== 'core' && (
-                  <span className="text-[10px] text-stone-400">
+                  <span className="font-pixel-text text-xs text-stone-300">
                     Costo: <strong>{selectedNode.costSP} SP</strong>
                   </span>
                 )}
@@ -667,10 +667,10 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
 
               {/* Alerta de habilidad sellada por degradación */}
               {isSelectedLevelLocked && (
-                <div className="mt-2 bg-red-950/70 border border-red-500/60 rounded-xl px-2.5 py-1.5 flex items-center gap-2 text-[11px] text-red-200">
+                <div className="mt-2 retro-box-danger px-2 py-1 flex items-center gap-2 text-xs text-red-200">
                   <Lock className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                  <span>
-                    <strong className="text-red-300">Sellada por degradación:</strong> Requiere Nivel {selectedNodeReqLevel} (Nivel actual: {player.level}). ¡Sube de nivel para reactivarla!
+                  <span className="font-pixel-text text-xs">
+                    <strong className="text-red-300">Sellada por degradación:</strong> Requiere Nivel {selectedNodeReqLevel} (Nivel actual: {player.level}).
                   </span>
                 </div>
               )}
@@ -680,25 +680,25 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
           {/* BOTÓN DE ACCIÓN (DESBLOQUEAR O EQUIPAR) */}
           <div className="shrink-0 self-center">
             {selectedNode.id === 'core' ? (
-              <span className="text-[10px] font-bold text-purple-400 bg-purple-950 px-2 py-1 rounded-xl border border-purple-800">
+              <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500">
                 Núcleo Activo
               </span>
             ) : isSelectedLevelLocked ? (
               <button
                 disabled
-                className="px-3 py-2 bg-red-950/80 text-red-400 border border-red-800/80 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-90 shadow"
+                className="retro-btn-danger px-3 py-1.5 flex items-center gap-1.5 cursor-not-allowed opacity-80"
                 title={`Requiere Nivel ${selectedNodeReqLevel} para equiparse`}
               >
-                <Lock className="w-3.5 h-3.5 text-red-500" />
-                <span>Nv. {selectedNodeReqLevel} Req.</span>
+                <Lock className="w-3 h-3 text-red-400" />
+                <span>Nv. {selectedNodeReqLevel}</span>
               </button>
             ) : isSelectedUnlocked ? (
               <button
                 onClick={handleEquipSelected}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-md ${
+                className={`px-3 py-1.5 text-xs ${
                   isSelectedEquipped
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700'
+                    ? 'retro-btn-emerald'
+                    : 'retro-btn-stone'
                 }`}
               >
                 {isSelectedEquipped ? 'Equipado' : 'Equipar'}
@@ -706,21 +706,16 @@ export const SkillsView: React.FC<SkillsViewProps> = ({
             ) : canUnlockSelected ? (
               <button
                 onClick={handleUnlockSelected}
-                className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-black text-xs rounded-xl shadow-lg active:scale-95 transition"
+                className="retro-btn-gold px-3 py-1.5 text-xs"
               >
                 Desbloquear ({selectedNode.costSP} SP)
               </button>
             ) : (
               <div className="text-center">
-                <span className="text-[10px] font-bold text-stone-500 bg-stone-900 px-2.5 py-1 rounded-xl border border-stone-800 flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  {!isSelectedPrereqMet ? 'Bloqueado' : `${selectedNode.costSP} SP requeridos`}
+                <span className="retro-badge bg-stone-900 text-stone-400 border-stone-700 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  {!isSelectedPrereqMet ? 'Bloqueado' : `${selectedNode.costSP} SP`}
                 </span>
-                {!isSelectedPrereqMet && (
-                  <span className="text-[9px] text-stone-500 block mt-0.5">
-                    Desbloquea el nodo anterior
-                  </span>
-                )}
               </div>
             )}
           </div>

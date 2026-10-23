@@ -22,6 +22,11 @@ export const WizardAvatar: React.FC<WizardAvatarProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    ctx.imageSmoothingEnabled = false;
+    (ctx as any).webkitImageSmoothingEnabled = false;
+    (ctx as any).mozImageSmoothingEnabled = false;
+    (ctx as any).msImageSmoothingEnabled = false;
+
     let animId: number;
 
     const render = () => {
@@ -49,14 +54,12 @@ export const WizardAvatar: React.FC<WizardAvatarProps> = ({
   }, [size, scale, activeElement, isAnimated]);
 
   return (
-    <div className="relative flex items-center justify-center">
-      {/* Resplandor místico de fondo */}
-      <div className="absolute inset-0 rounded-full bg-purple-600/20 blur-xl scale-75 animate-pulse" />
+    <div className="relative flex items-center justify-center p-1 retro-frame-hero">
       <canvas
         ref={canvasRef}
         width={size}
         height={size}
-        className="relative z-10 drop-shadow-[0_10px_15px_rgba(0,0,0,0.6)]"
+        className="relative z-10 pixelated"
       />
     </div>
   );

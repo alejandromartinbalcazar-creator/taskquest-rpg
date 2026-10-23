@@ -11145,6 +11145,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = false;
+          (ctx as any).webkitImageSmoothingEnabled = false;
+          (ctx as any).mozImageSmoothingEnabled = false;
+          (ctx as any).msImageSmoothingEnabled = false;
+
           IsometricRenderer.render(
             ctx,
             canvas.width,
@@ -11227,26 +11232,26 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         </div>
       )}
 
-      {/* Cabecera Superior de Combate (HUD Horizontal) */}
+      {/* Cabecera Superior de Combate (HUD Horizontal 16-Bit) */}
       <div className="absolute top-2 inset-x-3 z-40 flex items-center justify-between pointer-events-none">
         {/* Barra de Vida del Mago */}
-        <div className="flex items-center gap-2 bg-[#121422]/85 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-700/60 shadow-lg pointer-events-auto">
-          <div className="text-xs font-black text-rose-400">HP</div>
-          <div className="w-28 sm:w-40 bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-700">
+        <div className="flex items-center gap-2 retro-box-stone px-2.5 py-1 pointer-events-auto">
+          <div className="font-pixel-title text-[8px] text-rose-400">HP</div>
+          <div className="w-24 sm:w-36 retro-bar-container h-3.5">
             <div
-              className="h-full bg-gradient-to-r from-rose-600 to-emerald-400 transition-all duration-200"
+              className="retro-bar-fill bg-rose-600"
               style={{ width: `${Math.max(0, (currentHp / maxHp) * 100)}%` }}
             />
           </div>
-          <span className="text-[11px] font-bold text-slate-200">
-            {Math.round(currentHp)} / {maxHp}
+          <span className="font-pixel-title text-[8px] text-slate-200">
+            {Math.round(currentHp)}/{maxHp}
           </span>
         </div>
 
         {/* Indicador de Sala y Progreso */}
-        <div className="bg-[#121422]/85 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-700/60 text-xs font-bold text-slate-200 shadow-lg flex items-center gap-2">
-          <Compass className="w-4 h-4 text-cyan-400" />
-          <span>
+        <div className="retro-box-stone px-2.5 py-1 text-xs font-bold text-slate-200 flex items-center gap-2">
+          <Compass className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="font-pixel-title text-[8px]">
             {currentRoom.title} ({currentRoomIndex + 1}/{DUNGEON_ROOMS.length})
           </span>
         </div>
@@ -11258,16 +11263,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               const nextMuted = audioManager.toggleMute();
               setIsMuted(nextMuted);
             }}
-            className="p-2 bg-[#121422]/85 backdrop-blur-md text-slate-300 hover:text-white rounded-xl border border-slate-700/60 transition"
+            className="retro-btn-stone p-1.5 text-slate-300 hover:text-white"
             title={isMuted ? 'Activar sonido' : 'Silenciar sonido'}
           >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={onExit}
-            className="p-2 bg-[#121422]/85 backdrop-blur-md text-slate-300 hover:text-rose-400 rounded-xl border border-slate-700/60 transition"
+            className="retro-btn-danger p-1.5 text-slate-200"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -11277,7 +11282,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         ref={canvasRef}
         width={1000}
         height={620}
-        className="w-full h-full object-contain max-w-full max-h-full"
+        className="w-full h-full object-contain max-w-full max-h-full pixelated"
       />
 
       {/* CONTROLES TÁCTILES HORIZONTALES (DOBLE PULGAR) */}
@@ -11627,55 +11632,54 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       {/* MODAL DE VICTORIA TOTAL */}
       {isVictorious && (
-        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
-          <div className="bg-[#121422] border-2 border-amber-500/90 p-5 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.35)] animate-in fade-in zoom-in-95 duration-300">
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none">
+          <div className="retro-box-gold p-4 max-w-sm w-full text-center space-y-3">
             <div className="relative inline-block">
-              <Award className="w-14 h-14 text-amber-400 mx-auto animate-bounce filter drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]" />
-              <div className="absolute -inset-1 rounded-full bg-amber-400/20 blur-md pointer-events-none" />
+              <Award className="w-10 h-10 text-amber-400 mx-auto animate-bounce filter drop-shadow-[2px_2px_0px_#000]" />
             </div>
 
             <div>
-              <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 tracking-wide uppercase">
+              <h3 className="font-pixel-title text-sm font-black text-amber-300 tracking-wide uppercase drop-shadow-[2px_2px_0px_#000]">
                 ¡NIVEL 1 COMPLETADO!
               </h3>
-              <p className="text-xs text-slate-300 mt-1">
-                ¡Has atravesado con éxito La Ruta del Umbral y derrotado al colosal Custodio del Umbral!
+              <p className="font-pixel-text text-sm text-stone-200 mt-1">
+                ¡Has derrotado al colosal Custodio del Umbral!
               </p>
             </div>
 
             {/* Tarjetas de Estadísticas Detalladas de la Incursión */}
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
-                <span className="text-[10px] text-slate-400 font-medium">Monstruos Derrotados</span>
-                <span className="font-extrabold text-sm text-rose-400 mt-0.5">
+              <div className="retro-box-stone p-2 flex flex-col items-center">
+                <span className="font-pixel-text text-xs text-stone-300">Monstruos</span>
+                <span className="font-pixel-title text-[9px] text-rose-400 mt-0.5">
                   ⚔️ {totalKillsCount}
                 </span>
               </div>
-              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
-                <span className="text-[10px] text-slate-400 font-medium">Tiempo de Incursión</span>
-                <span className="font-extrabold text-sm text-cyan-300 mt-0.5">
+              <div className="retro-box-stone p-2 flex flex-col items-center">
+                <span className="font-pixel-text text-xs text-stone-300">Tiempo</span>
+                <span className="font-pixel-title text-[9px] text-cyan-300 mt-0.5">
                   ⏱️ {Math.floor(finalRunTimeSec / 60).toString().padStart(2, '0')}:{(finalRunTimeSec % 60).toString().padStart(2, '0')}
                 </span>
               </div>
-              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
-                <span className="text-[10px] text-slate-400 font-medium">EXP Obtenida</span>
-                <span className="font-extrabold text-sm text-cyan-400 mt-0.5">
-                  +{floor.enemy.expReward * 2} EXP
+              <div className="retro-box-stone p-2 flex flex-col items-center">
+                <span className="font-pixel-text text-xs text-stone-300">EXP</span>
+                <span className="font-pixel-title text-[9px] text-cyan-400 mt-0.5">
+                  +{floor.enemy.expReward * 2}
                 </span>
               </div>
-              <div className="bg-[#1a1c30] p-2.5 rounded-xl border border-slate-700/80 flex flex-col items-center">
-                <span className="text-[10px] text-slate-400 font-medium">Oro Recompensa</span>
-                <span className="font-extrabold text-sm text-amber-400 mt-0.5">
-                  +{floor.enemy.goldReward * 2} Oro
+              <div className="retro-box-stone p-2 flex flex-col items-center">
+                <span className="font-pixel-text text-xs text-stone-300">Oro</span>
+                <span className="font-pixel-title text-[9px] text-amber-400 mt-0.5">
+                  +{floor.enemy.goldReward * 2}
                 </span>
               </div>
             </div>
 
             <button
               onClick={onExit}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black rounded-xl text-sm shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-95 transition tracking-wider uppercase"
+              className="w-full py-2.5 retro-btn-gold text-xs uppercase"
             >
-              Volver a la Base / Tareas
+              Volver a la Base
             </button>
           </div>
         </div>
@@ -11683,19 +11687,19 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       {/* MODAL DE DERROTA */}
       {isDefeated && (
-        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#121422] border-2 border-rose-500 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <ShieldAlert className="w-14 h-14 text-rose-400 mx-auto animate-pulse" />
-            <h3 className="text-xl font-black text-rose-400">¡HÉROE CAÍDO!</h3>
-            <p className="text-xs text-slate-300">
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
+          <div className="retro-box-danger p-4 max-w-sm w-full text-center space-y-3">
+            <ShieldAlert className="w-10 h-10 text-rose-400 mx-auto animate-pulse" />
+            <h3 className="font-pixel-title text-sm font-black text-rose-300">¡HÉROE CAÍDO!</h3>
+            <p className="font-pixel-text text-base text-slate-200">
               Has caído en combate en <b>{currentRoom.title}</b>.
             </p>
-            <p className="text-[11px] text-amber-300">
-              Consejo: Usa <b>Hielo + Tierra</b> para atrapar a los enemigos en estacas y luego rómpelas con Fuego o Tierra para provocar metralla.
+            <p className="font-pixel-text text-sm text-amber-300">
+              Consejo: Usa <b>Hielo + Tierra</b> para atrapar a los enemigos en estacas y rómpelas con Fuego.
             </p>
             <button
               onClick={onExit}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-xl text-sm border border-slate-600 transition"
+              className="w-full py-2.5 retro-btn-danger text-xs uppercase"
             >
               REGRESAR A LA CIUDAD
             </button>

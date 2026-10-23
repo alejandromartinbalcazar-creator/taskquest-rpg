@@ -51,8 +51,8 @@ jobs:
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121420] border border-[#2e375a] rounded-3xl p-5 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="retro-box-stone p-5 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-400 hover:text-white"
@@ -61,12 +61,12 @@ jobs:
         </button>
 
         <div className="flex items-center gap-2 mb-1">
-          <Smartphone className="w-5 h-5 text-emerald-400" />
-          <h3 className="text-base font-bold text-slate-100">
-            Tener la App en tu Android (Ultra-ligero)
+          <Smartphone className="w-4 h-4 text-emerald-400" />
+          <h3 className="font-pixel-title text-xs text-emerald-400">
+            Tener la App en tu Android
           </h3>
         </div>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="font-pixel-text text-sm text-stone-300 mb-3">
           Diseñado para que tu laptop no sufra ni consuma batería compilando pesados emuladores.
         </p>
 

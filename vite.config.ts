@@ -25,6 +25,16 @@ const buildDate = new Date().toISOString().replace('T', ' ').substring(0, 16)
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: 'network-request-logger',
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          const ip = req.socket.remoteAddress || 'unknown';
+          console.log(`[NET-INBOUND] ${ip} ${req.method} ${req.url}`);
+          next();
+        });
+      },
+    },
     react(),
     tailwindcss(),
   ],

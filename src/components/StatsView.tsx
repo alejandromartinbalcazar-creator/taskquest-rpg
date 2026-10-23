@@ -99,42 +99,42 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
   return (
     <div className="max-w-xl mx-auto px-3 py-4 pb-24 space-y-4">
-      {/* Resumen Principal */}
-      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl">
+      {/* Resumen Principal 16-Bit */}
+      <div className="retro-box-stone p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="w-5 h-5 text-cyan-400" />
-          <h3 className="font-bold text-sm text-slate-100">Panel de Rendimiento Real</h3>
+          <BarChart3 className="w-4 h-4 text-cyan-400" />
+          <h3 className="font-pixel-title text-xs text-stone-100">Panel de Rendimiento Real</h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-center">
-          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
-            <span className="text-2xl font-black text-emerald-400">{totalCompleted}</span>
-            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="bg-[#0f172a] p-2.5 border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
+            <span className="font-pixel-title text-base text-emerald-400">{totalCompleted}</span>
+            <div className="font-pixel-text text-sm text-stone-300 mt-0.5">
               Misiones Conquistadas
             </div>
           </div>
 
-          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
-            <span className="text-2xl font-black text-cyan-400">{completionRate}%</span>
-            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+          <div className="bg-[#0f172a] p-2.5 border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
+            <span className="font-pixel-title text-base text-cyan-400">{completionRate}%</span>
+            <div className="font-pixel-text text-sm text-stone-300 mt-0.5">
               Efectividad Global
             </div>
           </div>
 
-          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
-            <span className="text-2xl font-black text-amber-400">
+          <div className="bg-[#0f172a] p-2.5 border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
+            <span className="font-pixel-title text-sm text-amber-400">
               {player.cleanStreakDays} días
             </span>
-            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+            <div className="font-pixel-text text-sm text-stone-300 mt-0.5">
               Racha sin Procrastinar
             </div>
           </div>
 
-          <div className="bg-[#171a2b] p-3 rounded-2xl border border-[#252a42]">
-            <span className="text-2xl font-black text-rose-400">
+          <div className="bg-[#0f172a] p-2.5 border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
+            <span className="font-pixel-title text-sm text-rose-400">
               {player.totalDamageSufferedFromProcrastination} HP
             </span>
-            <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+            <div className="font-pixel-text text-sm text-stone-300 mt-0.5">
               Daño por Retrasos
             </div>
           </div>
@@ -142,27 +142,27 @@ export const StatsView: React.FC<StatsViewProps> = ({
       </div>
 
       {/* Desglose por Atributos del Héroe */}
-      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl space-y-3">
-        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-purple-400" />
+      <div className="retro-box-stone p-4 space-y-3">
+        <h4 className="font-pixel-title text-[9px] text-stone-300 uppercase tracking-wider flex items-center gap-2">
+          <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
           Progreso por Atributos del Héroe
         </h4>
 
         <div className="space-y-3">
           {/* Ataque */}
           <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-bold text-rose-400 flex items-center gap-1.5">
-                <Swords className="w-3.5 h-3.5" />
-                Ataque (Nivel {player.stats.attack})
+            <div className="flex justify-between font-pixel-title text-[8px] mb-1">
+              <span className="text-rose-400 flex items-center gap-1.5">
+                <Swords className="w-3 h-3" />
+                Ataque (Nv. {player.stats.attack})
               </span>
-              <span className="text-slate-300">
+              <span className="text-stone-300 font-pixel-text text-xs">
                 {attackCompleted} / {attackTasks.length} completadas
               </span>
             </div>
-            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+            <div className="retro-bar-container h-3 w-full">
               <div
-                className="h-full bg-gradient-to-r from-rose-500 to-red-400"
+                className="retro-bar-fill bg-rose-600"
                 style={{
                   width: `${attackTasks.length > 0 ? (attackCompleted / attackTasks.length) * 100 : 0}%`,
                 }}
@@ -172,18 +172,18 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
           {/* Velocidad */}
           <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-bold text-cyan-300 flex items-center gap-1.5">
-                <Wind className="w-3.5 h-3.5" />
-                Velocidad (Nivel {player.stats.speed})
+            <div className="flex justify-between font-pixel-title text-[8px] mb-1">
+              <span className="text-amber-400 flex items-center gap-1.5">
+                <Wind className="w-3 h-3" />
+                Velocidad (Nv. {player.stats.speed})
               </span>
-              <span className="text-slate-300">
+              <span className="text-stone-300 font-pixel-text text-xs">
                 {speedCompleted} / {speedTasks.length} completadas
               </span>
             </div>
-            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+            <div className="retro-bar-container h-3 w-full">
               <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-blue-400"
+                className="retro-bar-fill bg-amber-500"
                 style={{
                   width: `${speedTasks.length > 0 ? (speedCompleted / speedTasks.length) * 100 : 0}%`,
                 }}
@@ -193,18 +193,18 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
           {/* Resistencia */}
           <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5" />
-                Resistencia (Nivel {player.stats.defense})
+            <div className="flex justify-between font-pixel-title text-[8px] mb-1">
+              <span className="text-emerald-400 flex items-center gap-1.5">
+                <Shield className="w-3 h-3" />
+                Resistencia (Nv. {player.stats.defense})
               </span>
-              <span className="text-slate-300">
+              <span className="text-stone-300 font-pixel-text text-xs">
                 {defenseCompleted} / {defenseTasks.length} completadas
               </span>
             </div>
-            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+            <div className="retro-bar-container h-3 w-full">
               <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                className="retro-bar-fill bg-emerald-500"
                 style={{
                   width: `${defenseTasks.length > 0 ? (defenseCompleted / defenseTasks.length) * 100 : 0}%`,
                 }}
@@ -214,18 +214,18 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
           {/* Conocimiento */}
           <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-bold text-purple-400 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5" />
-                Conocimiento (Nivel {player.stats.knowledge})
+            <div className="flex justify-between font-pixel-title text-[8px] mb-1">
+              <span className="text-cyan-400 flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3" />
+                Conocimiento (Nv. {player.stats.knowledge})
               </span>
-              <span className="text-slate-300">
+              <span className="text-stone-300 font-pixel-text text-xs">
                 {knowledgeCompleted} / {knowledgeTasks.length} completadas
               </span>
             </div>
-            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+            <div className="retro-bar-container h-3 w-full">
               <div
-                className="h-full bg-gradient-to-r from-purple-500 to-indigo-400"
+                className="retro-bar-fill bg-cyan-500"
                 style={{
                   width: `${knowledgeTasks.length > 0 ? (knowledgeCompleted / knowledgeTasks.length) * 100 : 0}%`,
                 }}
@@ -236,11 +236,11 @@ export const StatsView: React.FC<StatsViewProps> = ({
       </div>
 
       {/* Respaldo y Exportación de Datos */}
-      <div className="bg-[#121420] border border-[#22263d] rounded-3xl p-5 shadow-xl space-y-3">
-        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+      <div className="retro-box-stone p-4 space-y-2.5">
+        <h4 className="font-pixel-title text-[9px] text-stone-300 uppercase tracking-wider">
           Respaldo de Progreso (100% Offline)
         </h4>
-        <p className="text-xs text-slate-400">
+        <p className="font-pixel-text text-sm text-stone-300">
           Tus datos se guardan de forma privada y local en tu dispositivo. Puedes descargar una
           copia en cualquier momento para restaurarla en otro equipo o teléfono.
         </p>
@@ -248,14 +248,14 @@ export const StatsView: React.FC<StatsViewProps> = ({
         <div className="flex gap-2">
           <button
             onClick={handleExport}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#1a1f33] hover:bg-[#232945] border border-[#2e375a] text-slate-200 text-xs font-bold rounded-xl transition"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 retro-btn-stone"
           >
-            <Download className="w-4 h-4 text-cyan-400" />
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
             <span>Descargar Respaldo</span>
           </button>
 
-          <label className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-[#1a1f33] hover:bg-[#232945] border border-[#2e375a] text-slate-200 text-xs font-bold rounded-xl cursor-pointer transition">
-            <Upload className="w-4 h-4 text-purple-400" />
+          <label className="flex-1 flex items-center justify-center gap-1.5 py-2 retro-btn-stone cursor-pointer">
+            <Upload className="w-3.5 h-3.5 text-purple-400" />
             <span>Restaurar Datos</span>
             <input
               type="file"
@@ -267,19 +267,19 @@ export const StatsView: React.FC<StatsViewProps> = ({
         </div>
 
         {importStatus && (
-          <p className="text-xs text-center text-cyan-300 font-medium">{importStatus}</p>
+          <p className="font-pixel-text text-sm text-center text-cyan-300 font-bold">{importStatus}</p>
         )}
       </div>
 
       {/* Pie discreto con versión y activador easter egg */}
-      <div className="pt-3 pb-1 text-center">
+      <div className="pt-2 pb-1 text-center">
         <button
           type="button"
           onClick={handleVersionTap}
-          className="text-[11px] text-stone-600 hover:text-stone-400 transition font-mono select-none px-3 py-1 rounded-lg hover:bg-stone-900/60"
+          className="font-pixel-title text-[7px] text-stone-600 hover:text-stone-400 transition select-none px-2 py-1"
           title="Toca 5 veces para ver el registro de versiones (Changelog)"
         >
-          TaskQuest RPG v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0'} • Build {typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '2026-10-21'}
+          TaskQuest RPG v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0'}
         </button>
       </div>
     </div>

@@ -131,6 +131,12 @@ export class IsometricRenderer {
   ) {
     ctx.save();
 
+    // Desactivar suavizado de imágenes para estética Pixel Art de 16 bits
+    ctx.imageSmoothingEnabled = false;
+    (ctx as any).webkitImageSmoothingEnabled = false;
+    (ctx as any).mozImageSmoothingEnabled = false;
+    (ctx as any).msImageSmoothingEnabled = false;
+
     // 1. Efecto de Sacudida de Pantalla (Screen Shake)
     if (screenShake > 0) {
       const shakeX = (Math.random() - 0.5) * screenShake * 2;
@@ -2861,38 +2867,41 @@ export class IsometricRenderer {
     });
   }
 
-  // Dibuja Partículas
+  // Dibuja Partículas (16-Bit Pixel Art: Cuadrados y Bloques Sin Suavizado)
   private static drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
     particles.forEach((pt) => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, pt.alpha);
       if (pt.type === 'ring') {
         ctx.strokeStyle = pt.color;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.lineWidth = 2;
+        const r = Math.round(pt.radius);
+        ctx.strokeRect(Math.round(pt.x - r), Math.round(pt.y - r), r * 2, r * 2);
       } else {
         ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
-        ctx.fill();
+        const size = Math.max(2, Math.round(pt.radius * 1.8));
+        ctx.fillRect(Math.round(pt.x - size / 2), Math.round(pt.y - size / 2), size, size);
       }
       ctx.restore();
     });
   }
 
-  // Dibuja Textos Flotantes
+  // Dibuja Textos Flotantes (Tipografía Bitmap 'Press Start 2P' y Sombra de Bloque Sólido)
   private static drawFloatingTexts(ctx: CanvasRenderingContext2D, texts: FloatingText[]) {
     texts.forEach((t) => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, t.opacity);
-      ctx.font = `bold ${t.fontSize}px sans-serif`;
-      ctx.fillStyle = t.color;
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = 5;
+      const pixelSize = Math.max(8, Math.round(t.fontSize * 0.8));
+      ctx.font = `bold ${pixelSize}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(t.text, t.x, t.y);
+
+      // Sombra sólida de bloque pixelado (sin difuminar)
+      ctx.fillStyle = '#000000';
+      ctx.fillText(t.text, Math.round(t.x + 1.5), Math.round(t.y + 1.5));
+
+      // Texto de color principal
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.text, Math.round(t.x), Math.round(t.y));
       ctx.restore();
     });
   }

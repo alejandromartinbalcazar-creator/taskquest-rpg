@@ -23,39 +23,37 @@ export const DelevelModal: React.FC<DelevelModalProps> = ({ event, onClose }) =>
 
   if (event.isGraceShieldAbsorbed) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
-        <div className="bg-gradient-to-b from-[#061f14] via-[#04140d] to-[#020a06] border-2 border-emerald-500 max-w-md w-full rounded-3xl p-6 shadow-[0_0_50px_rgba(16,185,129,0.4)] space-y-5 text-stone-100 relative overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none" />
-
+      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 animate-fadeIn">
+        <div className="retro-box-gold max-w-md w-full p-5 space-y-4 text-stone-100 relative">
           {/* Encabezado Heroico */}
           <div className="text-center space-y-1">
-            <div className="inline-flex p-3 bg-emerald-950/80 border border-emerald-500/70 rounded-2xl mb-1 text-emerald-400 shadow-lg shadow-emerald-950">
+            <div className="inline-flex p-2 bg-emerald-950 border-2 border-emerald-500 mb-1 text-emerald-400 shadow-[2px_2px_0px_#000]">
               <ShieldCheck className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-black text-emerald-400 tracking-wider uppercase drop-shadow-md">
+            <h2 className="font-pixel-title text-sm font-black text-emerald-400 tracking-wider uppercase drop-shadow-[2px_2px_0px_#000]">
               ¡Escudo de Gracia Activado!
             </h2>
-            <p className="text-xs text-emerald-200 font-semibold tracking-wide">
+            <p className="font-pixel-text text-sm text-emerald-200">
               Tu constancia forjó una protección impenetrable.
             </p>
           </div>
 
           {/* Detalle de la absorción */}
-          <div className="bg-black/60 border border-emerald-800/80 rounded-2xl p-4 text-center">
-            <span className="text-sm font-bold text-stone-200">
+          <div className="bg-[#0f172a] border-2 border-[#18181b] p-3 text-center">
+            <span className="font-pixel-text text-base font-bold text-stone-200">
               La penalización por la tarea "{event.task.title}" fue absorbida.
             </span>
-            <div className="mt-2 text-xs text-emerald-300">
-              ✨ <strong>Sin deleveling:</strong> Tu héroe permanece en <span className="font-bold font-mono">Nv. {event.previousLevel}</span>.
+            <div className="mt-1 font-pixel-text text-sm text-emerald-300">
+              ✨ <strong>Sin deleveling:</strong> Tu héroe permanece en <span className="font-pixel-title text-[9px] text-emerald-400">Nv. {event.previousLevel}</span>.
             </div>
-            <div className="text-xs text-stone-400 mt-1">
+            <div className="font-pixel-text text-xs text-stone-400 mt-1">
               Se ha consumido 1 carga del Escudo de Gracia. Mantén otra racha de 7 días para recargarlo.
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-black text-sm rounded-2xl shadow-xl active:scale-98 transition flex items-center justify-center gap-2 border border-emerald-400/60"
+            className="w-full py-2.5 retro-btn-emerald text-xs uppercase"
           >
             <span>Continuar con Determinación</span>
           </button>
@@ -65,70 +63,66 @@ export const DelevelModal: React.FC<DelevelModalProps> = ({ event, onClose }) =>
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-gradient-to-b from-[#1c0808] via-[#120505] to-[#0a0202] border-2 border-red-600 max-w-md w-full rounded-3xl p-6 shadow-[0_0_50px_rgba(220,38,38,0.5)] space-y-5 text-stone-100 relative overflow-hidden">
-        {/* Resplandor y partículas de fondo */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 animate-fadeIn">
+      <div className="retro-box-danger max-w-md w-full p-5 space-y-4 text-stone-100 relative">
         {/* Encabezado Ominoso */}
         <div className="text-center space-y-1">
-          <div className="inline-flex p-3 bg-red-950/80 border border-red-500/70 rounded-2xl mb-1 text-red-400 shadow-lg shadow-red-950 animate-bounce">
+          <div className="inline-flex p-2 bg-red-950 border-2 border-red-500 mb-1 text-red-400 shadow-[2px_2px_0px_#000] animate-bounce">
             <Skull className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-black text-red-400 tracking-wider uppercase drop-shadow-md">
+          <h2 className="font-pixel-title text-sm font-black text-red-400 tracking-wider uppercase drop-shadow-[2px_2px_0px_#000]">
             ¡Fallo Crítico!
           </h2>
-          <p className="text-xs text-red-200 font-semibold tracking-wide">
+          <p className="font-pixel-text text-sm text-red-200">
             El descuido de tus deberes ha cobrado su precio en tu héroe.
           </p>
         </div>
 
         {/* Display de Nivel Quebrado */}
-        <div className="bg-black/60 border border-red-800/80 rounded-2xl p-4 text-center relative overflow-hidden">
-          <div className="text-[11px] font-bold text-stone-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+        <div className="bg-[#0f172a] border-2 border-[#18181b] p-3 text-center relative overflow-hidden">
+          <div className="font-pixel-title text-[8px] text-stone-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
             <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
             <span>Degradación de Rango</span>
           </div>
 
           {event.isAgony ? (
             <div className="space-y-1 py-1">
-              <span className="text-2xl font-black text-red-500 uppercase tracking-wider animate-pulse">
+              <span className="font-pixel-title text-xs font-black text-red-500 uppercase tracking-wider animate-pulse">
                 ⚠️ ¡Bancarrota & Agonía!
               </span>
-              <p className="text-[11px] text-red-300">
+              <p className="font-pixel-text text-xs text-red-300">
                 Tu personaje está en Nivel 1 y ha tocado fondo. Vitalidad severamente disminuida.
               </p>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-3 py-1 font-mono">
+            <div className="flex items-center justify-center gap-3 py-1">
               <div className="text-center">
-                <span className="text-2xl font-black line-through text-stone-500 decoration-red-500 decoration-2">
+                <span className="font-pixel-title text-base line-through text-stone-500 decoration-red-500 decoration-2">
                   Nv. {event.previousLevel}
                 </span>
-                <span className="block text-[9px] text-stone-500">ANTERIOR</span>
+                <span className="block font-pixel-title text-[7px] text-stone-500">ANTERIOR</span>
               </div>
-              <span className="text-red-500 text-2xl font-black">➔</span>
+              <span className="font-pixel-title text-red-500 text-lg">➔</span>
               <div className="text-center">
-                <span className="text-3xl font-black text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]">
+                <span className="font-pixel-title text-lg font-black text-red-400">
                   Nv. {event.newLevel}
                 </span>
-                <span className="block text-[9px] text-red-300 font-bold">ACTUAL</span>
+                <span className="block font-pixel-title text-[7px] text-red-300">ACTUAL</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Tarea Culpable */}
-        <div className="bg-[#1a0a0a]/80 border border-red-900/50 rounded-xl p-3 text-xs space-y-1">
-          <div className="text-[10px] text-stone-400 uppercase font-bold flex items-center gap-1">
+        <div className="bg-[#1a0a0a] border-2 border-[#18181b] p-2.5 text-xs space-y-1">
+          <div className="font-pixel-title text-[7px] text-stone-400 uppercase font-bold flex items-center gap-1">
             <Clock className="w-3 h-3 text-red-400" />
             <span>Misión Vencida / Fallida</span>
           </div>
-          <div className="font-bold text-red-200 text-sm">
+          <div className="font-pixel-title text-[9px] font-bold text-red-200">
             "{event.task.title}"
           </div>
-          <div className="text-[11px] text-stone-400 capitalize">
+          <div className="font-pixel-text text-xs text-stone-300 capitalize">
             Dificultad: <span className="text-amber-400 font-semibold">{event.task.difficulty}</span>
             {event.levelsLost > 1 && (
               <span className="ml-1 text-red-400 font-bold">(Penalización Crítica -2 Niveles)</span>
