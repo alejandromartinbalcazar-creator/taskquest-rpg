@@ -11,7 +11,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#cbd5e1',
     damage: 16,
     knockback: 1.5,
-    cooldownMs: 250,
+    cooldownMs: 0,
   },
 
   // 1 Elemento
@@ -25,7 +25,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#f97316',
     damage: 28,
     knockback: 2.2,
-    cooldownMs: 150,
+    cooldownMs: 0,
   },
   lightning_bolt: {
     id: 'lightning_bolt',
@@ -37,7 +37,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#fde047',
     damage: 24,
     knockback: 1.0,
-    cooldownMs: 280,
+    cooldownMs: 0,
   },
   ice_shard: {
     id: 'ice_shard',
@@ -49,7 +49,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#67e8f9',
     damage: 22,
     knockback: 1.8,
-    cooldownMs: 150,
+    cooldownMs: 0,
   },
   earth_toss: {
     id: 'earth_toss',
@@ -61,7 +61,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#a16207',
     damage: 32,
     knockback: 4.5,
-    cooldownMs: 350,
+    cooldownMs: 0,
   },
 
   // Elementos Puros Concentrados (2 o más del mismo elemento)
@@ -75,7 +75,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#fde047',
     damage: 38,
     knockback: 6.5,
-    cooldownMs: 3800,
+    cooldownMs: 0,
   },
   lightning_storm: {
     id: 'lightning_storm',
@@ -87,7 +87,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ffffff',
     damage: 42,
     knockback: 3.5,
-    cooldownMs: 450,
+    cooldownMs: 0,
   },
   ice_lance: {
     id: 'ice_lance',
@@ -99,7 +99,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#e0f7fa',
     damage: 48,
     knockback: 4.5,
-    cooldownMs: 550,
+    cooldownMs: 0,
   },
   earth_megalith: {
     id: 'earth_megalith',
@@ -111,7 +111,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#78350f',
     damage: 64,
     knockback: 7.5,
-    cooldownMs: 650,
+    cooldownMs: 0,
   },
 
   // LAS 6 COMBINACIONES PRIORITARIAS DE 2 ELEMENTOS
@@ -125,7 +125,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#38bdf8',
     damage: 56,
     knockback: 8.5,
-    cooldownMs: 450,
+    cooldownMs: 0,
   },
   magma_eruption: {
     id: 'magma_eruption',
@@ -137,7 +137,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#f97316',
     damage: 72,
     knockback: 5.5,
-    cooldownMs: 500,
+    cooldownMs: 0,
   },
   crystal_field: {
     id: 'crystal_field',
@@ -149,7 +149,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#f59e0b',
     damage: 34,
     knockback: 4.5,
-    cooldownMs: 500,
+    cooldownMs: 0,
   },
   cryo_storm: {
     id: 'cryo_storm',
@@ -161,7 +161,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#7c4dff',
     damage: 26,
     knockback: 1.8,
-    cooldownMs: 650,
+    cooldownMs: 0,
   },
   permafrost_prison: {
     id: 'permafrost_prison',
@@ -173,7 +173,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#38bdf8',
     damage: 48,
     knockback: 4.0,
-    cooldownMs: 500,
+    cooldownMs: 0,
   },
   explosive_overload: {
     id: 'explosive_overload',
@@ -185,7 +185,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ff6d00',
     damage: 64,
     knockback: 5.5,
-    cooldownMs: 500,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
 
@@ -200,7 +200,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ffd600',
     damage: 95,
     knockback: 6.5,
-    cooldownMs: 700,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
   celestial_storm: {
@@ -213,7 +213,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#7c4dff',
     damage: 90,
     knockback: 5.5,
-    cooldownMs: 650,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
   devastating_glacier: {
@@ -226,7 +226,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#e0f7fa',
     damage: 92,
     knockback: 6.0,
-    cooldownMs: 700,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
   telluric_barrier: {
@@ -239,7 +239,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#f59e0b',
     damage: 88,
     knockback: 7.0,
-    cooldownMs: 800,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
   obsidian_volcano: {
@@ -252,7 +252,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ea580c',
     damage: 86,
     knockback: 7.2,
-    cooldownMs: 650,
+    cooldownMs: 0,
   },
   conductive_prison: {
     id: 'conductive_prison',
@@ -264,7 +264,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#00e5ff',
     damage: 82,
     knockback: 5.5,
-    cooldownMs: 650,
+    cooldownMs: 0,
   },
   overload_core: {
     id: 'overload_core',
@@ -276,7 +276,7 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ffd600',
     damage: 92,
     knockback: 8.5,
-    cooldownMs: 650,
+    cooldownMs: 0,
   },
   glacial_plasma_storm: {
     id: 'glacial_plasma_storm',
@@ -288,11 +288,11 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     secondaryColor: '#ff6d00',
     damage: 88,
     knockback: 9.0,
-    cooldownMs: 650,
+    cooldownMs: 0,
     selfDamageRisk: 0,
   },
 
-  // COMBINACIÓN SUPREMA DE 4 ELEMENTOS
+  // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
     name: 'Cataclismo Elemental',

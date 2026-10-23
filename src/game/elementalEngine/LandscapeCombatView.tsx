@@ -538,9 +538,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const runStartTimeRef = useRef<number>(Date.now());
   const suctionStateRef = useRef<{ isSuctioning: boolean; startTime: number }>({ isSuctioning: false, startTime: 0 });
 
-  // Reducción de enfriamiento por progresión de nivel: -5% cada 3 niveles
+  // Reducción de enfriamiento por progresión de nivel: solo la habilidad suprema de 4 elementos tiene cooldown
   const getEffectiveCooldown = useCallback(
-    (cooldownMs: number) => {
+    (cooldownMs: number, recipeId?: string) => {
+      if (recipeId && recipeId !== 'elemental_cataclysm') return 0;
+      if (cooldownMs <= 0) return 0;
       const cooldownReduction = Math.floor(Math.max(0, (player.level || 1) - 1) / 3) * 0.05;
       return Math.round(cooldownMs * (1 - cooldownReduction));
     },
@@ -1143,9 +1145,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const g = gameStateRef.current;
       const rawRecipe = activeRecipe;
 
-      // Cooldown individual por receta/hechizo con reducción por nivel
+      // Cooldown individual por receta/hechizo con reducción por nivel (solo Cataclismo de 4 elementos tiene cooldown)
       const lastCast = g.recipeCooldowns[rawRecipe.id] || 0;
-      const effectiveCooldownMs = getEffectiveCooldown(rawRecipe.cooldownMs);
+      const effectiveCooldownMs = getEffectiveCooldown(rawRecipe.cooldownMs, rawRecipe.id);
       const recipeCdRemaining = Math.max(0, effectiveCooldownMs - (now - lastCast));
       if (recipeCdRemaining > 0) {
         const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
@@ -3600,7 +3602,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     const g = gameStateRef.current;
     const now = Date.now();
     const lastCast = g.recipeCooldowns[activeRecipe.id] || 0;
-    const effectiveCooldownMs = getEffectiveCooldown(activeRecipe.cooldownMs);
+    const effectiveCooldownMs = getEffectiveCooldown(activeRecipe.cooldownMs, activeRecipe.id);
     const recipeCdRemaining = Math.max(0, effectiveCooldownMs - (now - lastCast));
     if (recipeCdRemaining > 0) {
       const secsRemaining = (recipeCdRemaining / 1000).toFixed(1);
@@ -4148,7 +4150,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const currentRecipe = activeRecipeRef.current;
       const nowTs = Date.now();
       const lastCast = g.recipeCooldowns[currentRecipe.id] || 0;
-      const effectiveCooldownMs = getEffectiveCooldown(currentRecipe.cooldownMs);
+      const effectiveCooldownMs = getEffectiveCooldown(currentRecipe.cooldownMs, currentRecipe.id);
       const attackCdRemaining = Math.max(0, effectiveCooldownMs - (nowTs - lastCast));
       const attackCdRatio = (effectiveCooldownMs > 0 && attackCdRemaining > 0)
         ? attackCdRemaining / effectiveCooldownMs
