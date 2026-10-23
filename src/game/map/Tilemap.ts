@@ -547,71 +547,85 @@ export class Tilemap {
     time: number
   ): void {
     if (isArena) {
-      // 1. Color base de arena abisal del Custodio del Umbral
+      // 1. Color base de arena abisal del Custodio del Umbral (Losa de piedra abisal)
       ctx.fillStyle = '#18181b';
       ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
-      // Líneas de mortero con resplandor púrpura
-      ctx.strokeStyle = 'rgba(168, 85, 247, 0.28)';
-      ctx.lineWidth = 1.5;
+      // Líneas de mortero de 1 píxel oscuro con resplandor púrpura
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, TILE_WIDTH, TILE_HEIGHT);
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.35)';
       ctx.strokeRect(x + 1, y + 1, TILE_WIDTH - 2, TILE_HEIGHT - 2);
 
       const seed = (col * 17 + row * 31) % 100;
-      if (seed < 22) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
-        ctx.lineWidth = 1.2;
-        const rx = x + 16 + (seed % 32);
-        const ry = y + 16 + ((seed * 3) % 32);
-        ctx.beginPath();
-        ctx.arc(rx, ry, 6, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
+      if (seed < 25) {
+        // Runa angular pixelada grabada en el suelo
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.45)';
+        const rx = x + 16 + (seed % 24);
+        const ry = y + 16 + ((seed * 3) % 24);
+        ctx.fillRect(rx, ry, 6, 2);
+        ctx.fillRect(rx + 2, ry - 2, 2, 6);
       }
       return;
     }
 
-    // --- Sendero Natural "La Ruta del Umbral" ---
-    // Tonos de tierra compactada y losas de piedra (#27272A y #3F3F46)
+    // --- Sendero Natural "La Ruta del Umbral" en Pixel Art 16-Bit ---
+    // Losas de piedra y tierra con borde de mortero de 1 píxel oscuro
     const baseHash = (col * 37 + row * 19) % 100;
     ctx.fillStyle = baseHash % 2 === 0 ? '#27272a' : '#3f3f46';
     ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
-    // Losas de piedra desgastadas incrustadas en el sendero
-    ctx.strokeStyle = 'rgba(24, 24, 27, 0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x + 2, y + 2, TILE_WIDTH - 4, TILE_HEIGHT - 4);
+    // Borde de mortero de 1 píxel oscuro (#18181B / #0F172A)
+    ctx.strokeStyle = '#18181b';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
-    // Guijarros y piedras dispersas (matemáticas procedurales)
-    if (baseHash < 40) {
+    // Bisel de luz superior interno de 1 píxel en las losas
+    ctx.fillStyle = baseHash % 2 === 0 ? '#3f3f46' : '#52525b';
+    ctx.fillRect(x + 1, y + 1, TILE_WIDTH - 2, 1);
+    ctx.fillRect(x + 1, y + 1, 1, TILE_HEIGHT - 2);
+
+    // Puntos de textura (Dithering) sutiles simulando polvo y pequeñas piedras cuadradas
+    // Piedras cuadradas pequeñas (3x3 px)
+    if (baseHash < 42) {
+      const px = x + 6 + (baseHash % 48);
+      const py = y + 6 + ((baseHash * 7) % 48);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(px - 1, py - 1, 5, 5);
       ctx.fillStyle = '#52525b';
-      const px = x + 8 + (baseHash % 48);
-      const py = y + 8 + ((baseHash * 7) % 48);
-      ctx.beginPath();
-      ctx.ellipse(px, py, 3.5, 2.2, baseHash * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (baseHash > 60) {
+      ctx.fillRect(px, py, 3, 3);
       ctx.fillStyle = '#71717a';
-      const px = x + 12 + ((baseHash * 3) % 40);
-      const py = y + 12 + ((baseHash * 5) % 40);
-      ctx.beginPath();
-      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(px, py, 1, 1);
+    }
+    if (baseHash > 55) {
+      const px = x + 10 + ((baseHash * 3) % 42);
+      const py = y + 10 + ((baseHash * 5) % 42);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(px - 1, py - 1, 4, 4);
+      ctx.fillStyle = '#71717a';
+      ctx.fillRect(px, py, 2, 2);
     }
 
-    // Briznas de hierba silvestre natural en las juntas del sendero
-    if (baseHash % 3 === 0) {
-      ctx.strokeStyle = baseHash % 2 === 0 ? 'rgba(34, 197, 94, 0.45)' : 'rgba(22, 163, 74, 0.38)';
-      ctx.lineWidth = 1.2;
-      const gx = x + 10 + (baseHash % 44);
-      const gy = y + 16 + ((baseHash * 4) % 36);
-      ctx.beginPath();
-      ctx.moveTo(gx, gy);
-      ctx.quadraticCurveTo(gx - 3, gy - 7, gx - 5, gy - 10);
-      ctx.moveTo(gx + 2, gy);
-      ctx.quadraticCurveTo(gx + 3, gy - 8, gx + 6, gy - 11);
-      ctx.stroke();
+    // Dithering de grano de polvo (1x1 px)
+    const dustX1 = x + ((col * 13 + row * 7) % 56) + 4;
+    const dustY1 = y + ((col * 9 + row * 17) % 56) + 4;
+    ctx.fillStyle = '#18181b';
+    ctx.fillRect(dustX1, dustY1, 1, 1);
+    ctx.fillRect(dustX1 + 4, dustY1 + 6, 1, 1);
+
+    // Briznas de hierba silvestre en escalones de píxeles (sin curvas suaves)
+    if (baseHash % 4 === 0) {
+      const gx = x + 8 + (baseHash % 44);
+      const gy = y + 18 + ((baseHash * 4) % 32);
+      ctx.fillStyle = '#14532d';
+      ctx.fillRect(gx, gy, 2, 6);
+      ctx.fillStyle = '#16a34a';
+      ctx.fillRect(gx - 2, gy - 2, 2, 4);
+      ctx.fillRect(gx + 2, gy - 3, 2, 5);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(gx - 2, gy - 4, 1, 2);
+      ctx.fillRect(gx + 3, gy - 5, 1, 2);
     }
 
     // Faroles Rúnicos Guía: Cada 60 columnas a lo largo del sendero
@@ -621,7 +635,7 @@ export class Tilemap {
   }
 
   /**
-   * Dibuja faroles rúnicos protectores cada 60 tiles que guían al héroe hacia el este.
+   * Dibuja faroles rúnicos protectores en bloques de Pixel Art 16-Bit.
    */
   private drawLanternWaypoint(
     ctx: CanvasRenderingContext2D,
@@ -635,37 +649,33 @@ export class Tilemap {
     const cy = y + TILE_HEIGHT / 2;
 
     // Pedestal de piedra rúnica
-    ctx.fillStyle = '#1c1917';
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 7, cy + 1, 14, 14);
+    ctx.fillStyle = '#27272a';
     ctx.fillRect(cx - 6, cy + 2, 12, 12);
-    ctx.strokeStyle = '#44403c';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(cx - 6, cy + 2, 12, 12);
 
-    // Poste vertical
-    ctx.fillStyle = '#292524';
+    // Poste vertical en bloques de 2 píxeles
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 3, cy - 15, 6, 18);
+    ctx.fillStyle = '#451a03';
     ctx.fillRect(cx - 2, cy - 14, 4, 16);
 
-    // Farol rúnico etéreo con fuego azul celeste
-    const pulse = Math.sin(time * 3 + col) * 0.15 + 0.85;
-    const radGlow = ctx.createRadialGradient(cx, cy - 16, 2, cx, cy - 16, 22 * pulse);
-    radGlow.addColorStop(0, 'rgba(56, 189, 248, 0.65)');
-    radGlow.addColorStop(0.5, 'rgba(14, 165, 233, 0.25)');
-    radGlow.addColorStop(1, 'rgba(14, 165, 233, 0)');
-    ctx.fillStyle = radGlow;
-    ctx.beginPath();
-    ctx.arc(cx, cy - 16, 22 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Núcleo de la llama rúnica
-    ctx.fillStyle = '#f0f9ff';
-    ctx.beginPath();
-    ctx.arc(cx, cy - 16, 3 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
     // Corona metálica del farol
-    ctx.strokeStyle = '#78716c';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(cx - 5, cy - 21, 10, 10);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 6, cy - 22, 12, 12);
+    ctx.fillStyle = '#78716c';
+    ctx.fillRect(cx - 5, cy - 21, 10, 10);
+
+    // Fuego rúnico azul en píxeles (pulso en 2 estados)
+    const pulse = Math.floor(time * 6 + col) % 2 === 0;
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(cx - 3, cy - 19, 6, 6);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(cx - 2, cy - 18, 4, 4);
+    if (pulse) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 1, cy - 17, 2, 2);
+    }
   }
 
   private drawWallTile(
@@ -680,22 +690,26 @@ export class Tilemap {
 
     // 1. Sombra de oclusión ambiental en la base
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(x - 2, y + TILE_HEIGHT - 4, TILE_WIDTH + 4, 10);
+    ctx.fillRect(x - 2, y + TILE_HEIGHT - 4, TILE_WIDTH + 4, 8);
 
-    // 2. Base de mampostería de roca ancestral (Relieve 2.5D)
+    // 2. Base de mampostería de roca ancestral (Relieve 2.5D con juntas pixeladas)
     ctx.fillStyle = '#171a28';
     ctx.fillRect(x, y + TILE_HEIGHT - wallHeight, TILE_WIDTH, wallHeight);
 
-    // Juntas de sillería en el frente
+    // Juntas de sillería en el frente (bloques rectangulares)
     ctx.strokeStyle = '#0f111a';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y + TILE_HEIGHT - wallHeight, TILE_WIDTH, wallHeight);
+    ctx.beginPath();
+    ctx.moveTo(x + TILE_WIDTH / 2, y + TILE_HEIGHT - wallHeight);
+    ctx.lineTo(x + TILE_WIDTH / 2, y + TILE_HEIGHT);
+    ctx.stroke();
 
     // 3. Cara superior del muro
     ctx.fillStyle = '#2b3147';
     ctx.fillRect(x, y - wallHeight, TILE_WIDTH, TILE_HEIGHT);
 
-    // Borde biselado superior con luz
+    // Borde biselado superior con luz (1-2 píxeles)
     ctx.fillStyle = '#414a6b';
     ctx.fillRect(x, y - wallHeight, TILE_WIDTH, 2);
     ctx.fillRect(x, y - wallHeight, 2, TILE_HEIGHT);
@@ -705,54 +719,63 @@ export class Tilemap {
     ctx.fillRect(x, y - wallHeight + TILE_HEIGHT - 2, TILE_WIDTH, 2);
     ctx.fillRect(x + TILE_WIDTH - 2, y - wallHeight, 2, TILE_HEIGHT);
 
-    // 4. Copas de árboles estilizadas (#14532D, #166534) y troncos oscuros
-    // Enmarcan el sendero en los bordes boscosos
+    // 4. Copas de árboles escalonadas en pirámide con 3 verdes delimitados
+    // Cero bolas verdes circulares: pirámide escalonada en 3 verdes y tronco de madera oscura
     const seed = (col * 23 + row * 41) % 100;
     const isPerimeter = row <= 2 || row >= this.rows - 3 || col === 0 || col === this.cols - 1;
 
     if (isPerimeter || seed < 65) {
-      // Tronco de corteza oscura emergiendo de la piedra
-      ctx.fillStyle = '#1c1917';
+      // Tronco visible de madera oscura en bloques de 2 píxeles
+      ctx.fillStyle = '#0f172a'; // Contorno tronco
       const trunkW = 10;
       const trunkX = x + TILE_WIDTH / 2 - trunkW / 2 + ((seed % 11) - 5);
-      const trunkY = y - wallHeight + 6;
-      ctx.fillRect(trunkX, trunkY, trunkW, 16);
+      const trunkY = y - wallHeight + 4;
+      ctx.fillRect(trunkX - 1, trunkY, trunkW + 2, 18);
 
-      // Follaje de la copa de árbol en capas (Verde Bosque Profundo y Esmeralda Oscuro)
-      const crownCx = x + TILE_WIDTH / 2 + ((seed % 15) - 7);
-      const crownCy = y - wallHeight + 2;
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(trunkX, trunkY, trunkW, 17);
+      ctx.fillStyle = '#451a03'; // Núcleo madera
+      ctx.fillRect(trunkX + 2, trunkY, 4, 17);
 
-      // Capa base de copa (Verde más oscuro #14532D)
+      // Copas de follaje escalonadas en pirámide de 3 niveles superpuestos
+      const treeCx = x + TILE_WIDTH / 2 + ((seed % 15) - 7);
+      const treeBaseY = y - wallHeight;
+
+      // Nivel 1: Verde sombra base (#14532D) - Escalonado ancho
+      ctx.fillStyle = '#0f172a'; // Contorno
+      ctx.fillRect(treeCx - 23, treeBaseY - 15, 46, 17);
       ctx.fillStyle = '#14532d';
-      ctx.beginPath();
-      ctx.arc(crownCx, crownCy, 20, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(treeCx - 22, treeBaseY - 14, 44, 15);
+      // Detalle escalonado en bordes
+      ctx.fillRect(treeCx - 20, treeBaseY - 16, 40, 2);
 
-      // Capa media iluminada (#166534)
-      ctx.fillStyle = '#166534';
-      ctx.beginPath();
-      ctx.arc(crownCx - 3, crownCy - 3, 15, 0, Math.PI * 2);
-      ctx.arc(crownCx + 4, crownCy - 2, 12, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Toque de brillo superior (#15803d)
+      // Nivel 2: Verde medio (#15803D) - Escalonado medio
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(treeCx - 17, treeBaseY - 27, 34, 15);
       ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(crownCx - 2, crownCy - 6, 8, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(treeCx - 16, treeBaseY - 26, 32, 13);
+      ctx.fillRect(treeCx - 14, treeBaseY - 28, 28, 2);
+
+      // Nivel 3: Puntos de luz en la cresta (#22C55E) - Cúspide piramidal
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(treeCx - 11, treeBaseY - 37, 22, 12);
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(treeCx - 10, treeBaseY - 36, 20, 10);
+      // Cresta luminosa
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(treeCx - 6, treeBaseY - 35, 12, 4);
+      ctx.fillRect(treeCx - 3, treeBaseY - 38, 6, 3);
+      ctx.fillRect(treeCx - 1, treeBaseY - 40, 2, 2);
     } else if (seed < 85) {
-      // En monolitos internos de piedra, runas doradas ancestrales
+      // En monolitos internos de piedra, runas doradas ancestrales en escalones de píxeles
       ctx.save();
-      ctx.strokeStyle = '#f59e0b';
-      ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 4;
-      ctx.globalAlpha = 0.35 + Math.sin(time * 2 + col) * 0.15;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(x + 18, y - wallHeight + 14);
-      ctx.lineTo(x + 28, y - wallHeight + 28);
-      ctx.lineTo(x + 44, y - wallHeight + 20);
-      ctx.stroke();
+      ctx.fillStyle = '#f59e0b';
+      const runeBlink = Math.floor(time * 3 + col) % 2 === 0;
+      if (runeBlink) {
+        ctx.fillRect(x + 20, y - wallHeight + 14, 8, 2);
+        ctx.fillRect(x + 24, y - wallHeight + 16, 2, 8);
+        ctx.fillRect(x + 20, y - wallHeight + 24, 10, 2);
+      }
       ctx.restore();
     }
   }
@@ -762,32 +785,17 @@ export class Tilemap {
     ctx.fillStyle = '#05070e';
     ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
-    // Gradiente de borde de acantilado
-    const grad = ctx.createRadialGradient(
-      x + TILE_WIDTH / 2,
-      y + TILE_HEIGHT / 2,
-      4,
-      x + TILE_WIDTH / 2,
-      y + TILE_HEIGHT / 2,
-      TILE_WIDTH / 2
-    );
-    grad.addColorStop(0, '#020308');
-    grad.addColorStop(1, '#0e1220');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x + 2, y + 2, TILE_WIDTH - 4, TILE_HEIGHT - 4);
+    // Borde de acantilado en escalón pixelado
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x, y, TILE_WIDTH, 6);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(x, y, TILE_WIDTH, 3);
 
-    // Dientes de roca fracturada en los bordes
-    ctx.fillStyle = '#1c2236';
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + 14, y + 6);
-    ctx.lineTo(x + 28, y);
-    ctx.lineTo(x + 46, y + 8);
-    ctx.lineTo(x + TILE_WIDTH, y);
-    ctx.lineTo(x + TILE_WIDTH, y + 4);
-    ctx.lineTo(x, y + 4);
-    ctx.closePath();
-    ctx.fill();
+    // Dientes de roca fracturada en escalones de píxeles
+    ctx.fillStyle = '#27272a';
+    ctx.fillRect(x + 4, y + 2, 10, 4);
+    ctx.fillRect(x + 22, y + 2, 14, 6);
+    ctx.fillRect(x + 44, y + 2, 12, 4);
   }
 
   private drawCheckpointAltar(
@@ -799,44 +807,37 @@ export class Tilemap {
   ): void {
     ctx.save();
 
-    // 1. Aura circular pulsante en el suelo
-    const pulse = Math.sin(time * 3) * 3;
-    const ringRadius = 24 + pulse;
+    // 1. Santuario octagonal de bloques de piedra en el suelo
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 24, cy - 14, 48, 28);
+    ctx.fillRect(cx - 20, cy - 18, 40, 36);
 
-    ctx.strokeStyle = isActive ? '#fbbf24' : '#64748b';
-    ctx.shadowColor = isActive ? '#f59e0b' : '#334155';
-    ctx.shadowBlur = isActive ? 14 : 4;
-    ctx.lineWidth = isActive ? 2.5 : 1.5;
+    ctx.fillStyle = isActive ? '#14532d' : '#1e293b';
+    ctx.fillRect(cx - 22, cy - 12, 44, 24);
+    ctx.fillRect(cx - 18, cy - 16, 36, 32);
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-    ctx.stroke();
+    // Borde de runa dorada
+    ctx.fillStyle = isActive ? '#facc15' : '#475569';
+    ctx.fillRect(cx - 16, cy - 10, 32, 2);
+    ctx.fillRect(cx - 16, cy + 8, 32, 2);
+    ctx.fillRect(cx - 16, cy - 10, 2, 20);
+    ctx.fillRect(cx + 14, cy - 10, 2, 20);
 
-    // 2. Glifo rúnico interior giratorio
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(time * 0.4);
-    ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const ang = (i * Math.PI) / 2;
-      ctx.moveTo(Math.cos(ang) * 6, Math.sin(ang) * 6);
-      ctx.lineTo(Math.cos(ang) * 16, Math.sin(ang) * 16);
-    }
-    ctx.stroke();
-    ctx.restore();
+    // 2. Cristal flotante central en diamante de píxeles (pulso en 2 estados)
+    const floatStep = Math.floor(time * 4) % 2 === 0 ? 0 : 2;
+    const crystalY = cy - 14 + floatStep;
 
-    // 3. Cristal flotante central
-    const floatY = cy - 12 + Math.sin(time * 4) * 4;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 7, crystalY - 11, 14, 22);
+    ctx.fillRect(cx - 10, crystalY - 7, 20, 14);
+
     ctx.fillStyle = isActive ? '#fef08a' : '#94a3b8';
-    ctx.shadowColor = isActive ? '#facc15' : '#475569';
-    ctx.shadowBlur = isActive ? 16 : 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, floatY - 9);
-    ctx.lineTo(cx + 6, floatY);
-    ctx.lineTo(cx, floatY + 9);
-    ctx.lineTo(cx - 6, floatY);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fillRect(cx - 5, crystalY - 9, 10, 18);
+    ctx.fillRect(cx - 8, crystalY - 5, 16, 10);
+
+    // Núcleo brillante
+    ctx.fillStyle = isActive ? '#ffffff' : '#e2e8f0';
+    ctx.fillRect(cx - 2, crystalY - 3, 4, 6);
 
     ctx.restore();
   }

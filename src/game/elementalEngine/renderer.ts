@@ -2627,240 +2627,175 @@ export class IsometricRenderer {
     ctx.restore();
   }
 
-  // DIBUJO DE PROYECTILES CON SILUETAS FÍSICAS RECONOCIBLES Y TAMAÑO DRAMÁTICO
+  // DIBUJO DE PROYECTILES EN PIXEL ART 16-BIT (Bloques geométricos, estelas en dientes de sierra y cero arcos suaves)
   private static drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
     projectiles.forEach((p) => {
       ctx.save();
-      ctx.translate(p.x, p.y);
+      ctx.translate(Math.round(p.x), Math.round(p.y));
 
       const angle = Math.atan2(p.vy, p.vx);
       ctx.rotate(p.rotation !== undefined ? p.rotation : angle);
 
-      // A. FUEGO: Cometa de llamas incandescentes de gran escala con flamas vivas
+      const OUTLINE = '#0f172a';
+
+      // A. FUEGO: Cometa de llamas en bloques rectangulares escalonados
       if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
-        const time = Date.now() * 0.02;
         const scale = p.spellType === 'fire_inferno' ? 1.4 : 1.1;
+        const timeStep = Math.floor(Date.now() * 0.015) % 2;
 
-        // Resplandor cálido exterior
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 18;
+        // Estela dentada de fuego exterior (#EA580C)
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-18 * scale, -10 * scale, 30 * scale, 20 * scale);
 
-        // Flamas exteriores danzantes
         ctx.fillStyle = '#ea580c';
-        ctx.beginPath();
-        ctx.moveTo(18 * scale, 0);
-        ctx.lineTo(-24 * scale, -14 * scale + Math.sin(time * 3) * 4);
-        ctx.lineTo(-12 * scale, 0);
-        ctx.lineTo(-24 * scale, 14 * scale + Math.cos(time * 3) * 4);
-        ctx.closePath();
-        ctx.fill();
+        ctx.fillRect(-16 * scale, -8 * scale, 26 * scale, 16 * scale);
+        // Dientes de sierra en la estela
+        ctx.fillRect(-22 * scale, (-6 + timeStep * 2) * scale, 8 * scale, 4 * scale);
+        ctx.fillRect(-20 * scale, (2 - timeStep * 2) * scale, 6 * scale, 4 * scale);
 
-        // Cuerpo medio de fuego naranja
+        // Bloque central naranja (#F97316)
         ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.ellipse(2 * scale, 0, 14 * scale, 10 * scale, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-8 * scale, -6 * scale, 18 * scale, 12 * scale);
 
-        // Núcleo blanco-amarillo supercaliente
+        // Núcleo caliente amarillo/blanco (#FEF08A)
         ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.ellipse(4 * scale, 0, 8 * scale, 6 * scale, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(0 * scale, -3 * scale, 10 * scale, 6 * scale);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(4 * scale, -1 * scale, 4 * scale, 2 * scale);
       }
-      // B. HIELO: Lanza / Cristal puntiagudo geométrico facetado y brillante
+      // B. HIELO: Lanza / Cristal puntiagudo con quiebres a 45 grados en píxeles
       else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
         const scale = p.spellType === 'ice_lance' ? 1.3 : 1.0;
 
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 14;
+        // Contorno
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-18 * scale, -7 * scale, 36 * scale, 14 * scale);
+        ctx.fillRect(16 * scale, -3 * scale, 6 * scale, 6 * scale); // Punta
 
-        // Faceta exterior cristalina
-        ctx.fillStyle = '#67e8f9';
-        ctx.strokeStyle = '#e0f2fe';
-        ctx.lineWidth = 2.2;
+        // Cristal ártico (#7DD3FC)
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillRect(-16 * scale, -5 * scale, 32 * scale, 10 * scale);
+        ctx.fillRect(14 * scale, -2 * scale, 6 * scale, 4 * scale);
 
-        ctx.beginPath();
-        ctx.moveTo(26 * scale, 0); // Punta frontal afilada
-        ctx.lineTo(0, -9 * scale);
-        ctx.lineTo(-18 * scale, 0); // Cola
-        ctx.lineTo(0, 9 * scale);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        // Faceta frontal blanco nieve (#F8FAFC)
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-8 * scale, -3 * scale, 24 * scale, 3 * scale);
+        ctx.fillRect(6 * scale, -1 * scale, 12 * scale, 2 * scale);
 
-        // Facetas internas reflectantes
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(16 * scale, 0);
-        ctx.lineTo(0, -4 * scale);
-        ctx.lineTo(-10 * scale, 0);
-        ctx.closePath();
-        ctx.fill();
+        // Faceta inferior azul profundo (#0284C7)
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-14 * scale, 1 * scale, 26 * scale, 3 * scale);
       }
-      // C. TIERRA: Megalito de piedra maciza irregular con fisuras y aristas marcadas
+      // C. TIERRA: Megalito de piedra maciza en bloques rectangulares
       else if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
         const scale = p.spellType === 'earth_megalith' ? 1.4 : 1.1;
 
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-15 * scale, -13 * scale, 30 * scale, 26 * scale);
+
         ctx.fillStyle = '#78716c';
-        ctx.strokeStyle = '#292524';
-        ctx.lineWidth = 3;
+        ctx.fillRect(-13 * scale, -11 * scale, 26 * scale, 22 * scale);
 
-        // Polígono irregular de roca con 8 vértices marcados
-        ctx.beginPath();
-        ctx.moveTo(18 * scale, -6 * scale);
-        ctx.lineTo(8 * scale, -16 * scale);
-        ctx.lineTo(-10 * scale, -14 * scale);
-        ctx.lineTo(-18 * scale, 2 * scale);
-        ctx.lineTo(-12 * scale, 16 * scale);
-        ctx.lineTo(4 * scale, 16 * scale);
-        ctx.lineTo(16 * scale, 8 * scale);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Relieve y grietas de granito oscuro
-        ctx.strokeStyle = '#1c1917';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-4 * scale, -10 * scale);
-        ctx.lineTo(2 * scale, 2 * scale);
-        ctx.lineTo(-10 * scale, 8 * scale);
-        ctx.stroke();
+        // Bloques de relieve y fracturas
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(-11 * scale, -9 * scale, 10 * scale, 8 * scale);
+        ctx.fillStyle = '#44403c';
+        ctx.fillRect(-2 * scale, -3 * scale, 12 * scale, 10 * scale);
+        ctx.fillRect(-8 * scale, 1 * scale, 6 * scale, 6 * scale);
       }
-      // D. CHOQUE TÉRMICO (FUEGO + HIELO): Núcleo dual vapor/escarcha
+      // D. CHOQUE TÉRMICO (FUEGO + HIELO): Bloque dual mitad fuego / mitad hielo
       else if (p.spellType === 'thermal_shock') {
-        ctx.shadowColor = '#f43f5e';
-        ctx.shadowBlur = 18;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-14, -14, 28, 28);
 
-        // Mitad ígnea roja
         ctx.fillStyle = '#f43f5e';
-        ctx.beginPath();
-        ctx.arc(0, -5, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Mitad helada azul
+        ctx.fillRect(-12, -12, 24, 12);
         ctx.fillStyle = '#38bdf8';
-        ctx.beginPath();
-        ctx.arc(0, 5, 12, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-12, 0, 24, 12);
 
-        // Anillo de vapor blanco
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, 15, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-4, -4, 8, 8);
       }
-      // E. ERUPCIÓN DE MAGMA: Roca volcánica incandescente
+      // E. ERUPCIÓN DE MAGMA: Bloques de roca volcánica y fuego
       else if (p.spellType === 'magma_eruption') {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-14, -14, 28, 28);
         ctx.fillStyle = '#ea580c';
-        ctx.shadowColor = '#f97316';
-        ctx.shadowBlur = 20;
-
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-12, -12, 24, 24);
         ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(4, 0, 8, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-4, -4, 12, 8);
       }
-      // F. SOBRECARGA EXPLOSIVA: Bólido de plasma hipersónico
+      // F. SOBRECARGA EXPLOSIVA: Cubo de plasma violeta
       else if (p.spellType === 'explosive_overload') {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-14, -14, 28, 28);
         ctx.fillStyle = '#a855f7';
-        ctx.shadowColor = '#c084fc';
-        ctx.shadowBlur = 24;
-
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-12, -12, 24, 24);
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-4, -4, 8, 8);
       }
-      // G. TORMENTA CRIOGÉNICA (HIELO + RAYO): Estrella de escarcha electrificada
+      // G. TORMENTA CRIOGÉNICA (HIELO + RAYO): Diamante de escarcha con borde eléctrico
       else if (p.spellType === 'cryo_storm') {
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 18;
-
-        // Rombo de hielo
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-15, -9, 30, 18);
+        ctx.fillRect(-9, -15, 18, 30);
         ctx.fillStyle = '#bae6fd';
-        ctx.beginPath();
-        ctx.moveTo(18, 0);
-        ctx.lineTo(0, -9);
-        ctx.lineTo(-14, 0);
-        ctx.lineTo(0, 9);
-        ctx.closePath();
-        ctx.fill();
-
-        // Corona eléctrica amarilla
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(2, 0, 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // H. CATACLISMO ELEMENTAL: Esfera de plasma tetracromática
-      else if (p.spellType === 'elemental_cataclysm') {
-        ctx.shadowColor = '#ec4899';
-        ctx.shadowBlur = 25;
-
-        ctx.fillStyle = '#f43f5e';
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#38bdf8';
-        ctx.beginPath();
-        ctx.arc(3, -3, 8, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-13, -7, 26, 14);
+        ctx.fillRect(-7, -13, 14, 26);
         ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        ctx.arc(-3, 3, 6, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-3, -3, 6, 6);
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-1, -1, 2, 2);
       }
-      // I. PROYECTIL ENEMIGO (HOSTIL): Esfera de sombra umbría con núcleo púrpura/carmesí
+      // H. CATACLISMO ELEMENTAL: Matriz tetracromática pixelada
+      else if (p.spellType === 'elemental_cataclysm') {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-16, -16, 32, 32);
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillRect(-14, -14, 14, 14);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(0, -14, 14, 14);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(-14, 0, 14, 14);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(0, 0, 14, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-4, -4, 8, 8);
+      }
+      // I. PROYECTIL ENEMIGO (HOSTIL): Bloque de sombra umbría con núcleo carmesí
       else if (p.isHostile) {
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 16;
-
+        const pr = Math.round(p.radius);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-pr - 1, -pr - 1, pr * 2 + 2, pr * 2 + 2);
         ctx.fillStyle = '#1e1b4b';
-        ctx.beginPath();
-        ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-pr, -pr, pr * 2, pr * 2);
         ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(0, 0, p.radius * 0.55, 0, Math.PI * 2);
-        ctx.fill();
+        const inR = Math.max(2, Math.round(pr * 0.55));
+        ctx.fillRect(-inR, -inR, inR * 2, inR * 2);
       }
-      // J. Chispa Arcana Básica y Destellos Mágicos
+      // J. Tajos del Básico / Chispa Arcana: Estela de arco escalonada en dientes de sierra
       else {
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 14;
+        const pr = Math.max(3, Math.round(p.radius));
+        const color = p.color || '#94a3b8';
 
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
-        ctx.fill();
+        // Estela en dientes de sierra (Sawtooth stepped trail) detrás del proyectil
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillRect(-pr * 3.5, -pr * 0.8, pr * 1.5, pr * 1.6);
+        ctx.fillRect(-pr * 2.2, -pr * 1.2, pr * 1.2, pr * 0.8);
+        ctx.fillRect(-pr * 2.2, pr * 0.4, pr * 1.2, pr * 0.8);
 
-        // Núcleo brillante
+        // Bloque exterior
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-pr - 1, -pr - 1, pr * 2 + 2, pr * 2 + 2);
+
+        // Cuerpo cuadrado del proyectil
+        ctx.fillStyle = color;
+        ctx.fillRect(-pr, -pr, pr * 2, pr * 2);
+
+        // Núcleo brillante blanco
+        const coreSize = Math.max(2, Math.round(pr * 0.6));
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, Math.max(2, p.radius * 0.4), 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-coreSize / 2, -coreSize / 2, coreSize, coreSize);
       }
 
       ctx.restore();
@@ -3143,95 +3078,62 @@ export class IsometricRenderer {
           ctx.stroke();
         }
       } else if (crown.phase === 'detonation') {
-        // FASE 2: PILAR DE FUEGO ERUPTIVO (Geiser vertical estilizado de 145px a 180px)
-        const eruptionHeight = 165 + Math.sin(crown.phaseTimer * 0.035) * 15;
-        const baseWidth = crown.maxRadius * 0.95;
-        const topWidth = crown.maxRadius * 0.45;
+        // FASE 2: PILAR DE FUEGO RETRO (Columna de bloques rectangulares superpuestos de amarillo, naranja y rojo en saltos rígidos)
+        const stepAnim = Math.floor(crown.phaseTimer * 0.05) % 4;
+        const eruptionHeight = 160 + stepAnim * 8;
+        const cx = Math.round(crown.x);
+        const cy = Math.round(crown.y);
+        const baseW = Math.round(crown.maxRadius * 0.95);
 
-        // 1. Aura exterior difusa de calor y luz vertical
-        const haloGrad = ctx.createLinearGradient(crown.x, crown.y, crown.x, crown.y - eruptionHeight);
-        haloGrad.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
-        haloGrad.addColorStop(0.5, 'rgba(234, 88, 12, 0.35)');
-        haloGrad.addColorStop(0.9, 'rgba(153, 27, 27, 0.15)');
-        haloGrad.addColorStop(1, 'rgba(153, 27, 27, 0)');
-        ctx.fillStyle = haloGrad;
-        ctx.beginPath();
-        ctx.ellipse(crown.x, crown.y, baseWidth * 1.35, baseWidth * 1.35 * squish, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // 1. Sombra / base en el suelo en bloques pixelados
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(cx - baseW - 2, cy - 6, (baseW * 2) + 4, 12);
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(cx - baseW, cy - 4, baseW * 2, 8);
 
-        // 2. Columna principal del geiser (gradiente vertical especificado)
-        // Base: núcleo blanco/amarillo incandescente (#FEF08A)
-        // Cuerpo: naranja fuego intenso (#EA580C)
-        // Cúspide: rojo carmesí translúcido disipándose en humo (#991B1B)
-        const pillarGrad = ctx.createLinearGradient(crown.x, crown.y, crown.x, crown.y - eruptionHeight);
-        pillarGrad.addColorStop(0, '#ffffff');
-        pillarGrad.addColorStop(0.12, '#fef08a');
-        pillarGrad.addColorStop(0.48, '#ea580c');
-        pillarGrad.addColorStop(0.85, 'rgba(153, 27, 27, 0.7)');
-        pillarGrad.addColorStop(1, 'rgba(153, 27, 27, 0)');
+        // 2. Columna exterior de bloques rectangulares superpuestos en rojo carmesí (#991B1B / #DC2626)
+        const levels = 8;
+        const levelH = Math.round(eruptionHeight / levels);
 
-        // Dibujar cuerpo cónico/cilíndrico ascendente del geiser
-        ctx.fillStyle = pillarGrad;
-        ctx.beginPath();
-        // Base izquierda
-        ctx.moveTo(crown.x - baseWidth, crown.y);
-        // Curva sinuosa del lateral izquierdo
-        const waveL1 = Math.sin(crown.phaseTimer * 0.028) * 8;
-        const waveL2 = Math.cos(crown.phaseTimer * 0.04) * 6;
-        ctx.bezierCurveTo(
-          crown.x - baseWidth * 0.85 + waveL1, crown.y - eruptionHeight * 0.35,
-          crown.x - topWidth + waveL2, crown.y - eruptionHeight * 0.7,
-          crown.x - topWidth * 0.4, crown.y - eruptionHeight
-        );
-        // Cúspide en punta de llama
-        ctx.lineTo(crown.x, crown.y - eruptionHeight - 12);
-        // Curva sinuosa del lateral derecho
-        const waveR1 = Math.cos(crown.phaseTimer * 0.025) * 8;
-        const waveR2 = Math.sin(crown.phaseTimer * 0.038) * 6;
-        ctx.bezierCurveTo(
-          crown.x + topWidth * 0.4, crown.y - eruptionHeight,
-          crown.x + topWidth + waveR2, crown.y - eruptionHeight * 0.7,
-          crown.x + baseWidth * 0.85 + waveR1, crown.y - eruptionHeight * 0.35
-        );
-        ctx.lineTo(crown.x + baseWidth, crown.y);
-        // Arco de la base isométrica
-        ctx.ellipse(crown.x, crown.y, baseWidth, baseWidth * squish, 0, 0, Math.PI, false);
-        ctx.closePath();
-        ctx.fill();
+        for (let l = 0; l < levels; l++) {
+          const lRatio = l / levels;
+          const curW = Math.max(12, Math.round(baseW * (1 - lRatio * 0.55)));
+          const curY = cy - (l + 1) * levelH;
+          const jitterX = ((l + stepAnim) % 3 - 1) * 3;
 
-        // 3. Columna interior incandescente (núcleo de plasma blanco-amarillo)
-        const coreH = eruptionHeight * 0.65;
-        const coreBaseW = baseWidth * 0.48;
-        const coreTopW = topWidth * 0.3;
-        const innerGrad = ctx.createLinearGradient(crown.x, crown.y, crown.x, crown.y - coreH);
-        innerGrad.addColorStop(0, '#ffffff');
-        innerGrad.addColorStop(0.35, '#fef08a');
-        innerGrad.addColorStop(0.8, '#f97316');
-        innerGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
-        ctx.fillStyle = innerGrad;
-        ctx.beginPath();
-        ctx.moveTo(crown.x - coreBaseW, crown.y);
-        ctx.lineTo(crown.x - coreTopW, crown.y - coreH);
-        ctx.lineTo(crown.x, crown.y - coreH - 8);
-        ctx.lineTo(crown.x + coreTopW, crown.y - coreH);
-        ctx.lineTo(crown.x + coreBaseW, crown.y);
-        ctx.closePath();
-        ctx.fill();
+          // Bloque exterior rojo
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(cx - curW / 2 + jitterX - 1, curY - 1, curW + 2, levelH + 2);
+          ctx.fillStyle = l > levels - 3 ? '#991b1b' : '#dc2626';
+          ctx.fillRect(cx - curW / 2 + jitterX, curY, curW, levelH);
 
-        // 4. Partículas triangulares ascendiendo a alta velocidad
+          // Bloque intermedio naranja (#EA580C / #F97316)
+          const midW = Math.max(6, Math.round(curW * 0.65));
+          ctx.fillStyle = l > levels - 3 ? '#ea580c' : '#f97316';
+          ctx.fillRect(cx - midW / 2 + jitterX, curY, midW, levelH);
+
+          // Bloque núcleo incandescente amarillo/blanco (#FEF08A / #FFFFFF)
+          if (l < levels - 1) {
+            const coreW = Math.max(3, Math.round(midW * 0.5));
+            ctx.fillStyle = l < 3 ? '#ffffff' : '#fef08a';
+            ctx.fillRect(cx - coreW / 2 + jitterX, curY, coreW, levelH);
+          }
+        }
+
+        // Picos de fuego superiores en saltos de píxeles
+        const crestY = cy - eruptionHeight;
         ctx.fillStyle = '#fef08a';
-        for (let p = 0; p < 7; p++) {
-          const t = (crown.phaseTimer * 0.0035 + p * 0.14) % 1;
-          const px = crown.x + (Math.sin(p * 2.3 + crown.phaseTimer * 0.01) * baseWidth * 0.55);
-          const py = crown.y - t * eruptionHeight;
-          const pSize = (4 + Math.sin(p * 1.5) * 2) * (1 - t * 0.4);
+        ctx.fillRect(cx - 3, crestY - 8, 6, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(cx - 1, crestY - 12, 2, 4);
 
-          ctx.beginPath();
-          ctx.moveTo(px, py - pSize * 1.5);
-          ctx.lineTo(px - pSize, py + pSize);
-          ctx.lineTo(px + pSize, py + pSize);
-          ctx.closePath();
-          ctx.fill();
+        // Chispas cuadradas ascendentes (2x2 px)
+        ctx.fillStyle = '#fde047';
+        for (let p = 0; p < 6; p++) {
+          const t = ((crown.phaseTimer * 0.006 + p * 0.16) % 1.0);
+          const spX = cx + ((p % 3 - 1) * 16);
+          const spY = cy - Math.round(t * (eruptionHeight + 20));
+          ctx.fillRect(spX, spY, 3, 3);
         }
       } else if (crown.phase === 'ring') {
         // FASE 3: LENGUAS DE FUEGO BAJAS Y BRASAS VIVAS EN EL CRÁTER RESIDUAL
@@ -4901,39 +4803,33 @@ export class IsometricRenderer {
     }
   }
 
-  // CAPA 2 (Y-SORTED): Tronco de árbol y raíces en el suelo
+  // CAPA 2 (Y-SORTED): Tronco de árbol y raíces en el suelo en Pixel Art 16-Bit
   private static drawTreeTrunk(ctx: CanvasRenderingContext2D, tree: ForestTreeEntity) {
-    const tx = tree.x;
-    const ty = tree.y;
-    const r = tree.trunkRadius;
-    const squish = 0.58;
+    const tx = Math.round(tree.x);
+    const ty = Math.round(tree.y);
+    const r = Math.round(tree.trunkRadius);
+    const OUTLINE = '#0f172a';
 
-    // Sombra del tronco en el suelo
+    // Sombra del tronco en escalones pixelados
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(tx, ty + 2, r * 1.4, r * 1.4 * squish, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(tx - r * 1.5, ty + 1, r * 3, 4);
+    ctx.fillRect(tx - r * 1.2, ty + 5, r * 2.4, 3);
 
-    // Raíces y ensanchamiento en la base
-    ctx.fillStyle = tree.trunkColor;
-    ctx.beginPath();
-    ctx.moveTo(tx - r * 1.3, ty + 2);
-    ctx.lineTo(tx - r * 0.7, ty - tree.canopyHeight * 0.25);
-    ctx.lineTo(tx + r * 0.7, ty - tree.canopyHeight * 0.25);
-    ctx.lineTo(tx + r * 1.3, ty + 2);
-    ctx.closePath();
-    ctx.fill();
+    // Contorno del tronco
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(tx - r - 1, ty - tree.canopyHeight * 0.75 - 1, (r * 2) + 2, tree.canopyHeight * 0.75 + 3);
+    ctx.fillRect(tx - r * 1.4 - 1, ty - 1, (r * 2.8) + 2, 5); // Raíces
 
-    // Columna del tronco
-    ctx.fillRect(tx - r * 0.7, ty - tree.canopyHeight * 0.75, r * 1.4, tree.canopyHeight * 0.55);
+    // Tronco de madera oscura en bloques de 2 píxeles
+    ctx.fillStyle = '#1c1917';
+    ctx.fillRect(tx - r, ty - tree.canopyHeight * 0.75, r * 2, tree.canopyHeight * 0.75);
+    ctx.fillRect(tx - r * 1.4, ty, r * 2.8, 4);
 
-    // Corteza iluminada
-    ctx.strokeStyle = '#5d4037';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(tx - r * 0.2, ty - tree.canopyHeight * 0.7);
-    ctx.lineTo(tx - r * 0.2, ty - 2);
-    ctx.stroke();
+    // Vetas de madera iluminada en el centro
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(tx - r * 0.3, ty - tree.canopyHeight * 0.7, r * 0.8, tree.canopyHeight * 0.7);
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(tx - r * 0.1, ty - tree.canopyHeight * 0.65, 2, tree.canopyHeight * 0.6);
   }
 
   // CAPA 2 (Y-SORTED): Monolito Rúnico de Punto de Control (Checkpoint)
@@ -5587,61 +5483,45 @@ export class IsometricRenderer {
   private static drawTreeCanopy(ctx: CanvasRenderingContext2D, tree: ForestTreeEntity) {
     ctx.save();
     ctx.globalAlpha = tree.canopyAlpha; // 1.0 normal, 0.65 cuando el jugador pasa por debajo
-    const cx = tree.x;
-    const cy = tree.y - tree.canopyHeight;
-    const r = tree.canopyRadius;
+    const cx = Math.round(tree.x);
+    const cy = Math.round(tree.y - tree.canopyHeight);
+    const r = Math.round(tree.canopyRadius);
+    const OUTLINE = '#0f172a';
 
-    if (tree.treeType === 'pine') {
-      // Pino / Abeto: 3 niveles triangulares superpuestos
-      const levels = 3;
-      for (let lvl = 0; lvl < levels; lvl++) {
-        const lvlR = r * (1 - lvl * 0.22);
-        const lvlY = cy + lvl * (r * 0.38);
-        const lvlH = r * 0.75;
+    // Copas de follaje escalonadas en pirámide o capas superpuestas con 3 verdes delimitados:
+    // Verde sombra base (#14532D)
+    // Verde medio (#15803D)
+    // Puntos de luz en la cresta (#22C55E)
 
-        ctx.fillStyle = lvl === 0 ? '#1b4324' : lvl === 1 ? tree.foliageColor : '#102e17';
-        ctx.beginPath();
-        ctx.moveTo(cx, lvlY - lvlH);
-        ctx.lineTo(cx + lvlR, lvlY);
-        ctx.lineTo(cx - lvlR, lvlY);
-        ctx.closePath();
-        ctx.fill();
+    // NIVEL 1 (BASE INFERIOR): Verde sombra base (#14532D)
+    const baseW = Math.round(r * 2.2);
+    const baseH = Math.round(r * 0.7);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(cx - baseW / 2 - 1, cy + Math.round(r * 0.1) - 1, baseW + 2, baseH + 2);
+    ctx.fillStyle = '#14532d';
+    ctx.fillRect(cx - baseW / 2, cy + Math.round(r * 0.1), baseW, baseH);
 
-        // Borde escarchado superior
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-    } else if (tree.treeType === 'oak') {
-      // Roble frondoso: racimos circulares de follaje
-      const clumps = [
-        { ox: 0, oy: 0, cr: r * 0.8 },
-        { ox: -r * 0.42, oy: r * 0.2, cr: r * 0.58 },
-        { ox: r * 0.42, oy: r * 0.2, cr: r * 0.58 },
-        { ox: -r * 0.25, oy: -r * 0.3, cr: r * 0.52 },
-        { ox: r * 0.25, oy: -r * 0.3, cr: r * 0.52 },
-      ];
+    // NIVEL 2 (CAPA MEDIA): Verde medio (#15803D)
+    const midW = Math.round(r * 1.6);
+    const midH = Math.round(r * 0.65);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(cx - midW / 2 - 1, cy - Math.round(r * 0.45) - 1, midW + 2, midH + 2);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(cx - midW / 2, cy - Math.round(r * 0.45), midW, midH);
 
-      clumps.forEach((c, idx) => {
-        ctx.fillStyle = idx === 0 ? tree.foliageColor : (idx % 2 === 0 ? '#1b4d24' : '#225d2b');
-        ctx.beginPath();
-        ctx.arc(cx + c.ox, cy + c.oy, c.cr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      });
-    } else {
-      // Árbol ancestral: copa colosal con sombras profundas
-      ctx.fillStyle = '#0f2916';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r, r * 0.75, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = tree.foliageColor;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 8, r * 0.82, r * 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // NIVEL 3 (CÚSPIDE Y CRESTA): Puntos de luz en la cresta (#22C55E)
+    const topW = Math.round(r * 1.0);
+    const topH = Math.round(r * 0.6);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(cx - topW / 2 - 1, cy - Math.round(r * 0.95) - 1, topW + 2, topH + 2);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(cx - topW / 2, cy - Math.round(r * 0.95), topW, topH);
+
+    // Cresta luminosa
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(cx - Math.round(topW * 0.35), cy - Math.round(r * 0.9), Math.round(topW * 0.7), 4);
+    ctx.fillRect(cx - 3, cy - Math.round(r * 1.05), 6, 4);
+    ctx.fillRect(cx - 1, cy - Math.round(r * 1.12), 2, 2);
 
     ctx.restore();
   }

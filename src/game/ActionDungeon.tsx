@@ -623,45 +623,41 @@ export const ActionDungeon: React.FC<ActionDungeonProps> = ({
         ctx.fill();
       });
 
-      // D. Dibujar Creeps / Enemigos
+      // D. Dibujar Creeps / Enemigos en Pixel Art 16-Bit
       state.creeps.forEach((creep) => {
         ctx.save();
-        ctx.translate(creep.x, creep.y);
+        ctx.translate(Math.round(creep.x), Math.round(creep.y));
 
-        // Sombra
-        ctx.beginPath();
-        ctx.ellipse(0, creep.radius * 0.8, creep.radius * 0.9, creep.radius * 0.4, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fill();
+        const cr = Math.round(creep.radius);
 
-        // Cuerpo del creep
-        ctx.beginPath();
-        ctx.arc(0, 0, creep.radius, 0, Math.PI * 2);
+        // Sombra pixelada
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(-cr, Math.round(cr * 0.7), cr * 2, 4);
+
+        // Cuerpo en bloques de píxeles
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-cr - 1, -cr - 1, (cr * 2) + 2, (cr * 2) + 2);
         ctx.fillStyle = creep.color;
-        ctx.fill();
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fillRect(-cr, -cr, cr * 2, cr * 2);
 
-        // Ojos malvados del creep
+        // Ojos de píxeles
+        const eyeOffset = Math.round(cr * 0.35);
+        const eyeY = Math.round(-cr * 0.2);
         ctx.fillStyle = '#fee2e2';
-        ctx.beginPath();
-        ctx.arc(-creep.radius * 0.35, -creep.radius * 0.2, 2.5, 0, Math.PI * 2);
-        ctx.arc(creep.radius * 0.35, -creep.radius * 0.2, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(-eyeOffset - 1, eyeY - 1, 3, 3);
+        ctx.fillRect(eyeOffset - 1, eyeY - 1, 3, 3);
         ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(-creep.radius * 0.35, -creep.radius * 0.2, 1.2, 0, Math.PI * 2);
-        ctx.arc(creep.radius * 0.35, -creep.radius * 0.2, 1.2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(-eyeOffset, eyeY, 1, 1);
+        ctx.fillRect(eyeOffset, eyeY, 1, 1);
 
         // Barra de vida del creep
-        const barW = creep.radius * 2;
+        const barW = cr * 2;
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-barW / 2, -creep.radius - 8, barW, 4);
+        ctx.fillRect(-barW / 2 - 1, -cr - 9, barW + 2, 5);
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(-barW / 2, -cr - 8, barW, 3);
         ctx.fillStyle = '#ef4444';
-        ctx.fillRect(-barW / 2, -creep.radius - 8, barW * (creep.hp / creep.maxHp), 4);
+        ctx.fillRect(-barW / 2, -cr - 8, Math.round(barW * (creep.hp / creep.maxHp)), 3);
 
         ctx.restore();
       });

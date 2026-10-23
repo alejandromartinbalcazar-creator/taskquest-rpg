@@ -1,4 +1,5 @@
-// Renderizador de Sprite de Mago 2D para Canvas (Vista Top-Down y Vista de Perfil)
+// Renderizador de Sprite de Mago en Pixel Art 16-Bits para Canvas 2D
+// Basado en matrices de píxeles, contorno de grafito (#0F172A), animación por pasos discretos y cero curvas suaves.
 
 export interface WizardRenderOptions {
   ctx: CanvasRenderingContext2D;
@@ -7,14 +8,14 @@ export interface WizardRenderOptions {
   scale?: number;
   facingAngle?: number; // en radianes
   isMoving?: boolean;
-  vx?: number; // velocidad horizontal para balanceo e inclinación lateral
+  vx?: number; // velocidad horizontal
   vy?: number;
   castAnimProgress?: number; // 0 a 1 si está lanzando hechizo
   recoilX?: number; // desplazamiento por retroceso de ataque
   recoilY?: number;
   castFlashColor?: string; // tinte o destello elemental al castear
   activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
-  time?: number; // para animaciones de flotación y brillo
+  time?: number; // para ciclos de animación escalonados
 }
 
 export function drawWizardSprite({
@@ -34,209 +35,218 @@ export function drawWizardSprite({
   time = Date.now() / 1000,
 }: WizardRenderOptions) {
   ctx.save();
+
+  // Asegurar que no haya suavizado de imágenes en este contexto
   ctx.imageSmoothingEnabled = false;
   (ctx as any).webkitImageSmoothingEnabled = false;
   (ctx as any).mozImageSmoothingEnabled = false;
-  ctx.translate(x, y);
+  (ctx as any).msImageSmoothingEnabled = false;
 
-  // 1. Cinemática Procedimental: Run Bobbing, Respiración Idle y Sombra Dinámica
-  let bob = 0;
-  let shadowScale = 1;
-  let breatheX = 1;
-  let breatheY = 1;
+  // Tamaño de píxel virtual (2x escalado por defecto con respecto al zoom del juego)
+  const P = Math.max(1, Math.round(2 * scale));
+
+  // Posicionamiento de base entera para evitar subpíxeles borrosos
+  const baseX = Math.round(x + recoilX);
+  const baseY = Math.round(y + recoilY);
+  ctx.translate(baseX, baseY);
+
+  // Orientación horizontal izquierda / derecha (Flip en eje X)
+  const isFacingLeft = Math.cos(facingAngle) < -0.15;
+  if (isFacingLeft) {
+    ctx.scale(-1, 1);
+  }
+
+  // 1. SOMBRA PIXELADA EN EL SUELO (Óvalo escalonado con rectángulos de píxeles)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  // Sombra en 3 bandas de píxeles
+  ctx.fillRect(-6 * P, 8 * P, 12 * P, 1 * P);
+  ctx.fillRect(-7 * P, 9 * P, 14 * P, 2 * P);
+  ctx.fillRect(-6 * P, 11 * P, 12 * P, 1 * P);
+
+  // 2. CICLO DE ANIMACIÓN RETRO DISCRETO (Sin interpolación suave)
+  let torsoOffY = 0;
+  let staffTilt = 0; // Inclinación en píxeles del báculo
+  let robeWalkShift = 0;
 
   if (isMoving) {
-    // Bobbing vertical procedimental al correr (rebote de pisadas de 0 a -4px)
-    bob = -Math.abs(Math.sin(time * 12)) * 4;
-    // La sombra se contrae en el punto más alto del paso y se expande al pisar el suelo
-    shadowScale = Math.max(0.7, 1 - (Math.abs(bob) / 16));
+    // Al caminar: 3 cuadros rígidos (paso izq, medio arriba, paso der)
+    const walkStep = Math.floor(time * 7) % 3;
+    if (walkStep === 0) {
+      torsoOffY = 0;
+      staffTilt = 1;
+      robeWalkShift = -1;
+    } else if (walkStep === 1) {
+      torsoOffY = -1; // Levantamiento de paso
+      staffTilt = 0;
+      robeWalkShift = 0;
+    } else {
+      torsoOffY = 0;
+      staffTilt = -1;
+      robeWalkShift = 1;
+    }
   } else {
-    // Flotación suave y respiración senoidal en reposo
-    bob = Math.sin(time * 3) * 1.5;
-    shadowScale = 1 + Math.sin(time * 3) * 0.04;
-    breatheY = 1 + Math.sin(time * 3) * 0.03;
-    breatheX = 1 - Math.sin(time * 3) * 0.02;
+    // En reposo (Idle): respiración en 2 cuadros (el torso sube/baja 1 píxel cada 600 ms)
+    const idleFrame = Math.floor(time / 0.6) % 2;
+    torsoOffY = idleFrame === 0 ? 0 : -1;
+    staffTilt = 0;
   }
 
-  // 1. Sombra en el suelo de la mazmorra
-  ctx.beginPath();
-  ctx.ellipse(0, 18 * scale, 14 * scale * shadowScale, 6 * scale * shadowScale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fill();
+  // Paleta de Color Indexada 16-Bit
+  const OUTLINE = '#0f172a';      // Contorno fino negro grafito
+  const ROBE_LIGHT = '#7e22ce';   // Púrpura frontal claro
+  const ROBE_MID = '#581c87';     // Violeta túnica principal
+  const ROBE_DARK = '#3b0764';    // Sombra trasera rígida
+  const GOLD_TRIM = '#f59e0b';    // Ribete dorado
+  const GOLD_BRIGHT = '#fbbf24';  // Brillo dorado
+  const FACE_DARK = '#090a10';    // Penumbra bajo la capucha
+  const STAFF_WOOD = '#78350f';   // Madera báculo
+  const STAFF_WOOD_DARK = '#451a03';
 
-  // Aplicar retroceso de ataque (Recoil)
-  if (recoilX !== 0 || recoilY !== 0) {
-    ctx.translate(recoilX, recoilY);
-  }
-
-  // Aplicar desplazamiento vertical de pisada / flotación
-  ctx.translate(0, bob);
-
-  // Inclinación lateral procedimental por inercia en el eje Z (Tilt proporcional a vx, máx ±6° o ~0.10 rad)
-  const leanAngle = isMoving ? Math.max(-0.10, Math.min(0.10, vx * 0.025)) : 0;
-  if (leanAngle !== 0) {
-    ctx.rotate(leanAngle);
-  }
-
-  // Respiración Idle del torso
-  if (!isMoving) {
-    ctx.scale(breatheX, breatheY);
-  }
-
-  // 2. Aura de Hechizo / Elemento
-  const elementColors: Record<string, { orb: string; glow: string }> = {
-    fire: { orb: '#f97316', glow: 'rgba(249, 115, 22, 0.5)' },
-    lightning: { orb: '#facc15', glow: 'rgba(250, 204, 21, 0.5)' },
-    earth: { orb: '#22c55e', glow: 'rgba(34, 197, 94, 0.5)' },
-    ice: { orb: '#38bdf8', glow: 'rgba(56, 189, 248, 0.5)' },
-    plasma: { orb: '#c084fc', glow: 'rgba(192, 132, 252, 0.6)' },
-    magma: { orb: '#ef4444', glow: 'rgba(239, 68, 68, 0.6)' },
+  // Paleta elemental del orbe rúnico del báculo
+  const elementGemColors: Record<string, { gemLight: string; gemDark: string; eyeColor: string }> = {
+    fire: { gemLight: '#fde047', gemDark: '#ea580c', eyeColor: '#fde047' },
+    lightning: { gemLight: '#ffffff', gemDark: '#facc15', eyeColor: '#facc15' },
+    earth: { gemLight: '#86efac', gemDark: '#15803d', eyeColor: '#4ade80' },
+    ice: { gemLight: '#e0f2fe', gemDark: '#0284c7', eyeColor: '#67e8f9' },
+    plasma: { gemLight: '#f5d0fe', gemDark: '#a855f7', eyeColor: '#c084fc' },
+    magma: { gemLight: '#fef08a', gemDark: '#dc2626', eyeColor: '#f87171' },
   };
+  const gemInfo = elementGemColors[activeElement] || elementGemColors.fire;
 
-  const elem = elementColors[activeElement] || elementColors.fire;
+  // Estado del pulso del orbe (2 estados discretos cada 350 ms)
+  const isOrbPulsing = Math.floor(time / 0.35) % 2 === 1 || castAnimProgress > 0;
 
-  // 3. Túnica del Mago (Cuerpo)
-  ctx.beginPath();
-  ctx.moveTo(-10 * scale, 14 * scale);
-  ctx.lineTo(10 * scale, 14 * scale);
-  ctx.lineTo(8 * scale, -2 * scale);
-  ctx.lineTo(-8 * scale, -2 * scale);
-  ctx.closePath();
-  ctx.fillStyle = '#2e1065'; // Púrpura oscuro místico
-  ctx.fill();
-  ctx.strokeStyle = '#1e1b4b';
-  ctx.lineWidth = 1.5 * scale;
-  ctx.stroke();
+  // 3. TÚNICA Y CUERPO (Con sombra lateral rígida y ribete dorado)
+  const ty = torsoOffY * P;
 
-  // Borde dorado inferior de la túnica
-  ctx.beginPath();
-  ctx.moveTo(-10 * scale, 13 * scale);
-  ctx.lineTo(10 * scale, 13 * scale);
-  ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 2 * scale;
-  ctx.stroke();
+  // A. Contorno del cuerpo
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect((-5 + robeWalkShift) * P, ty + 1 * P, (10 - robeWalkShift) * P, 8 * P);
+  ctx.fillRect((-6 + robeWalkShift) * P, ty + 7 * P, (12 - robeWalkShift) * P, 2 * P);
 
-  // Capa / Cuello
-  ctx.beginPath();
-  ctx.ellipse(0, -1 * scale, 9 * scale, 4 * scale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#3b0764';
-  ctx.fill();
+  // B. Relleno de túnica con sombra lateral rígida (bloque claro al frente, oscuro atrás)
+  // Sombra trasera rígida (izquierda / atrás)
+  ctx.fillStyle = ROBE_DARK;
+  ctx.fillRect(-4 * P, ty + 2 * P, 4 * P, 6 * P);
+  // Bloque claro al frente (derecha / frontal)
+  ctx.fillStyle = ROBE_LIGHT;
+  ctx.fillRect(0 * P, ty + 2 * P, 4 * P, 6 * P);
+  // Zona central de volumen
+  ctx.fillStyle = ROBE_MID;
+  ctx.fillRect(-2 * P, ty + 2 * P, 3 * P, 6 * P);
 
-  // 4. Cabeza con Capucha Oscura
-  ctx.beginPath();
-  ctx.arc(0, -6 * scale, 7 * scale, 0, Math.PI * 2);
-  ctx.fillStyle = '#0f172a'; // Oscuridad bajo la capucha
-  ctx.fill();
+  // C. Ribete dorado inferior escalonado
+  ctx.fillStyle = GOLD_TRIM;
+  ctx.fillRect((-4 + robeWalkShift) * P, ty + 7 * P, 8 * P, 1 * P);
+  ctx.fillStyle = GOLD_BRIGHT;
+  ctx.fillRect((0 + robeWalkShift) * P, ty + 7 * P, 3 * P, 1 * P);
 
-  // Ojos Brillantes Místicos (Estilo Black Mage 16-Bit)
-  const eyeColor = activeElement === 'fire' ? '#fde047' : '#67e8f9';
-  const eyeOffset = Math.sin(facingAngle) * 2 * scale;
-  ctx.fillStyle = eyeColor;
-  const eyeW = Math.max(2, Math.round(3.2 * scale));
-  const eyeH = Math.max(2, Math.round(2.2 * scale));
-  ctx.fillRect(Math.round(-4.5 * scale + eyeOffset), Math.round(-7 * scale), eyeW, eyeH);
-  ctx.fillRect(Math.round(1.5 * scale + eyeOffset), Math.round(-7 * scale), eyeW, eyeH);
+  // 4. ROSTRO EN PENUMBRA Y OJOS BRILLANTES (Bajo el ala)
+  // Cara oscura
+  ctx.fillStyle = FACE_DARK;
+  ctx.fillRect(-3 * P, ty - 3 * P, 6 * P, 4 * P);
 
-  // 5. Sombrero de Mago Puntiagudo
-  // Ala del sombrero
-  ctx.beginPath();
-  ctx.ellipse(0, -9 * scale, 13 * scale, 4 * scale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#1e1b4b';
-  ctx.fill();
-  ctx.strokeStyle = '#3b0764';
-  ctx.lineWidth = 1.5 * scale;
-  ctx.stroke();
+  // Ojos luminosos estilo 16-Bit (1 o 2 píxeles luminosos según orientación)
+  ctx.fillStyle = gemInfo.eyeColor;
+  // Ojo frontal (más visible y definido)
+  ctx.fillRect(1 * P, ty - 2 * P, 1 * P, 1 * P);
+  // Ojo trasero (1 píxel)
+  ctx.fillRect(-1 * P, ty - 2 * P, 1 * P, 1 * P);
 
-  // Cinta dorada del sombrero
-  ctx.beginPath();
-  ctx.ellipse(0, -11 * scale, 7 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#f59e0b';
-  ctx.fill();
+  // 5. SOMBRERO PUNTIAGUDO CON QUIEBRE ANGULAR Y ALA ANCHA
+  // A. Ala ancha del sombrero (borde exterior negro)
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-7 * P, ty - 5 * P, 14 * P, 3 * P);
 
-  // Cono del sombrero inclinado con pliegue místico
-  ctx.beginPath();
-  ctx.moveTo(-7 * scale, -11 * scale);
-  ctx.quadraticCurveTo(-2 * scale, -22 * scale, 8 * scale, -28 * scale); // Punta doblada
-  ctx.quadraticCurveTo(3 * scale, -20 * scale, 7 * scale, -11 * scale);
-  ctx.closePath();
-  ctx.fillStyle = '#2e1065';
-  ctx.fill();
-  ctx.stroke();
+  // B. Ala del sombrero (Púrpura medio con sombra rígida)
+  ctx.fillStyle = ROBE_DARK;
+  ctx.fillRect(-6 * P, ty - 4 * P, 6 * P, 1 * P);
+  ctx.fillStyle = ROBE_LIGHT;
+  ctx.fillRect(0 * P, ty - 4 * P, 6 * P, 1 * P);
 
-  // Estrella brillante en la punta del sombrero
-  ctx.beginPath();
-  ctx.arc(8 * scale, -28 * scale, 2 * scale, 0, Math.PI * 2);
-  ctx.fillStyle = '#fbbf24';
-  ctx.fill();
+  // C. Cinta dorada del sombrero
+  ctx.fillStyle = GOLD_TRIM;
+  ctx.fillRect(-4 * P, ty - 6 * P, 8 * P, 1 * P);
+  ctx.fillStyle = GOLD_BRIGHT;
+  ctx.fillRect(0 * P, ty - 6 * P, 3 * P, 1 * P);
 
-  // 6. Bastón Mágico del Mago
-  const staffAngle = isMoving ? Math.sin(time * 10) * 0.2 : 0;
-  const staffX = 12 * scale;
-  const staffY = 2 * scale;
+  // D. Cono del sombrero con quiebre angular (doblado hacia atrás)
+  // Base del cono
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-4 * P, ty - 8 * P, 8 * P, 2 * P);
+  ctx.fillStyle = ROBE_MID;
+  ctx.fillRect(-3 * P, ty - 8 * P, 6 * P, 2 * P);
+  ctx.fillStyle = ROBE_LIGHT;
+  ctx.fillRect(0 * P, ty - 8 * P, 3 * P, 2 * P);
 
-  ctx.save();
-  ctx.translate(staffX, staffY);
-  ctx.rotate(staffAngle);
+  // Sección media del sombrero
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-3 * P, ty - 11 * P, 6 * P, 3 * P);
+  ctx.fillStyle = ROBE_MID;
+  ctx.fillRect(-2 * P, ty - 11 * P, 4 * P, 3 * P);
+  ctx.fillStyle = ROBE_LIGHT;
+  ctx.fillRect(0 * P, ty - 11 * P, 2 * P, 3 * P);
 
-  // Mango de madera
-  ctx.beginPath();
-  ctx.moveTo(-1 * scale, -20 * scale);
-  ctx.lineTo(1 * scale, 14 * scale);
-  ctx.strokeStyle = '#78350f';
-  ctx.lineWidth = 2.5 * scale;
-  ctx.lineCap = 'round';
-  ctx.stroke();
+  // Quiebre angular superior (inclinado a la izquierda/atrás)
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-5 * P, ty - 13 * P, 4 * P, 2 * P);
+  ctx.fillStyle = ROBE_LIGHT;
+  ctx.fillRect(-4 * P, ty - 13 * P, 2 * P, 2 * P);
 
-  // Corona del bastón
-  ctx.beginPath();
-  ctx.arc(0, -22 * scale, 4 * scale, Math.PI * 0.2, Math.PI * 1.8);
-  ctx.strokeStyle = '#d97706';
-  ctx.lineWidth = 2 * scale;
-  ctx.stroke();
+  // Punta angular doblada
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-7 * P, ty - 14 * P, 3 * P, 2 * P);
+  ctx.fillStyle = GOLD_BRIGHT; // Pequeño remate o estrella en la punta
+  ctx.fillRect(-6 * P, ty - 13 * P, 1 * P, 1 * P);
 
-  // Orbe Elemental Brillante
-  const pulse = Math.sin(time * 6) * 1.5 * scale;
-  const castBoost = castAnimProgress > 0 ? 6 * scale : 0;
-  ctx.beginPath();
-  ctx.arc(0, -22 * scale, (4 * scale) + pulse + castBoost, 0, Math.PI * 2);
-  ctx.fillStyle = elem.orb;
-  ctx.shadowColor = elem.glow;
-  ctx.shadowBlur = (12 * scale) + (castAnimProgress * 20);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  // 6. BÁCULO RÚNICO CON GEMA ARDIENTE CUADRADA QUE PULSA EN 2 ESTADOS
+  const staffX = 5 * P + staffTilt * P;
+  const staffY = ty + 1 * P;
 
-  // Pequeñas chispas del orbe
-  if (Math.random() < 0.3) {
-    const sparkX = (Math.random() - 0.5) * 10 * scale;
-    const sparkY = -22 * scale + (Math.random() - 0.5) * 10 * scale;
-    ctx.beginPath();
-    ctx.arc(sparkX, sparkY, 1 * scale, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
+  // A. Mango de madera oscura (bloques de 1 píxel de ancho con sombra)
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(staffX - 1 * P, staffY - 9 * P, 3 * P, 16 * P);
+
+  ctx.fillStyle = STAFF_WOOD;
+  ctx.fillRect(staffX, staffY - 8 * P, 1 * P, 14 * P);
+
+  // Engaste / corona del báculo
+  ctx.fillStyle = STAFF_WOOD_DARK;
+  ctx.fillRect(staffX - 1 * P, staffY - 9 * P, 3 * P, 1 * P);
+
+  // B. Gema elemental cuadrada (remate del báculo)
+  // En estado 1: 2x2 píxeles
+  // En estado 2 (pulsación): 3x3 píxeles con halo de píxeles
+  if (isOrbPulsing) {
+    // Halo cuadrado exterior
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(staffX - 2 * P, staffY - 14 * P, 5 * P, 5 * P);
+    // Gema base
+    ctx.fillStyle = gemInfo.gemDark;
+    ctx.fillRect(staffX - 1 * P, staffY - 13 * P, 3 * P, 3 * P);
+    // Núcleo brillante
+    ctx.fillStyle = gemInfo.gemLight;
+    ctx.fillRect(staffX, staffY - 12 * P, 1 * P, 1 * P);
+  } else {
+    // Estado normal compacto
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(staffX - 1 * P, staffY - 13 * P, 3 * P, 4 * P);
+    ctx.fillStyle = gemInfo.gemDark;
+    ctx.fillRect(staffX, staffY - 12 * P, 2 * P, 2 * P);
+    ctx.fillStyle = gemInfo.gemLight;
+    ctx.fillRect(staffX, staffY - 12 * P, 1 * P, 1 * P);
   }
 
-  ctx.restore();
-
-  // Destello / Aura elemental al castear (60ms Elemental Flash sin artefactos rectangulares)
+  // 7. DESTELLO ELEMENTAL AL CASTEAR (Flash angular en píxeles, sin degradado difuminado)
   if (castFlashColor) {
-    ctx.save();
-    // Halo esférico difuminado centrado en el mago
-    const auraGrad = ctx.createRadialGradient(0, -6 * scale, 2 * scale, 0, -6 * scale, 24 * scale);
-    auraGrad.addColorStop(0, castFlashColor);
-    auraGrad.addColorStop(0.55, castFlashColor);
-    auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = auraGrad;
-    ctx.beginPath();
-    ctx.arc(0, -6 * scale, 24 * scale, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Micro-anillo sutil de onda expansiva
-    ctx.strokeStyle = castFlashColor;
-    ctx.lineWidth = 1.5 * scale;
-    ctx.beginPath();
-    ctx.arc(0, -6 * scale, 19 * scale, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    ctx.fillStyle = castFlashColor;
+    ctx.globalAlpha = 0.6;
+    // Anillo exterior de bloques pixelados en cruz
+    ctx.fillRect(-8 * P, ty - 6 * P, 2 * P, 2 * P);
+    ctx.fillRect(7 * P, ty - 6 * P, 2 * P, 2 * P);
+    ctx.fillRect(staffX - 1 * P, staffY - 16 * P, 3 * P, 2 * P);
+    ctx.fillRect(-1 * P, ty + 8 * P, 2 * P, 2 * P);
+    ctx.globalAlpha = 1.0;
   }
 
   ctx.restore();

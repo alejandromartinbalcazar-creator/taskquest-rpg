@@ -1,9 +1,10 @@
 import { GameEnemy } from './types';
 
 /**
- * Renderizado Procedural en Canvas 2D de "El Custodio del Umbral" (Threshold Custodian).
- * Cero sprites externos: torso colosal de roca rúnica, metal oxidado, engranajes visibles,
- * orbe central reactivo a fases, guanteletes flotantes desacoplados y telegrafiados tácticos.
+ * Renderizado Procedural en Canvas 2D en Pixel Art de 16 Bits de "El Custodio del Umbral" (Threshold Custodian).
+ * Escala monumental (grilla virtual de 48x48 píxeles escalada), bloques de piedra rúnica,
+ * metal oxidado, engranajes en píxeles, orbe central en rombo pixelado, guanteletes flotantes
+ * de piedra y telegrafiados tácticos sin suavizado.
  */
 
 export function drawThresholdCustodian(
@@ -18,6 +19,7 @@ export function drawThresholdCustodian(
   const isDefeated = cs?.isDefeated || false;
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.translate(boss.x, boss.y);
 
   // 1. SECUENCIA DE DERROTA: COLAPSO EN ESCOMBROS
@@ -27,65 +29,56 @@ export function drawThresholdCustodian(
     return;
   }
 
-  // 2. RUNA DE LEVITACIÓN Y SOMBRA ISOMÉTRICA EN EL SUELO
+  // Píxel virtual escalado para proporciones monumentales de 48x48
+  const P = Math.max(1, Math.round(r / 16));
+
+  // 2. RUNA DE LEVITACIÓN Y SOMBRA ISOMÉTRICA EN EL SUELO (PIXEL ART)
   ctx.save();
-  ctx.scale(1, 0.58); // Proyección isométrica
-
-  // Sombra elíptica
+  // Sombra pixelada en 3 bandas de píxeles
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.beginPath();
-  ctx.ellipse(0, r * 1.2, r * 1.55, r * 0.9, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(-18 * P, 14 * P, 36 * P, 2 * P);
+  ctx.fillRect(-22 * P, 16 * P, 44 * P, 4 * P);
+  ctx.fillRect(-18 * P, 20 * P, 36 * P, 2 * P);
 
-  // Runa concéntrica giratoria
-  const runeAngle = (now * 0.001) % (Math.PI * 2);
+  // Runa concéntrica giratoria en bloques pixelados
+  const runeAngle = Math.floor(now * 0.002 * 8) / 8;
   let runeStroke = '#ea580c';
   if (phase === 2) runeStroke = '#0284c7';
   if (phase === 3) runeStroke = '#7c3aed';
 
-  ctx.strokeStyle = runeStroke;
-  ctx.lineWidth = 2.0;
-  ctx.shadowColor = runeStroke;
-  ctx.shadowBlur = 10;
-
-  // Círculo exterior con marcas rúnicas
-  ctx.beginPath();
-  ctx.arc(0, r * 1.15, r * 1.35, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Rayos rúnicos giratorios
+  ctx.fillStyle = runeStroke;
+  // Anillo exterior de 8 bloques pixelados
   for (let i = 0; i < 8; i++) {
     const a = runeAngle + (i * Math.PI) / 4;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * (r * 1.05), r * 1.15 + Math.sin(a) * (r * 1.05));
-    ctx.lineTo(Math.cos(a) * (r * 1.35), r * 1.15 + Math.sin(a) * (r * 1.35));
-    ctx.stroke();
+    const rx = Math.round(Math.cos(a) * (18 * P));
+    const ry = Math.round(18 * P + Math.sin(a) * (9 * P));
+    ctx.fillRect(rx - 2 * P, ry - 1 * P, 4 * P, 2 * P);
   }
-  ctx.shadowBlur = 0;
   ctx.restore();
 
-  // 3. FLOTACIÓN SENOIDAL DEL TORSO
-  const floatY = Math.sin(now * 0.004) * 8;
+  // 3. FLOTACIÓN EN SALTOS RÍGIDOS DISCRETOS (Sin seno continuo suave)
+  const floatStep = Math.floor(now * 0.003) % 4;
+  const floatY = (floatStep === 1 ? -1 : floatStep === 3 ? 1 : 0) * P;
   ctx.translate(0, floatY);
 
   // 4. AURA ELEMENTAL DEL ESCUDO (Si no está quebrada)
   if (!isVulnerable) {
-    drawElementalShieldAura(ctx, r, phase, now);
+    drawElementalShieldAura(ctx, r, P, phase, now);
   }
 
-  // 5. ENGRANAJES MECÁNICOS VISIBLES EN EL CUELLO Y COSTADOS
-  drawMechanicalGears(ctx, r, now);
+  // 5. ENGRANAJES MECÁNICOS PIXELADOS EN EL CUELLO Y COSTADOS
+  drawMechanicalGears(ctx, P, now);
 
-  // 6. TORSO Y CORAZA DE ROCA ANCESTRAL Y METAL OXIDADO
-  drawArmoredTorso(ctx, boss, r, phase, isVulnerable, now);
+  // 6. TORSO Y CORAZA DE ROCA ANCESTRAL Y METAL OXIDADO (48x48)
+  drawArmoredTorso(ctx, boss, r, P, phase, isVulnerable, now);
 
   // 7. NÚCLEO ELEMENTAL CENTRAL PALPITANTE
-  drawCentralCore(ctx, r, phase, isVulnerable, now);
+  drawCentralCore(ctx, P, phase, isVulnerable, now);
 
   // 7.5 EFECTO PROCEDURAL DE ESCARCHA Y CONGELAMIENTO (Shader adaptado a la coraza de piedra)
   const isChilledOrFrozen = boss.statuses.some((s) => s.type === 'frozen' || s.type === 'slowed') || isVulnerable;
   if (isChilledOrFrozen) {
-    drawCustodianFrostShader(ctx, boss, r, now);
+    drawCustodianFrostShader(ctx, boss, P, now);
   }
 
   ctx.restore();
@@ -98,159 +91,80 @@ export function drawThresholdCustodian(
 }
 
 /**
- * Dibuja el aura protectora elemental del coloso.
+ * Dibuja el aura protectora elemental del coloso en bloques pixelados.
  */
 function drawElementalShieldAura(
   ctx: CanvasRenderingContext2D,
-  r: number,
+  _r: number,
+  P: number,
   phase: 1 | 2 | 3,
   now: number
 ) {
   ctx.save();
-  const pulse = 0.85 + 0.15 * Math.sin(now * 0.006);
+  const auraStep = Math.floor(now * 0.006) % 3;
 
   if (phase === 1) {
-    // Escudo de Magma: brasas y calor distorsionado
-    const grad = ctx.createRadialGradient(0, -r * 0.7, r * 0.5, 0, -r * 0.7, r * 1.8 * pulse);
-    grad.addColorStop(0, 'rgba(234, 88, 12, 0.35)');
-    grad.addColorStop(0.6, 'rgba(249, 115, 22, 0.18)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.7, r * 1.8 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Brasas flotantes
-    for (let i = 0; i < 4; i++) {
-      const spkAng = (now * 0.003 + (i * Math.PI) / 2) % (Math.PI * 2);
-      const spkDist = r * 1.25 + Math.sin(now * 0.008 + i) * 12;
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.arc(Math.cos(spkAng) * spkDist, -r * 0.7 + Math.sin(spkAng) * spkDist * 0.6, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Escudo de Magma: brasas cuadradas de 2x2
+    ctx.fillStyle = auraStep === 0 ? '#f97316' : '#fde047';
+    ctx.fillRect(-22 * P, -12 * P, 3 * P, 3 * P);
+    ctx.fillRect(20 * P, -10 * P, 3 * P, 3 * P);
+    ctx.fillRect(-18 * P, 4 * P, 2 * P, 2 * P);
+    ctx.fillRect(16 * P, 6 * P, 2 * P, 2 * P);
   } else if (phase === 2) {
-    // Coraza Glacial: halo ártico y cristales afilados
-    const grad = ctx.createRadialGradient(0, -r * 0.7, r * 0.5, 0, -r * 0.7, r * 1.7 * pulse);
-    grad.addColorStop(0, 'rgba(2, 132, 199, 0.4)');
-    grad.addColorStop(0.7, 'rgba(56, 189, 248, 0.15)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.7, r * 1.7 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Fragmentos de hielo flotantes
-    for (let i = 0; i < 4; i++) {
-      const cAng = (now * -0.0025 + (i * Math.PI) / 2) % (Math.PI * 2);
-      const cx = Math.cos(cAng) * (r * 1.3);
-      const cy = -r * 0.7 + Math.sin(cAng) * (r * 0.8);
-      ctx.fillStyle = '#e0f2fe';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 6);
-      ctx.lineTo(cx + 4, cy);
-      ctx.lineTo(cx, cy + 6);
-      ctx.lineTo(cx - 4, cy);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
+    // Coraza Glacial: diamantes de hielo en píxeles
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-23 * P, -14 * P, 4 * P, 4 * P);
+    ctx.fillRect(20 * P, -12 * P, 4 * P, 4 * P);
+    ctx.fillStyle = '#e0f2fe';
+    ctx.fillRect(-22 * P, -13 * P, 2 * P, 2 * P);
+    ctx.fillRect(21 * P, -11 * P, 2 * P, 2 * P);
   } else {
-    // Sobrecarga de Vacío: arcos eléctricos púrpuras
-    const grad = ctx.createRadialGradient(0, -r * 0.7, r * 0.5, 0, -r * 0.7, r * 1.8 * pulse);
-    grad.addColorStop(0, 'rgba(124, 58, 237, 0.45)');
-    grad.addColorStop(0.7, 'rgba(192, 132, 252, 0.2)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.7, r * 1.8 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Descargas eléctricas instantáneas
-    ctx.strokeStyle = '#f3e8ff';
-    ctx.lineWidth = 1.6;
-    for (let i = 0; i < 3; i++) {
-      const arcAng = now * 0.005 + i * 2.1;
-      const ax = Math.cos(arcAng) * (r * 1.15);
-      const ay = -r * 0.7 + Math.sin(arcAng) * (r * 0.85);
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax + (Math.random() - 0.5) * 16, ay + (Math.random() - 0.5) * 16);
-      ctx.lineTo(ax * 1.15, ay * 1.15);
-      ctx.stroke();
-    }
+    // Sobrecarga de Vacío: chispas púrpuras
+    ctx.fillStyle = '#c084fc';
+    ctx.fillRect(-24 * P, -8 * P, 3 * P, 3 * P);
+    ctx.fillRect(22 * P, -6 * P, 3 * P, 3 * P);
+    ctx.fillRect(0, -28 * P, 3 * P, 3 * P);
   }
   ctx.restore();
 }
 
 /**
- * Dibuja los engranajes mecánicos en las cavidades del coloso.
+ * Dibuja los engranajes mecánicos en bloques pixelados.
  */
-function drawMechanicalGears(ctx: CanvasRenderingContext2D, r: number, now: number) {
+function drawMechanicalGears(ctx: CanvasRenderingContext2D, P: number, now: number) {
   ctx.save();
-  const gearAng1 = (now * 0.002) % (Math.PI * 2);
-  const gearAng2 = -gearAng1 * 1.4;
+  const gearStep = Math.floor(now * 0.004) % 4;
 
-  // Engranaje clavícula izquierda
-  drawCog(ctx, -r * 0.55, -r * 1.15, 14, 8, gearAng1, '#78350f', '#d97706');
-  // Engranaje clavícula derecha
-  drawCog(ctx, r * 0.55, -r * 1.15, 14, 8, gearAng2, '#78350f', '#d97706');
-  // Engranaje central inferior
-  drawCog(ctx, 0, -r * 0.15, 18, 10, gearAng1 * 0.8, '#451a03', '#b45309');
-  ctx.restore();
-}
+  const drawPixelGear = (gx: number, gy: number) => {
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(gx - 3 * P, gy - 3 * P, 6 * P, 6 * P);
+    ctx.fillStyle = '#b45309';
+    ctx.fillRect(gx - 2 * P, gy - 2 * P, 4 * P, 4 * P);
+    // Dientes angulares
+    if (gearStep % 2 === 0) {
+      ctx.fillRect(gx - 4 * P, gy - 1 * P, 8 * P, 2 * P);
+      ctx.fillRect(gx - 1 * P, gy - 4 * P, 2 * P, 8 * P);
+    } else {
+      ctx.fillRect(gx - 3 * P, gy - 3 * P, 2 * P, 2 * P);
+      ctx.fillRect(gx + 1 * P, gy - 3 * P, 2 * P, 2 * P);
+      ctx.fillRect(gx - 3 * P, gy + 1 * P, 2 * P, 2 * P);
+      ctx.fillRect(gx + 1 * P, gy + 1 * P, 2 * P, 2 * P);
+    }
+  };
 
-function drawCog(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  teeth: number,
-  angle: number,
-  fillColor: string,
-  strokeColor: string
-) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = fillColor;
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1.5;
-
-  ctx.beginPath();
-  for (let i = 0; i < teeth; i++) {
-    const a = (i * Math.PI * 2) / teeth;
-    const aNext = ((i + 0.5) * Math.PI * 2) / teeth;
-    const aStep = ((i + 1) * Math.PI * 2) / teeth;
-
-    ctx.lineTo(Math.cos(a) * (radius * 0.78), Math.sin(a) * (radius * 0.78));
-    ctx.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
-    ctx.lineTo(Math.cos(aNext) * radius, Math.sin(aNext) * radius);
-    ctx.lineTo(Math.cos(aNext) * (radius * 0.78), Math.sin(aNext) * (radius * 0.78));
-    ctx.lineTo(Math.cos(aStep) * (radius * 0.78), Math.sin(aStep) * (radius * 0.78));
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Eje central
-  ctx.fillStyle = '#18181b';
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.32, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawPixelGear(-9 * P, -16 * P);
+  drawPixelGear(9 * P, -16 * P);
   ctx.restore();
 }
 
 /**
- * Dibuja el torso colosal de roca rúnica biselada y placas metálicas.
+ * Dibuja el torso colosal de roca rúnica biselada y placas metálicas en Pixel Art 16-Bit.
  */
 function drawArmoredTorso(
   ctx: CanvasRenderingContext2D,
   boss: GameEnemy,
-  r: number,
+  _r: number,
+  P: number,
   phase: 1 | 2 | 3,
   isVulnerable: boolean,
   now: number
@@ -258,297 +172,198 @@ function drawArmoredTorso(
   ctx.save();
 
   // Color de roca base con destello de golpe
-  const baseRock = boss.hitFlash > 0 ? '#ffffff' : '#27272a';
-  const rimColor = boss.hitFlash > 0 ? '#ffffff' : '#52525b';
-  const brassTrim = '#b45309';
+  const OUTLINE = '#0f172a';
+  const BASE_ROCK = boss.hitFlash > 0 ? '#ffffff' : '#27272a';
+  const LIGHT_ROCK = boss.hitFlash > 0 ? '#ffffff' : '#3f3f46';
+  const HIGHLIGHT_ROCK = boss.hitFlash > 0 ? '#ffffff' : '#52525b';
+  const BRASS_TRIM = '#b45309';
+  const BRASS_LIGHT = '#d97706';
 
-  ctx.fillStyle = baseRock;
-  ctx.strokeStyle = rimColor;
-  ctx.lineWidth = 2.5;
+  // 1. Contorno Monumental Exterior (Bloques escalonados de 48x48 píxeles)
+  ctx.fillStyle = OUTLINE;
+  // Hombros y corona
+  ctx.fillRect(-20 * P, -20 * P, 40 * P, 6 * P);
+  ctx.fillRect(-22 * P, -17 * P, 44 * P, 10 * P);
+  // Pecho y costillas
+  ctx.fillRect(-17 * P, -7 * P, 34 * P, 14 * P);
+  // Quilla inferior (estrechamiento hacia abajo)
+  ctx.fillRect(-12 * P, 7 * P, 24 * P, 6 * P);
+  ctx.fillRect(-7 * P, 13 * P, 14 * P, 4 * P);
 
-  // 1. Placa de Hombros y Cuello Monumental
-  ctx.beginPath();
-  ctx.moveTo(-r * 1.25, -r * 1.1); // Hombro izq
-  ctx.lineTo(-r * 0.85, -r * 1.7); // Borde superior izq
-  ctx.lineTo(-r * 0.35, -r * 1.9); // Cuello izq
-  ctx.lineTo(0, -r * 2.05);        // Cima yelmo/corona
-  ctx.lineTo(r * 0.35, -r * 1.9);  // Cuello der
-  ctx.lineTo(r * 0.85, -r * 1.7);  // Borde superior der
-  ctx.lineTo(r * 1.25, -r * 1.1);  // Hombro der
-  ctx.lineTo(r * 0.95, -r * 0.5);  // Clavícula baja der
-  ctx.lineTo(r * 0.65, -r * 0.3);  // Costillar der
-  ctx.lineTo(r * 0.45, 0.1 * r);   // Cintura der
-  ctx.lineTo(0, 0.45 * r);         // Quilla inferior (sin piernas)
-  ctx.lineTo(-r * 0.45, 0.1 * r);  // Cintura izq
-  ctx.lineTo(-r * 0.65, -r * 0.3); // Costillar izq
-  ctx.lineTo(-r * 0.95, -r * 0.5); // Clavícula baja izq
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  // 2. Relleno de roca ancestral
+  ctx.fillStyle = BASE_ROCK;
+  ctx.fillRect(-19 * P, -19 * P, 38 * P, 5 * P);
+  ctx.fillRect(-21 * P, -16 * P, 42 * P, 8 * P);
+  ctx.fillRect(-16 * P, -6 * P, 32 * P, 12 * P);
+  ctx.fillRect(-11 * P, 6 * P, 22 * P, 6 * P);
+  ctx.fillRect(-6 * P, 12 * P, 12 * P, 4 * P);
 
-  // 2. Hombreras de piedra biselada
-  ctx.fillStyle = '#3f3f46';
-  ctx.strokeStyle = brassTrim;
-  ctx.lineWidth = 2.0;
+  // 3. Biseles de luz superior (efecto de volumen 16-bit)
+  ctx.fillStyle = HIGHLIGHT_ROCK;
+  ctx.fillRect(-19 * P, -19 * P, 38 * P, 1 * P);
+  ctx.fillRect(-21 * P, -16 * P, 42 * P, 1 * P);
+  ctx.fillRect(-16 * P, -6 * P, 32 * P, 1 * P);
 
-  // Hombrera Izquierda
-  ctx.beginPath();
-  ctx.moveTo(-r * 1.35, -r * 1.15);
-  ctx.lineTo(-r * 1.1, -r * 1.6);
-  ctx.lineTo(-r * 0.6, -r * 1.45);
-  ctx.lineTo(-r * 0.85, -r * 0.95);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  // 4. Hombreras de piedra biselada con borde de bronce
+  ctx.fillStyle = BRASS_TRIM;
+  ctx.fillRect(-22 * P, -16 * P, 6 * P, 7 * P);
+  ctx.fillRect(16 * P, -16 * P, 6 * P, 7 * P);
 
-  // Hombrera Derecha
-  ctx.beginPath();
-  ctx.moveTo(r * 1.35, -r * 1.15);
-  ctx.lineTo(r * 1.1, -r * 1.6);
-  ctx.lineTo(r * 0.6, -r * 1.45);
-  ctx.lineTo(r * 0.85, -r * 0.95);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = BRASS_LIGHT;
+  ctx.fillRect(-21 * P, -15 * P, 4 * P, 5 * P);
+  ctx.fillRect(17 * P, -15 * P, 4 * P, 5 * P);
 
-  // 3. Corona / Visera con Ojos Rúnicos
-  ctx.fillStyle = '#18181b';
-  ctx.strokeStyle = rimColor;
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.35, -r * 1.75);
-  ctx.lineTo(0, -r * 1.95);
-  ctx.lineTo(r * 0.35, -r * 1.75);
-  ctx.lineTo(r * 0.25, -r * 1.5);
-  ctx.lineTo(-r * 0.25, -r * 1.5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  // 5. Glifos rúnicos tallados en bajo relieve pixelado
+  ctx.fillStyle = phase === 1 ? '#ea580c' : phase === 2 ? '#38bdf8' : '#c084fc';
+  // Glifo hombro izq
+  ctx.fillRect(-14 * P, -14 * P, 2 * P, 4 * P);
+  ctx.fillRect(-16 * P, -12 * P, 6 * P, 1 * P);
+  // Glifo hombro der
+  ctx.fillRect(12 * P, -14 * P, 2 * P, 4 * P);
+  ctx.fillRect(10 * P, -12 * P, 6 * P, 1 * P);
+  // Glifos laterales del torso
+  ctx.fillRect(-14 * P, 0, 3 * P, 2 * P);
+  ctx.fillRect(11 * P, 0, 3 * P, 2 * P);
 
-  // Ojos rúnicos brillantes
+  // 6. Corona / Yelmo central con Visera Oscura
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-6 * P, -25 * P, 12 * P, 7 * P);
+  ctx.fillStyle = LIGHT_ROCK;
+  ctx.fillRect(-5 * P, -24 * P, 10 * P, 5 * P);
+  ctx.fillStyle = BRASS_TRIM;
+  ctx.fillRect(-2 * P, -26 * P, 4 * P, 3 * P); // Cresta superior
+
+  // Visera oscura
+  ctx.fillStyle = '#090a10';
+  ctx.fillRect(-4 * P, -22 * P, 8 * P, 3 * P);
+
+  // Ojos rúnicos brillantes de 2 píxeles
   let eyeColor = '#ea580c';
   if (phase === 2) eyeColor = '#00f0ff';
   if (phase === 3) eyeColor = '#c084fc';
   if (isVulnerable) eyeColor = '#64748b';
 
   ctx.fillStyle = eyeColor;
-  ctx.shadowColor = eyeColor;
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.ellipse(-r * 0.12, -r * 1.62, 3.5, 2.2, 0, 0, Math.PI * 2);
-  ctx.ellipse(r * 0.12, -r * 1.62, 3.5, 2.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.fillRect(-3 * P, -21 * P, 2 * P, 1 * P);
+  ctx.fillRect(1 * P, -21 * P, 2 * P, 1 * P);
 
-  // 4. Grietas de armadura fracturada en FASE 3 (Sobrecarga de Vacío)
+  // 7. Grietas fracturadas en Fase 3
   if (phase === 3) {
-    const crackPulse = 0.75 + 0.25 * Math.sin(now * 0.008);
-    ctx.strokeStyle = '#c084fc';
-    ctx.lineWidth = 2.2 * crackPulse;
-    ctx.shadowColor = '#c084fc';
-    ctx.shadowBlur = 6 * crackPulse;
-    ctx.beginPath();
-    // Grieta hombro izq
-    ctx.moveTo(-r * 0.8, -r * 1.4);
-    ctx.lineTo(-r * 0.5, -r * 1.1);
-    ctx.lineTo(-r * 0.3, -r * 0.85);
-    // Grieta costado der
-    ctx.moveTo(r * 0.75, -r * 1.0);
-    ctx.lineTo(r * 0.45, -r * 0.75);
-    ctx.lineTo(r * 0.3, -r * 0.45);
-    // Grieta inferior
-    ctx.moveTo(-r * 0.2, -r * 0.35);
-    ctx.lineTo(0, 0.15 * r);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    const crackBlink = Math.floor(now * 0.008) % 2 === 0;
+    ctx.fillStyle = crackBlink ? '#c084fc' : '#ffffff';
+    ctx.fillRect(-10 * P, -10 * P, 2 * P, 3 * P);
+    ctx.fillRect(-8 * P, -7 * P, 2 * P, 2 * P);
+    ctx.fillRect(7 * P, -9 * P, 2 * P, 4 * P);
+    ctx.fillRect(5 * P, -5 * P, 2 * P, 2 * P);
   }
 
   ctx.restore();
 }
 
 /**
- * Dibuja el orbe central incrustado en el pecho del Custodio.
+ * Dibuja el orbe central incrustado en el pecho del Custodio en Pixel Art.
  */
 function drawCentralCore(
   ctx: CanvasRenderingContext2D,
-  r: number,
+  P: number,
   phase: 1 | 2 | 3,
   isVulnerable: boolean,
   now: number
 ) {
   ctx.save();
-  const coreY = -r * 0.85;
-  const coreR = r * 0.38;
+  const OUTLINE = '#0f172a';
+  const coreY = -5 * P;
 
-  // Cavidad metálica biselada
-  ctx.fillStyle = '#09090b';
-  ctx.strokeStyle = '#71717a';
-  ctx.lineWidth = 3.0;
-  ctx.beginPath();
-  ctx.arc(0, coreY, coreR * 1.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  // Cavidad metálica biselada (octágono pixelado)
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-8 * P, coreY - 6 * P, 16 * P, 12 * P);
+  ctx.fillRect(-9 * P, coreY - 4 * P, 18 * P, 8 * P);
 
-  // Si está vulnerable / noqueado: núcleo apagado con humo
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(-7 * P, coreY - 5 * P, 14 * P, 10 * P);
+  ctx.fillRect(-8 * P, coreY - 3 * P, 16 * P, 6 * P);
+
   if (isVulnerable) {
-    const pulseWarn = 0.5 + 0.5 * Math.sin(now * 0.015);
-    ctx.fillStyle = `rgba(234, 179, 8, ${0.4 * pulseWarn})`;
-    ctx.beginPath();
-    ctx.arc(0, coreY, coreR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#eab308';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Núcleo apagado o parpadeante
+    const warnBlink = Math.floor(now * 0.01) % 2 === 0;
+    ctx.fillStyle = warnBlink ? '#facc15' : '#71717a';
+    ctx.fillRect(-4 * P, coreY - 3 * P, 8 * P, 6 * P);
     ctx.restore();
     return;
   }
 
-  // Gradiente radial del núcleo según la fase activa
-  const coreGrad = ctx.createRadialGradient(0, coreY, 2, 0, coreY, coreR);
+  // Paleta de la gema elemental central
+  let coreDark = '#ea580c';
+  let coreMid = '#f97316';
+  let coreLight = '#fde047';
 
-  if (phase === 1) {
-    // Fase 1: Magma incandescente
-    coreGrad.addColorStop(0, '#fff7ed');
-    coreGrad.addColorStop(0.35, '#f97316');
-    coreGrad.addColorStop(0.85, '#ea580c');
-    coreGrad.addColorStop(1, '#9a3412');
-    ctx.shadowColor = '#ea580c';
-  } else if (phase === 2) {
-    // Fase 2: Glaciar ártico
-    coreGrad.addColorStop(0, '#f0f9ff');
-    coreGrad.addColorStop(0.35, '#38bdf8');
-    coreGrad.addColorStop(0.85, '#0284c7');
-    coreGrad.addColorStop(1, '#0369a1');
-    ctx.shadowColor = '#38bdf8';
-  } else {
-    // Fase 3: Vacío inestable
-    coreGrad.addColorStop(0, '#faf5ff');
-    coreGrad.addColorStop(0.35, '#c084fc');
-    coreGrad.addColorStop(0.85, '#7c3aed');
-    coreGrad.addColorStop(1, '#581c87');
-    ctx.shadowColor = '#c084fc';
+  if (phase === 2) {
+    coreDark = '#0284c7';
+    coreMid = '#38bdf8';
+    coreLight = '#e0f2fe';
+  } else if (phase === 3) {
+    coreDark = '#7c3aed';
+    coreMid = '#c084fc';
+    coreLight = '#faf5ff';
   }
 
-  ctx.shadowBlur = 14;
-  ctx.fillStyle = coreGrad;
-  ctx.beginPath();
-  ctx.arc(0, coreY, coreR, 0, Math.PI * 2);
-  ctx.fill();
+  // Gema en rombo/octágono de píxeles
+  ctx.fillStyle = coreDark;
+  ctx.fillRect(-5 * P, coreY - 4 * P, 10 * P, 8 * P);
+  ctx.fillRect(-6 * P, coreY - 2 * P, 12 * P, 4 * P);
 
-  // Borde rúnico del orbe
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.arc(0, coreY, coreR * 0.65, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = coreMid;
+  ctx.fillRect(-3 * P, coreY - 3 * P, 6 * P, 6 * P);
+
+  // Destello en 2 estados discretos
+  const pulse = Math.floor(now * 0.005) % 2 === 0;
+  if (pulse) {
+    ctx.fillStyle = coreLight;
+    ctx.fillRect(-1 * P, coreY - 2 * P, 3 * P, 3 * P);
+  }
 
   ctx.restore();
 }
 
 /**
  * Renderiza el efecto procedural de escarcha y congelamiento sobre el coloso.
- * Cero cajas rectangulares: silueta translúcida adaptada al modelo de piedra,
- * cristales afilados en los bordes de hombreras y vaho ascendente desde el núcleo.
+ * Cubre el coloso con fragmentos y picos cuadrados celestes respetando su contorno sin cajas sólidas.
  */
 function drawCustodianFrostShader(
   ctx: CanvasRenderingContext2D,
   _boss: GameEnemy,
-  r: number,
-  now: number
+  P: number,
+  _now: number
 ) {
   ctx.save();
 
-  // 1. Tinte gélido translúcido adaptado a la forma exacta de la coraza
-  ctx.save();
-  ctx.globalAlpha = 0.35;
+  // Fragmentos y picos cuadrados celestes (#38BDF8, #E0F2FE) siguiendo las aristas de la armadura
   ctx.fillStyle = '#38bdf8';
-  ctx.strokeStyle = '#e0f2fe';
-  ctx.lineWidth = 2.0;
+  // Picos en hombrera izquierda
+  ctx.fillRect(-24 * P, -16 * P, 3 * P, 3 * P);
+  ctx.fillRect(-22 * P, -18 * P, 2 * P, 2 * P);
+  ctx.fillRect(-20 * P, -21 * P, 2 * P, 2 * P);
 
-  ctx.beginPath();
-  ctx.moveTo(-r * 1.25, -r * 1.1); // Hombro izq
-  ctx.lineTo(-r * 0.85, -r * 1.7); // Borde superior izq
-  ctx.lineTo(-r * 0.35, -r * 1.9); // Cuello izq
-  ctx.lineTo(0, -r * 2.05);        // Cima yelmo/corona
-  ctx.lineTo(r * 0.35, -r * 1.9);  // Cuello der
-  ctx.lineTo(r * 0.85, -r * 1.7);  // Borde superior der
-  ctx.lineTo(r * 1.25, -r * 1.1);  // Hombro der
-  ctx.lineTo(r * 0.95, -r * 0.5);  // Clavícula baja der
-  ctx.lineTo(r * 0.65, -r * 0.3);  // Costillar der
-  ctx.lineTo(r * 0.45, 0.1 * r);   // Cintura der
-  ctx.lineTo(0, 0.45 * r);         // Quilla inferior
-  ctx.lineTo(-r * 0.45, 0.1 * r);  // Cintura izq
-  ctx.lineTo(-r * 0.65, -r * 0.3); // Costillar izq
-  ctx.lineTo(-r * 0.95, -r * 0.5); // Clavícula baja izq
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
+  // Picos en hombrera derecha
+  ctx.fillRect(21 * P, -16 * P, 3 * P, 3 * P);
+  ctx.fillRect(20 * P, -18 * P, 2 * P, 2 * P);
+  ctx.fillRect(18 * P, -21 * P, 2 * P, 2 * P);
 
-  // 2. Cristales y púas vectoriales afiladas en los bordes de las hombreras de piedra
-  ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = 'rgba(224, 242, 254, 0.9)';
-  ctx.strokeStyle = '#38bdf8';
-  ctx.lineWidth = 1.6;
-
-  // Cristales en hombrera izquierda
-  const leftSpikes = [
-    { bx: -r * 1.35, by: -r * 1.15, tx: -r * 1.55, ty: -r * 1.3 },
-    { bx: -r * 1.2, by: -r * 1.45, tx: -r * 1.42, ty: -r * 1.65 },
-    { bx: -r * 0.95, by: -r * 1.65, tx: -r * 1.1, ty: -r * 1.88 },
-  ];
-  leftSpikes.forEach((sp) => {
-    ctx.beginPath();
-    ctx.moveTo(sp.bx, sp.by + 6);
-    ctx.lineTo(sp.tx, sp.ty);
-    ctx.lineTo(sp.bx + 8, sp.by);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  });
-
-  // Cristales en hombrera derecha
-  const rightSpikes = [
-    { bx: r * 1.35, by: -r * 1.15, tx: r * 1.55, ty: -r * 1.3 },
-    { bx: r * 1.2, by: -r * 1.45, tx: r * 1.42, ty: -r * 1.65 },
-    { bx: r * 0.95, by: -r * 1.65, tx: r * 1.1, ty: -r * 1.88 },
-  ];
-  rightSpikes.forEach((sp) => {
-    ctx.beginPath();
-    ctx.moveTo(sp.bx, sp.by + 6);
-    ctx.lineTo(sp.tx, sp.ty);
-    ctx.lineTo(sp.bx - 8, sp.by);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  });
-  ctx.restore();
-
-  // 3. Vaho y vapor frío ascendente desde su núcleo
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  for (let v = 0; v < 4; v++) {
-    const vPhase = ((now * 0.0018 + v * 0.25) % 1.0);
-    const vx = Math.sin(now * 0.005 + v * 1.8) * (r * 0.35);
-    const vy = -r * 0.8 - vPhase * (r * 0.9);
-    const vRadius = 8 + vPhase * 16;
-    const vGrad = ctx.createRadialGradient(vx, vy, 1, vx, vy, vRadius);
-    vGrad.addColorStop(0, 'rgba(224, 242, 254, 0.45)');
-    vGrad.addColorStop(0.6, 'rgba(56, 189, 248, 0.25)');
-    vGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-    ctx.fillStyle = vGrad;
-    ctx.beginPath();
-    ctx.arc(vx, vy, vRadius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  // Escarcha dispersa sobre placas de roca
+  ctx.fillStyle = '#e0f2fe';
+  ctx.fillRect(-15 * P, -15 * P, 2 * P, 2 * P);
+  ctx.fillRect(-12 * P, -8 * P, 3 * P, 2 * P);
+  ctx.fillRect(10 * P, -14 * P, 2 * P, 2 * P);
+  ctx.fillRect(12 * P, -7 * P, 3 * P, 2 * P);
+  ctx.fillRect(-4 * P, 2 * P, 3 * P, 2 * P);
+  ctx.fillRect(2 * P, 3 * P, 3 * P, 2 * P);
+  ctx.fillRect(-2 * P, 8 * P, 4 * P, 2 * P);
 
   ctx.restore();
 }
 
 /**
- * Dibuja un guantelete monumental flotante e independiente.
+ * Dibuja un guantelete monumental flotante e independiente en Pixel Art 16-Bit.
  */
 function drawFloatingGauntlet(
   ctx: CanvasRenderingContext2D,
@@ -560,124 +375,99 @@ function drawFloatingGauntlet(
   _side: -1 | 1
 ) {
   ctx.save();
-  ctx.translate(g.x, g.y);
+  ctx.translate(Math.round(g.x), Math.round(g.y));
   ctx.rotate(g.angle);
 
-  const gw = 28;
-  const gh = 38;
+  const OUTLINE = '#0f172a';
+  const STONE_DARK = hitFlash > 0 ? '#ffffff' : '#27272a';
+  const STONE_MID = hitFlash > 0 ? '#ffffff' : '#3f3f46';
+  const BRASS = '#b45309';
 
-  // Sombra proyectada del guantelete en el suelo
+  // Sombra del guantelete en el suelo
   ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.beginPath();
-  ctx.ellipse(0, 48, gw * 1.1, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(-14, 40, 28, 6);
+  ctx.fillRect(-10, 46, 20, 4);
 
-  // Base del guantelete
-  ctx.fillStyle = hitFlash > 0 ? '#ffffff' : '#3f3f46';
-  ctx.strokeStyle = '#71717a';
-  ctx.lineWidth = 2.0;
+  // Antebrazo de piedra (bloque rectangular biselado)
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-16, -20, 32, 42);
 
-  // Bloque principal del antebrazo
-  ctx.beginPath();
-  ctx.roundRect(-gw / 2, -gh / 2, gw, gh, [6, 6, 4, 4]);
-  ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = STONE_MID;
+  ctx.fillRect(-14, -18, 28, 38);
 
-  // Brazalete de bronce/oro
-  ctx.fillStyle = '#b45309';
-  ctx.fillRect(-gw / 2, -gh / 2, gw, 8);
+  // Brazalete de bronce
+  ctx.fillStyle = BRASS;
+  ctx.fillRect(-14, -18, 28, 8);
 
-  // Nudillos tallados en piedra rúnica
-  ctx.fillStyle = '#27272a';
-  ctx.strokeStyle = '#52525b';
-  ctx.lineWidth = 1.5;
-
-  const knuckleY = gh / 2 - 6;
+  // Nudillos cuadrados de piedra rúnica
+  ctx.fillStyle = STONE_DARK;
   for (let k = 0; k < 3; k++) {
-    const kx = -gw / 2 + 5 + k * 9;
-    ctx.beginPath();
-    ctx.roundRect(kx, knuckleY, 8, 12, 3);
-    ctx.fill();
-    ctx.stroke();
+    const kx = -13 + k * 9;
+    ctx.fillRect(kx, 14, 8, 10);
   }
 
-  // Gemas rúnicas en el dorso de la mano que brillan según la fase
+  // Gema rúnica en el dorso que pulsa en 2 estados
   let gemColor = '#ea580c';
   if (phase === 2) gemColor = '#38bdf8';
   if (phase === 3) gemColor = '#c084fc';
   if (isVulnerable) gemColor = '#64748b';
 
-  const gemPulse = 0.8 + 0.2 * Math.sin(now * 0.007);
+  const isGemPulsing = Math.floor(now * 0.007) % 2 === 0;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-5, -4, 10, 10);
   ctx.fillStyle = gemColor;
-  ctx.shadowColor = gemColor;
-  ctx.shadowBlur = 8 * gemPulse;
-  ctx.beginPath();
-  ctx.arc(0, -2, 5 * gemPulse, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.fillRect(-3, -2, 6, 6);
+  if (isGemPulsing) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1, 0, 2, 2);
+  }
 
   ctx.restore();
 }
 
 /**
- * Animación de colapso en escombros tras la derrota.
+ * Animación de colapso en escombros de piedra tras la derrota en Pixel Art.
  */
-function drawDefeatedRubble(ctx: CanvasRenderingContext2D, boss: GameEnemy, now: number) {
+function drawDefeatedRubble(ctx: CanvasRenderingContext2D, boss: GameEnemy, _now: number) {
   ctx.save();
   const cs = boss.custodianState;
   const dt = cs ? Math.min(60, cs.defeatTimer) : 30;
-  const collapseProg = dt / 60; // 0..1
+  const collapseProg = dt / 60;
 
-  // Sombra en dispersión
-  ctx.fillStyle = `rgba(0, 0, 0, ${0.5 * (1 - collapseProg * 0.5)})`;
-  ctx.beginPath();
-  ctx.ellipse(0, 30, boss.radius * 1.6, boss.radius * 0.7, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Sombra
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(-28, 20, 56, 12);
 
-  // Fragmentos de roca derrumbados en el suelo
+  // Fragmentos de roca derrumbados
   const rockOffsets = [
-    { x: -35, y: 15, w: 28, h: 22, rot: 0.3 },
-    { x: 30, y: 20, w: 32, h: 24, rot: -0.4 },
-    { x: -10, y: 35, w: 40, h: 26, rot: 0.1 },
-    { x: -50, y: 30, w: 20, h: 18, rot: 0.6 },
-    { x: 45, y: 28, w: 24, h: 20, rot: -0.5 },
+    { x: -30, y: 12, w: 24, h: 18 },
+    { x: 26, y: 16, w: 26, h: 20 },
+    { x: -8, y: 24, w: 34, h: 22 },
+    { x: -44, y: 22, w: 18, h: 14 },
+    { x: 38, y: 22, w: 20, h: 16 },
   ];
 
-  ctx.fillStyle = '#27272a';
-  ctx.strokeStyle = '#52525b';
-  ctx.lineWidth = 2.0;
-
+  ctx.fillStyle = '#0f172a';
   rockOffsets.forEach((rock) => {
-    ctx.save();
-    ctx.translate(rock.x * collapseProg, rock.y * collapseProg);
-    ctx.rotate(rock.rot);
-    ctx.beginPath();
-    ctx.rect(-rock.w / 2, -rock.h / 2, rock.w, rock.h);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+    ctx.fillRect(rock.x * collapseProg - rock.w / 2 - 1, rock.y * collapseProg - rock.h / 2 - 1, rock.w + 2, rock.h + 2);
   });
 
-  // Núcleo apagado en el centro entre escombros
-  ctx.fillStyle = '#18181b';
-  ctx.strokeStyle = '#3f3f46';
-  ctx.beginPath();
-  ctx.arc(0, 20, 16, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = '#27272a';
+  rockOffsets.forEach((rock) => {
+    ctx.fillRect(rock.x * collapseProg - rock.w / 2, rock.y * collapseProg - rock.h / 2, rock.w, rock.h);
+  });
 
-  // Humo disipándose
-  ctx.fillStyle = 'rgba(100, 116, 139, 0.25)';
-  ctx.beginPath();
-  ctx.arc(Math.sin(now * 0.002) * 10, -collapseProg * 25, 25 + collapseProg * 15, 0, Math.PI * 2);
-  ctx.fill();
+  // Núcleo apagado en el centro
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(-8, 12, 16, 16);
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(-6, 14, 12, 12);
 
   ctx.restore();
 }
 
 /**
  * Renderizado de todos los telegrafiados del Custodio (Fisura, Estalagmitas, Nova y Juicio).
- * Se dibujan sobre la capa de suelo antes de las entidades.
  */
 export function drawCustodianTelegraphs(
   ctx: CanvasRenderingContext2D,
@@ -693,7 +483,6 @@ export function drawCustodianTelegraphs(
     const prog = Math.min(1.0, ft.timer / ft.maxTimer);
 
     ctx.save();
-    // Banda telegrafiada en perspectiva
     const dx = ft.x2 - ft.x1;
     const dy = ft.y2 - ft.y1;
     const angle = Math.atan2(dy, dx);
@@ -702,27 +491,21 @@ export function drawCustodianTelegraphs(
     ctx.translate(ft.x1, ft.y1);
     ctx.rotate(angle);
 
-    // Fondo brillante que parpadea
-    const flash = 0.25 + 0.25 * Math.sin(now * 0.02);
-    ctx.fillStyle = ft.hasErupted ? 'rgba(239, 68, 68, 0.75)' : `rgba(234, 88, 12, ${flash + prog * 0.35})`;
+    const flash = Math.floor(now * 0.02) % 2 === 0;
+    ctx.fillStyle = ft.hasErupted ? 'rgba(239, 68, 68, 0.85)' : flash ? 'rgba(234, 88, 12, 0.55)' : 'rgba(234, 88, 12, 0.35)';
     ctx.fillRect(0, -ft.width / 2, len, ft.width);
 
-    // Borde de peligro
     ctx.strokeStyle = ft.hasErupted ? '#ffffff' : '#ea580c';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.strokeRect(0, -ft.width / 2, len, ft.width);
 
-    // Si ha brotado la columna de lava: llamaradas verticales
+    // Llamaradas verticales de bloques si ha brotado
     if (ft.hasErupted) {
-      for (let s = 0; s < 12; s++) {
-        const lx = (s + 0.5) * (len / 12);
-        const flameH = 45 + Math.sin(now * 0.02 + s) * 20;
-        ctx.fillStyle = s % 2 === 0 ? '#ffedd5' : '#f97316';
-        ctx.beginPath();
-        ctx.moveTo(lx - 12, -ft.width / 4);
-        ctx.lineTo(lx, -flameH);
-        ctx.lineTo(lx + 12, -ft.width / 4);
-        ctx.fill();
+      for (let s = 0; s < 10; s++) {
+        const lx = s * (len / 10);
+        const flameH = 40 + (s % 3) * 12;
+        ctx.fillStyle = s % 2 === 0 ? '#fde047' : '#ea580c';
+        ctx.fillRect(lx, -ft.width / 2 - flameH, len / 10 - 2, flameH);
       }
     }
     ctx.restore();
@@ -734,36 +517,23 @@ export function drawCustodianTelegraphs(
       const prog = Math.min(1.0, st.timer / st.maxTimer);
       ctx.save();
       ctx.translate(st.x, st.y);
-      ctx.scale(1, 0.58);
 
-      // Círculo base de advertencia
-      ctx.fillStyle = `rgba(2, 132, 199, ${0.15 + prog * 0.3})`;
+      // Bloques de advertencia en octágono
+      ctx.fillStyle = `rgba(2, 132, 199, ${0.2 + prog * 0.35})`;
+      ctx.fillRect(-st.radius, -st.radius * 0.58, st.radius * 2, st.radius * 1.16);
+
       ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      ctx.arc(0, 0, st.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-st.radius, -st.radius * 0.58, st.radius * 2, st.radius * 1.16);
 
-      // Indicador radial de cuenta atrás
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, st.radius * (1 - prog), 0, Math.PI * 2);
-      ctx.fill();
-
-      // Si ha detonado: aguja de hielo clavada en el suelo
+      // Si ha detonado: aguja de hielo en bloque angular clavada en el suelo
       if (st.detonated) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-11, -62, 22, 64);
         ctx.fillStyle = '#e0f2fe';
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-10, 0);
-        ctx.lineTo(0, -60);
-        ctx.lineTo(10, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+        ctx.fillRect(-9, -60, 18, 60);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-4, -55, 8, 50);
       }
       ctx.restore();
     });
@@ -776,25 +546,18 @@ export function drawCustodianTelegraphs(
 
     ctx.save();
     ctx.translate(nt.x, nt.y);
-    ctx.scale(1, 0.58);
 
-    // Área máxima delimitada
+    // Área delimitada
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.arc(0, 0, nt.maxRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-nt.maxRadius, -nt.maxRadius * 0.58, nt.maxRadius * 2, nt.maxRadius * 1.16);
 
-    // Onda expansiva en crecimiento
+    // Onda expansiva en crecimiento de píxeles
     ctx.fillStyle = `rgba(6, 182, 212, ${0.15 + prog * 0.35})`;
+    ctx.fillRect(-nt.currentRadius, -nt.currentRadius * 0.58, nt.currentRadius * 2, nt.currentRadius * 1.16);
     ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 3.0;
-    ctx.beginPath();
-    ctx.arc(0, 0, nt.currentRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-nt.currentRadius, -nt.currentRadius * 0.58, nt.currentRadius * 2, nt.currentRadius * 1.16);
     ctx.restore();
   }
 
@@ -804,50 +567,30 @@ export function drawCustodianTelegraphs(
     const prog = Math.min(1.0, jt.timer / jt.maxTimer);
 
     ctx.save();
-    // Cuadrícula roja de peligro en toda la arena
-    const pulseDanger = 0.15 + 0.15 * Math.sin(now * 0.015);
-    ctx.fillStyle = `rgba(239, 68, 68, ${pulseDanger + prog * 0.15})`;
-    ctx.beginPath();
-    ctx.arc(jt.bossX, jt.bossY, jt.dangerRadius, 0, Math.PI * 2);
-    ctx.fill();
+    const flashDanger = Math.floor(now * 0.015) % 2 === 0;
+    ctx.fillStyle = flashDanger ? 'rgba(239, 68, 68, 0.35)' : 'rgba(185, 28, 28, 0.2)';
+    ctx.fillRect(jt.bossX - jt.dangerRadius, jt.bossY - jt.dangerRadius * 0.58, jt.dangerRadius * 2, jt.dangerRadius * 1.16);
 
-    // 2 Zonas Seguras Rúnicas Resplandecientes
+    // Zonas Seguras Rúnicas
     jt.safeZones.forEach((zone) => {
       ctx.save();
       ctx.translate(zone.x, zone.y);
-      ctx.scale(1, 0.58);
 
-      // Fondo dorado/azul protector
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.35)';
+      // Borde de piedra verde
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-zone.radius - 2, (-zone.radius * 0.58) - 2, (zone.radius * 2) + 4, (zone.radius * 1.16) + 4);
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.4)';
+      ctx.fillRect(-zone.radius, -zone.radius * 0.58, zone.radius * 2, zone.radius * 1.16);
       ctx.strokeStyle = '#4ade80';
-      ctx.lineWidth = 3.0;
-      ctx.shadowColor = '#4ade80';
-      ctx.shadowBlur = 12;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-zone.radius, -zone.radius * 0.58, zone.radius * 2, zone.radius * 1.16);
 
-      ctx.beginPath();
-      ctx.arc(0, 0, zone.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Círculo rúnico interior giratorio
-      const zRot = (now * 0.003) % (Math.PI * 2);
-      ctx.save();
-      ctx.rotate(zRot);
-      ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, zone.radius * 0.7, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // Texto de auxilio táctico en la zona segura
-      ctx.scale(1, 1 / 0.58);
-      ctx.font = 'bold 11px sans-serif';
+      // Texto en tipografía bitmap
+      ctx.font = '8px "Press Start 2P", monospace';
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🛡️ ZONA SEGURA', 0, 0);
-      ctx.shadowBlur = 0;
+      ctx.fillText('ZONA SEGURA', 0, 0);
       ctx.restore();
     });
 
@@ -856,7 +599,7 @@ export function drawCustodianTelegraphs(
 }
 
 /**
- * Renderizado de la barra de salud dedicada superior del Custodio del Umbral.
+ * Renderizado de la barra de salud dedicada superior del Custodio del Umbral en 16-Bit Pixel Art.
  */
 export function drawCustodianHUD(
   ctx: CanvasRenderingContext2D,
@@ -868,85 +611,91 @@ export function drawCustodianHUD(
   const isVulnerable = cs?.isShieldBroken || false;
   const now = performance.now();
 
-  const barW = Math.min(width * 0.72, 460);
+  const barW = Math.min(width * 0.72, 480);
   const barH = 16;
-  const barX = width / 2 - barW / 2;
-  const barY = 36;
+  const barX = Math.round(width / 2 - barW / 2);
+  const barY = 32;
 
   const hpPct = Math.max(0, boss.hp / boss.maxHp);
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
 
-  // 1. Marco y fondo oscuro
-  ctx.fillStyle = '#090a12';
-  ctx.fillRect(barX - 4, barY - 4, barW + 8, barH + 8);
+  // 1. Marco y fondo oscuro con doble borde de píxeles y sombra de bloque sólido
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(barX + 3, barY + 3, barW, barH); // Sombra bloque sólido
 
-  // Borde interactivo (parpadea en amarillo si está vulnerable)
-  if (isVulnerable) {
-    const pulse = 0.5 + 0.5 * Math.sin(now * 0.015);
-    ctx.strokeStyle = `rgba(250, 204, 21, ${0.5 + pulse * 0.5})`;
-    ctx.lineWidth = 3.5;
-    ctx.shadowColor = '#facc15';
-    ctx.shadowBlur = 12;
-  } else {
-    let phaseBorder = '#ea580c';
-    if (phase === 2) phaseBorder = '#0284c7';
-    if (phase === 3) phaseBorder = '#7c3aed';
-    ctx.strokeStyle = phaseBorder;
-    ctx.lineWidth = 2.0;
-    ctx.shadowBlur = 0;
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+
+  // Bisel de piedra exterior
+  let phaseBorder = '#ea580c';
+  if (phase === 2) phaseBorder = '#0284c7';
+  if (phase === 3) phaseBorder = '#7c3aed';
+  if (isVulnerable) phaseBorder = Math.floor(now * 0.01) % 2 === 0 ? '#facc15' : '#ffffff';
+
+  ctx.fillStyle = phaseBorder;
+  ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(barX, barY, barW, barH);
+
+  // 2. Relleno de vida segmentado
+  const fillW = Math.round(barW * hpPct);
+  if (fillW > 0) {
+    if (isVulnerable) {
+      ctx.fillStyle = '#facc15';
+    } else if (phase === 1) {
+      ctx.fillStyle = '#ea580c';
+    } else if (phase === 2) {
+      ctx.fillStyle = '#0284c7';
+    } else {
+      ctx.fillStyle = '#7c3aed';
+    }
+    ctx.fillRect(barX, barY, fillW, barH);
+
+    // Brillo superior de 2 píxeles
+    ctx.fillStyle = isVulnerable ? '#fef08a' : phase === 1 ? '#fbbf24' : phase === 2 ? '#7dd3fc' : '#c084fc';
+    ctx.fillRect(barX, barY, fillW, 2);
   }
-  ctx.strokeRect(barX - 4, barY - 4, barW + 8, barH + 8);
-  ctx.shadowBlur = 0;
 
-  // 2. Relleno de vida con gradiente temático de fase
-  const hpGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-  if (isVulnerable) {
-    hpGrad.addColorStop(0, '#facc15');
-    hpGrad.addColorStop(1, '#fef08a');
-  } else if (phase === 1) {
-    hpGrad.addColorStop(0, '#ef4444');
-    hpGrad.addColorStop(1, '#f97316');
-  } else if (phase === 2) {
-    hpGrad.addColorStop(0, '#0284c7');
-    hpGrad.addColorStop(1, '#38bdf8');
-  } else {
-    hpGrad.addColorStop(0, '#7c3aed');
-    hpGrad.addColorStop(1, '#c084fc');
-  }
-  ctx.fillStyle = hpGrad;
-  ctx.fillRect(barX, barY, barW * hpPct, barH);
+  // Separadores de fase (3 fases)
+  ctx.fillStyle = '#0f172a';
+  const third = Math.round(barW / 3);
+  ctx.fillRect(barX + third, barY, 2, barH);
+  ctx.fillRect(barX + third * 2, barY, 2, barH);
 
-  // 3. Título del Jefe
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillStyle = '#fef08a';
-  ctx.shadowColor = 'rgba(0,0,0,0.95)';
-  ctx.shadowBlur = 6;
+  // 3. Título del Jefe en 'Press Start 2P'
+  ctx.font = '9px "Press Start 2P", monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('👑 CUSTODIO DEL UMBRAL — GUARDIÁN PRIMORDIAL', width / 2, barY - 10);
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#000000';
+  ctx.fillText('CUSTODIO DEL UMBRAL', Math.round(width / 2) + 1.5, barY - 9);
+  ctx.fillStyle = '#fde047';
+  ctx.fillText('CUSTODIO DEL UMBRAL', Math.round(width / 2), barY - 10);
 
-  // 4. Subtítulo con estado del escudo y contra-elemento requerido
+  // 4. Subtítulo con estado del escudo y contra-elemento en 'VT323'
   let statusText = '';
   let statusColor = '#ffffff';
 
   if (isVulnerable) {
-    statusText = '💥 ¡ESCUDO QUEBRADO! ¡VULNERABLE A DAÑO CRÍTICO x2.0!';
+    statusText = '¡ESCUDO QUEBRADO! ¡VULNERABLE A DAÑO CRITICO x2.0!';
     statusColor = '#facc15';
   } else if (phase === 1) {
-    statusText = `🛡️ Escudo de Magma Activo (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 90}) — Contrarresta con: ❄️ Hielo`;
+    statusText = `Escudo de Magma (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 90}) — Contrarresta: Hielo`;
     statusColor = '#38bdf8';
   } else if (phase === 2) {
-    statusText = `🛡️ Coraza Glacial Activa (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 100}) — Contrarresta con: 🔥 Fuego`;
+    statusText = `Coraza Glacial (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 100}) — Contrarresta: Fuego`;
     statusColor = '#fb923c';
   } else {
-    statusText = '⚡ Sobrecarga de Vacío (Furia) — ¡Ataca con 🌍 Tierra para Romper Postura!';
+    statusText = 'Sobrecarga de Vacio (Furia) — Ataca con Tierra para Romper Postura';
     statusColor = '#e879f9';
   }
 
-  ctx.font = 'bold 10px sans-serif';
+  ctx.font = '16px "VT323", monospace';
+  ctx.fillStyle = '#000000';
+  ctx.fillText(statusText, Math.round(width / 2) + 1, barY + barH + 15);
   ctx.fillStyle = statusColor;
-  ctx.fillText(statusText, width / 2, barY + barH + 14);
+  ctx.fillText(statusText, Math.round(width / 2), barY + barH + 14);
 
   ctx.restore();
 }

@@ -1,692 +1,524 @@
 import { GameEnemy } from './types';
 
 /**
- * Renderizado Procedural Vectorial del Bestiario Elemental para Canvas 2D.
- * Cero emojis. Geometría vectorial pura, facetas angulares, gradientes y trazados a 60 FPS.
+ * Renderizado Procedural en Pixel Art de 16 Bits para el Bestiario Elemental (Canvas 2D).
+ * Cero primitivas circulares continuas: entidades formadas por bloques de píxeles,
+ * contornos negros de grafito (#0F172A), animación por pasos discretos y paleta indexada.
  */
 
-// 1. GÓLEM DE ESCORIA ÍGNEA (Pyre Golem) — Melé Pesado / Tanque
+// 1. GÓLEM DE ESCORIA ÍGNEA (Pyre Golem) — Melé Pesado / Tanque en Pixel Art 16-Bit
 export function drawPyreGolem(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
+  const P = Math.max(1, Math.round(r / 10)); // Píxel virtual escalado
   const isCooled = (enemy.cooledDownTimer ?? 0) > 0;
   const isFrenzy = (enemy.frenzyTimer ?? 0) > 0;
-  const heatPulse = 0.75 + 0.25 * Math.sin(now * 0.006);
+  const isTelegraph = enemy.isTelegraphing;
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
 
-  // A. Sombra elíptica sólida en el suelo
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.beginPath();
-  ctx.ellipse(0, r * 0.85, r * 1.35, r * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Animación pesada al caminar: 2 pasos con caída rígida de 1 píxel
+  const step = Math.floor(now * 0.005) % 2;
+  const stompY = step === 1 ? P : 0;
+  ctx.translate(0, stompY);
 
-  // B. Resplandor de magma / frenesí
-  if (!isCooled) {
-    const glowGrad = ctx.createRadialGradient(0, -r * 0.6, 5, 0, -r * 0.6, r * 1.6);
-    if (isFrenzy) {
-      glowGrad.addColorStop(0, 'rgba(255, 69, 0, 0.45)');
-      glowGrad.addColorStop(0.6, 'rgba(255, 0, 0, 0.2)');
-      glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    } else {
-      glowGrad.addColorStop(0, 'rgba(255, 109, 0, 0.3)');
-      glowGrad.addColorStop(0.7, 'rgba(255, 69, 0, 0.1)');
-      glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    }
-    ctx.fillStyle = glowGrad;
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.6, r * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // Paleta indexada
+  const OUTLINE = '#0f172a';
+  const BASALT_DARK = isCooled ? '#1e293b' : '#18181b';
+  const BASALT_MID = isCooled ? '#334155' : (enemy.hitFlash > 0 ? '#ffffff' : '#27272a');
+  const BASALT_LIGHT = isCooled ? '#64748b' : '#3f3f46';
+  const LAVA_HOT = isCooled ? '#475569' : (isFrenzy ? '#fde047' : '#ea580c');
+  const LAVA_BRIGHT = isCooled ? '#94a3b8' : (isFrenzy ? '#ffffff' : '#fbbf24');
+  const EYE_COLOR = isCooled ? '#94a3b8' : (isFrenzy ? '#ef4444' : '#fbbf24');
 
-  // C. Piernas de basalto pesadas
-  ctx.fillStyle = '#1c1917';
-  ctx.strokeStyle = isCooled ? '#334155' : '#292524';
-  ctx.lineWidth = 1.5;
+  // A. Sombra pixelada en el suelo (escalonada)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(-10 * P, 7 * P - stompY, 20 * P, 1 * P);
+  ctx.fillRect(-12 * P, 8 * P - stompY, 24 * P, 3 * P);
+  ctx.fillRect(-10 * P, 11 * P - stompY, 20 * P, 1 * P);
 
+  // B. Piernas pesadas de basalto (bloques rectangulares)
   // Pierna izquierda
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.75, -r * 0.2);
-  ctx.lineTo(-r * 0.5, r * 0.7);
-  ctx.lineTo(-r * 0.15, r * 0.65);
-  ctx.lineTo(-r * 0.3, -r * 0.2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  const legShift = step === 0 ? 0 : -1 * P;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-7 * P, 3 * P + legShift, 5 * P, 6 * P);
+  ctx.fillStyle = BASALT_DARK;
+  ctx.fillRect(-6 * P, 4 * P + legShift, 3 * P, 4 * P);
 
   // Pierna derecha
-  ctx.beginPath();
-  ctx.moveTo(r * 0.3, -r * 0.2);
-  ctx.lineTo(r * 0.15, r * 0.65);
-  ctx.lineTo(r * 0.5, r * 0.7);
-  ctx.lineTo(r * 0.75, -r * 0.2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  const rightLegShift = step === 1 ? 0 : -1 * P;
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(2 * P, 3 * P + rightLegShift, 5 * P, 6 * P);
+  ctx.fillStyle = BASALT_DARK;
+  ctx.fillRect(3 * P, 4 * P + rightLegShift, 3 * P, 4 * P);
 
-  // D. Torso de roca volcánica asimétrica
-  ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#292524';
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.95, -r * 0.4); // Hombro izq
-  ctx.lineTo(-r * 1.25, -r * 1.1); // Púa hombro izq
-  ctx.lineTo(-r * 0.5, -r * 1.4);  // Clavícula izq
-  ctx.lineTo(0, -r * 1.55);        // Cuello
-  ctx.lineTo(r * 0.6, -r * 1.35);  // Clavícula der
-  ctx.lineTo(r * 1.2, -r * 0.95);  // Hombro der
-  ctx.lineTo(r * 0.85, -r * 0.3);  // Costado der
-  ctx.lineTo(r * 0.45, 0);         // Cintura der
-  ctx.lineTo(-r * 0.45, 0);        // Cintura izq
-  ctx.closePath();
-  ctx.fill();
+  // C. Torso masivo de basalto con juntas y grietas de lava
+  // Contorno exterior
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-10 * P, -9 * P, 20 * P, 13 * P);
+  ctx.fillRect(-11 * P, -8 * P, 22 * P, 10 * P);
+  ctx.fillRect(-8 * P, -11 * P, 16 * P, 2 * P); // Cresta hombros
 
-  // Borde biselado
-  ctx.strokeStyle = isCooled ? '#475569' : '#44403c';
-  ctx.lineWidth = 2.0;
-  ctx.stroke();
+  // Relleno de roca volcánica
+  ctx.fillStyle = BASALT_MID;
+  ctx.fillRect(-9 * P, -8 * P, 18 * P, 11 * P);
+  ctx.fillStyle = BASALT_LIGHT;
+  ctx.fillRect(-9 * P, -8 * P, 18 * P, 2 * P); // Luz en hombros
+  ctx.fillStyle = BASALT_DARK;
+  ctx.fillRect(-9 * P, 1 * P, 18 * P, 2 * P);  // Sombra cintura
 
-  // E. Grietas interiores de magma (o enfriadas a gris/negro ceniza)
-  const crackStroke = isCooled ? '#334155' : (isFrenzy ? '#ffd700' : '#ff4500');
-  ctx.strokeStyle = crackStroke;
-  ctx.lineWidth = isCooled ? 1.5 : (2.2 * heatPulse);
-  ctx.lineCap = 'round';
+  // D. Grietas de magma incandescente (#EA580C, #FBBF24)
+  ctx.fillStyle = LAVA_HOT;
+  // Grieta diagonal izquierda
+  ctx.fillRect(-6 * P, -6 * P, 2 * P, 3 * P);
+  ctx.fillRect(-4 * P, -4 * P, 2 * P, 2 * P);
+  // Grieta diagonal derecha
+  ctx.fillRect(3 * P, -5 * P, 3 * P, 2 * P);
+  ctx.fillRect(2 * P, -3 * P, 2 * P, 3 * P);
 
-  ctx.beginPath();
-  // Grieta diagonal 1
-  ctx.moveTo(-r * 0.5, -r * 1.2);
-  ctx.lineTo(-r * 0.2, -r * 0.8);
-  ctx.lineTo(-r * 0.35, -r * 0.4);
-  // Grieta central hacia núcleo
-  ctx.moveTo(r * 0.4, -r * 1.1);
-  ctx.lineTo(0.1, -r * 0.75);
-  ctx.lineTo(0.25, -r * 0.35);
-  // Grieta inferior
-  ctx.moveTo(-r * 0.1, -r * 0.4);
-  ctx.lineTo(0, -r * 0.1);
-  ctx.stroke();
+  // Núcleo incandescente en el pecho (cuadrado de lava con centro amarillo)
+  ctx.fillRect(-2 * P, -4 * P, 4 * P, 4 * P);
+  ctx.fillStyle = LAVA_BRIGHT;
+  ctx.fillRect(-1 * P, -3 * P, 2 * P, 2 * P);
 
-  // F. Núcleo incandescente en el pecho
-  const coreY = -r * 0.75;
-  ctx.save();
-  ctx.translate(0, coreY);
-  const coreR = r * 0.32;
-  const coreGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, coreR);
-  if (isCooled) {
-    coreGrad.addColorStop(0, '#64748b');
-    coreGrad.addColorStop(0.7, '#334155');
-    coreGrad.addColorStop(1, '#0f172a');
-  } else if (isFrenzy) {
-    coreGrad.addColorStop(0, '#ffffff');
-    coreGrad.addColorStop(0.35, '#ffea00');
-    coreGrad.addColorStop(0.7, '#ff3d00');
-    coreGrad.addColorStop(1, 'rgba(255, 0, 0, 0.4)');
-  } else {
-    coreGrad.addColorStop(0, '#ffd700');
-    coreGrad.addColorStop(0.5, '#ff4500');
-    coreGrad.addColorStop(1, '#7f1d1d');
-  }
-  ctx.fillStyle = coreGrad;
-  ctx.beginPath();
-  // Forma de rombo de piedra
-  ctx.moveTo(0, -coreR);
-  ctx.lineTo(coreR * 0.85, 0);
-  ctx.lineTo(0, coreR);
-  ctx.lineTo(-coreR * 0.85, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  // E. Cabeza de bloque de roca
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-4 * P, -14 * P, 8 * P, 5 * P);
+  ctx.fillStyle = BASALT_DARK;
+  ctx.fillRect(-3 * P, -13 * P, 6 * P, 4 * P);
+  ctx.fillStyle = BASALT_LIGHT;
+  ctx.fillRect(-3 * P, -13 * P, 6 * P, 1 * P); // Ceja de piedra
 
-  // G. Cabeza de roca basáltica con ojos incandescentes
-  const headY = -r * 1.6;
-  ctx.fillStyle = '#1c1917';
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.35, headY + r * 0.25);
-  ctx.lineTo(-r * 0.45, headY - r * 0.2);
-  ctx.lineTo(-r * 0.2, headY - r * 0.45);
-  ctx.lineTo(r * 0.25, headY - r * 0.4);
-  ctx.lineTo(r * 0.4, headY - r * 0.15);
-  ctx.lineTo(r * 0.3, headY + r * 0.25);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = isCooled ? '#475569' : '#57534e';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  // Ojos de 2 píxeles incandescentes (#FBBF24)
+  ctx.fillStyle = EYE_COLOR;
+  ctx.fillRect(-2 * P, -11 * P, 1 * P, 1 * P);
+  ctx.fillRect(1 * P, -11 * P, 1 * P, 1 * P);
 
-  // Ojos (hendiduras brillantes)
-  ctx.fillStyle = isCooled ? '#94a3b8' : (isFrenzy ? '#ff1744' : '#ffd54f');
-  ctx.beginPath();
-  ctx.ellipse(-r * 0.18, headY - r * 0.1, r * 0.09, r * 0.04, -0.2, 0, Math.PI * 2);
-  ctx.ellipse(r * 0.18, headY - r * 0.1, r * 0.09, r * 0.04, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // H. Brazos y Puños de roca pesados
-  const isTelegraph = enemy.isTelegraphing;
-  const punchLift = isTelegraph ? -r * 0.5 : 0;
+  // F. Brazos y Puños de roca pesados
+  const punchLift = isTelegraph ? -4 * P : 0;
 
   // Brazo izquierdo
-  ctx.fillStyle = '#292524';
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.9, -r * 0.9);
-  ctx.lineTo(-r * 1.4, -r * 0.4 + punchLift);
-  ctx.lineTo(-r * 1.15, 0 + punchLift);
-  ctx.lineTo(-r * 0.75, -r * 0.4);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-13 * P, -7 * P, 4 * P, 10 * P);
+  ctx.fillStyle = BASALT_DARK;
+  ctx.fillRect(-12 * P, -6 * P, 2 * P, 8 * P);
 
   // Brazo derecho (puño pesado telegrafiado)
-  ctx.fillStyle = isTelegraph ? '#7f1d1d' : '#292524';
-  ctx.beginPath();
-  ctx.moveTo(r * 0.9, -r * 0.9);
-  ctx.lineTo(r * 1.45, -r * 0.3 + punchLift * 1.4);
-  ctx.lineTo(r * 1.2, r * 0.1 + punchLift * 1.4);
-  ctx.lineTo(r * 0.75, -r * 0.4);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillStyle = isTelegraph ? '#ef4444' : OUTLINE;
+  ctx.fillRect(9 * P, -7 * P + punchLift, 5 * P, 11 * P);
+  ctx.fillStyle = isTelegraph ? '#dc2626' : BASALT_MID;
+  ctx.fillRect(10 * P, -6 * P + punchLift, 3 * P, 9 * P);
   if (isTelegraph) {
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 2.5;
+    ctx.fillStyle = '#fee2e2';
+    ctx.fillRect(11 * P, -4 * P + punchLift, 1 * P, 3 * P);
   }
-  ctx.stroke();
 
-  // Destello de escarcha si está enfriado
+  // Si está enfriado por hielo: escarcha de píxeles celestes sobre el torso
   if (isCooled) {
-    ctx.fillStyle = 'rgba(103, 232, 249, 0.35)';
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.7, r * 1.1, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#67e8f9';
+    ctx.fillRect(-8 * P, -7 * P, 2 * P, 1 * P);
+    ctx.fillRect(4 * P, -6 * P, 2 * P, 1 * P);
+    ctx.fillRect(-2 * P, -1 * P, 3 * P, 1 * P);
+    ctx.fillRect(6 * P, 0, 2 * P, 1 * P);
   }
 
   ctx.restore();
 }
 
-// 2. ESPECTRO DE TORMENTA (Storm Stalker) — Hostigador Rápido / Flanqueador
+// 2. ESPECTRO DE TORMENTA (Storm Stalker) — Hostigador Rápido / Flanqueador en Pixel Art 16-Bit
 export function drawStormStalker(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
-  // Flotación senoidal suave
-  const floatY = Math.sin(now * 0.005) * 5;
-  const isChargingSpark = (enemy.sparkTimer ?? 0) > 170; // Últimos 40 frames antes de disparar
+  const P = Math.max(1, Math.round(r / 10));
+  const isChargingSpark = (enemy.sparkTimer ?? 0) > 170;
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
+
+  // Flotación escalonada rígida en 3 niveles de píxeles
+  const floatStep = Math.floor(now * 0.006) % 4;
+  const floatY = (floatStep === 1 ? -1 : floatStep === 3 ? 1 : 0) * P;
   ctx.translate(0, floatY);
 
-  // A. Sombra flotante tenue en el suelo (se atenúa con la altura)
+  // Paleta de color indexada
+  const OUTLINE = '#0f172a';
+  const GHOST_DEEP = '#0f172a';
+  const ELECTRIC_BLUE = '#0284c7';
+  const CYAN_BRIGHT = '#38bdf8';
+  const VOLT_CYAN = '#00f0ff';
+  const WHITE = '#ffffff';
+
+  // A. Sombra pixelada tenue en el suelo
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.beginPath();
-  ctx.ellipse(0, r * 1.2 - floatY, r * 0.9, r * 0.32, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(-7 * P, 9 * P - floatY, 14 * P, 1 * P);
+  ctx.fillRect(-8 * P, 10 * P - floatY, 16 * P, 2 * P);
+  ctx.fillRect(-7 * P, 12 * P - floatY, 14 * P, 1 * P);
 
-  // B. Aura de plasma voltaico
-  const auraGrad = ctx.createRadialGradient(0, -r * 0.8, 4, 0, -r * 0.8, r * 1.6);
-  auraGrad.addColorStop(0, 'rgba(0, 240, 255, 0.3)');
-  auraGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.18)');
-  auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = auraGrad;
-  ctx.beginPath();
-  ctx.arc(0, -r * 0.8, r * 1.6, 0, Math.PI * 2);
-  ctx.fill();
+  // B. Silueta etérea dentada con base deshilachada que oscila rítmicamente
+  const fringeShift = Math.floor(now * 0.008) % 2 === 0 ? 0 : 1;
 
-  // C. Manto espectral etéreo (color zafiro oscuro sin piernas)
-  ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#0f172a';
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 1.7); // Pico capucha
-  ctx.quadraticCurveTo(-r * 0.85, -r * 1.2, -r * 0.95, -r * 0.3); // Hombro izq
-  ctx.lineTo(-r * 1.1, r * 0.4); // Caída manto izq
+  // Capucha y pico superior
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-1 * P, -16 * P, 3 * P, 3 * P);
+  ctx.fillRect(-4 * P, -13 * P, 9 * P, 4 * P);
 
-  // Jirones inferiores ondulantes
-  const wave1 = Math.sin(now * 0.008) * 3;
-  const wave2 = Math.cos(now * 0.009) * 4;
-  const wave3 = Math.sin(now * 0.007 + 1) * 3;
+  // Cuerpo dentado
+  ctx.fillRect(-6 * P, -9 * P, 13 * P, 12 * P);
+  ctx.fillRect(-7 * P, -6 * P, 15 * P, 8 * P);
 
-  ctx.lineTo(-r * 0.65, r * 0.8 + wave1);
-  ctx.lineTo(-r * 0.3, r * 0.4);
-  ctx.lineTo(0, r * 0.9 + wave2);
-  ctx.lineTo(r * 0.35, r * 0.45);
-  ctx.lineTo(r * 0.7, r * 0.85 + wave3);
-  ctx.lineTo(r * 1.05, r * 0.35); // Caída manto der
-  ctx.quadraticCurveTo(r * 0.85, -r * 1.2, 0, -r * 1.7);
-  ctx.closePath();
-  ctx.fill();
+  // Relleno del manto espectral
+  ctx.fillStyle = GHOST_DEEP;
+  ctx.fillRect(-5 * P, -8 * P, 11 * P, 11 * P);
+  ctx.fillRect(-6 * P, -5 * P, 13 * P, 7 * P);
 
-  // Borde exterior místico en azul zafiro luminoso
-  ctx.strokeStyle = '#38bdf8';
-  ctx.lineWidth = 1.8;
-  ctx.stroke();
+  // Borde dentado exterior en cian / azul eléctrico (#0284C7, #38BDF8)
+  ctx.fillStyle = ELECTRIC_BLUE;
+  ctx.fillRect(-6 * P, -8 * P, 1 * P, 10 * P);
+  ctx.fillRect(6 * P, -8 * P, 1 * P, 10 * P);
+  ctx.fillStyle = CYAN_BRIGHT;
+  ctx.fillRect(-5 * P, -12 * P, 1 * P, 4 * P);
+  ctx.fillRect(5 * P, -12 * P, 1 * P, 4 * P);
 
-  // D. Filamentos de relámpago vertical en cian eléctrico (#00f0ff) por el torso
-  ctx.save();
-  ctx.strokeStyle = '#00f0ff';
-  ctx.lineWidth = 1.6;
-  ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  // Relámpago central
-  ctx.moveTo(-r * 0.15, -r * 1.2);
-  ctx.lineTo(r * 0.1, -r * 0.9);
-  ctx.lineTo(-r * 0.18, -r * 0.6);
-  ctx.lineTo(r * 0.15, -r * 0.2);
-  ctx.lineTo(-r * 0.05, r * 0.3);
-  // Ramificación derecha
-  ctx.moveTo(r * 0.1, -r * 0.9);
-  ctx.lineTo(r * 0.4, -r * 0.7);
-  ctx.lineTo(r * 0.3, -r * 0.35);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.restore();
+  // Base deshilachada en picos de píxeles que oscilan de izquierda a derecha
+  ctx.fillStyle = ELECTRIC_BLUE;
+  // Pico 1
+  ctx.fillRect((-5 + fringeShift) * P, 4 * P, 2 * P, 3 * P);
+  ctx.fillRect((-5 + fringeShift) * P, 7 * P, 1 * P, 2 * P);
+  // Pico 2 (central)
+  ctx.fillRect((0 - fringeShift) * P, 4 * P, 2 * P, 4 * P);
+  ctx.fillRect((0 - fringeShift) * P, 8 * P, 1 * P, 2 * P);
+  // Pico 3
+  ctx.fillRect((4 + fringeShift) * P, 4 * P, 2 * P, 3 * P);
+  ctx.fillRect((4 + fringeShift) * P, 7 * P, 1 * P, 2 * P);
 
-  // E. Capucha sombría con ojos blancos incandescentes
-  ctx.fillStyle = '#020617';
-  ctx.beginPath();
-  ctx.ellipse(0, -r * 1.15, r * 0.45, r * 0.4, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // C. Filamentos de relámpago vertical en cian eléctrico (#00F0FF) por el torso
+  ctx.fillStyle = VOLT_CYAN;
+  ctx.fillRect(-1 * P, -7 * P, 1 * P, 2 * P);
+  ctx.fillRect(0 * P, -5 * P, 2 * P, 1 * P);
+  ctx.fillRect(1 * P, -4 * P, 1 * P, 3 * P);
+  ctx.fillRect(0 * P, -1 * P, 1 * P, 2 * P);
+  ctx.fillRect(-2 * P, 0 * P, 2 * P, 1 * P);
+  ctx.fillRect(-2 * P, 1 * P, 1 * P, 2 * P);
 
-  // Ojos blancos brillantes
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.ellipse(-r * 0.16, -r * 1.15, r * 0.1, r * 0.05, -0.15, 0, Math.PI * 2);
-  ctx.ellipse(r * 0.16, -r * 1.15, r * 0.1, r * 0.05, 0.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  // D. Capucha sombría con ojos blancos de 2 píxeles
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-3 * P, -12 * P, 7 * P, 4 * P);
 
-  // F. Si está canalizando orbe de chispa eléctrica: esfera de energía flotante
+  ctx.fillStyle = WHITE;
+  ctx.fillRect(-2 * P, -11 * P, 1 * P, 1 * P);
+  ctx.fillRect(2 * P, -11 * P, 1 * P, 1 * P);
+
+  // E. Partículas de chispa: pequeños cuadrados de 2x2 píxeles que parpadean
+  const sparkPhase = Math.floor(now * 0.015) % 3;
+  ctx.fillStyle = VOLT_CYAN;
+  if (sparkPhase === 0) {
+    ctx.fillRect(7 * P, -4 * P, 2 * P, 2 * P);
+    ctx.fillRect(-8 * P, 1 * P, 2 * P, 2 * P);
+  } else if (sparkPhase === 1) {
+    ctx.fillRect(-7 * P, -7 * P, 2 * P, 2 * P);
+    ctx.fillRect(6 * P, 3 * P, 2 * P, 2 * P);
+  } else {
+    ctx.fillRect(0 * P, -15 * P, 2 * P, 2 * P);
+    ctx.fillRect(-6 * P, 6 * P, 2 * P, 2 * P);
+  }
+
+  // F. Carga de orbe de plasma eléctrico (cubo de energía pixelada)
   if (isChargingSpark) {
-    const sparkR = r * 0.35 + Math.random() * 3;
-    const orbY = -r * 0.4;
-    const orbGrad = ctx.createRadialGradient(0, orbY, 2, 0, orbY, sparkR);
-    orbGrad.addColorStop(0, '#ffffff');
-    orbGrad.addColorStop(0.5, '#00f0ff');
-    orbGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
-
-    ctx.save();
-    ctx.fillStyle = orbGrad;
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.arc(0, orbY, sparkR, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Chispas de arco rotando
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.4;
-    for (let c = 0; c < 3; c++) {
-      const ang = (c * Math.PI * 2) / 3 + now * 0.015;
-      ctx.beginPath();
-      ctx.moveTo(0, orbY);
-      ctx.lineTo(Math.cos(ang) * sparkR * 1.4, orbY + Math.sin(ang) * sparkR * 1.4);
-      ctx.stroke();
-    }
-    ctx.restore();
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-3 * P, -4 * P, 7 * P, 7 * P);
+    ctx.fillStyle = VOLT_CYAN;
+    ctx.fillRect(-2 * P, -3 * P, 5 * P, 5 * P);
+    ctx.fillStyle = WHITE;
+    ctx.fillRect(-1 * P, -2 * P, 3 * P, 3 * P);
   }
 
   ctx.restore();
 }
 
-// 3. ACECHADOR DE ESCARCHA (Frost Lurker) — Francotirador / Escudo Frontal
+// 3. ACECHADOR DE ESCARCHA (Frost Lurker) — Francotirador / Escudo Frontal en Pixel Art 16-Bit
 export function drawFrostLurker(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
+  const P = Math.max(1, Math.round(r / 10));
   const isBroken = (enemy.shieldBrokenTimer ?? 0) > 0;
   const isSniping = !!enemy.isSniping;
   const facing = enemy.facingAngle ?? 0;
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
 
-  // A. Línea de telegrafiado fino de francotirador en el suelo
+  // Paleta indexada
+  const OUTLINE = '#0f172a';
+  const ICE_ARCTIC = '#7dd3fc'; // Azul ártico
+  const ICE_DEEP = '#0284c7';   // Azul profundo
+  const ICE_WHITE = '#f8fafc';  // Blanco nieve
+  const ICE_CYAN = '#38bdf8';
+
+  // A. Línea de telegrafiado fino de francotirador en el suelo (escalonada)
   if (isSniping) {
     ctx.save();
-    const aimLen = 320;
+    const aimLen = 300;
     const endX = Math.cos(facing) * aimLen;
     const endY = Math.sin(facing) * aimLen * 0.58;
 
-    ctx.strokeStyle = '#00e5ff';
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([8, 6]);
-    ctx.shadowColor = '#00e5ff';
-    ctx.shadowBlur = 8;
+    ctx.strokeStyle = ICE_ARCTIC;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
     ctx.beginPath();
-    ctx.moveTo(0, -r * 0.5);
+    ctx.moveTo(0, -5 * P);
     ctx.lineTo(endX, endY);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
   }
 
-  // B. Sombra alargada en perspectiva isométrica
+  // B. Sombra pixelada en el suelo
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.ellipse(0, r * 0.8, r * 1.1, r * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(-8 * P, 6 * P, 16 * P, 1 * P);
+  ctx.fillRect(-10 * P, 7 * P, 20 * P, 2 * P);
+  ctx.fillRect(-8 * P, 9 * P, 16 * P, 1 * P);
 
-  // C. Rastro de vapor gélido en la base
-  const mistGrad = ctx.createRadialGradient(0, r * 0.6, 2, 0, r * 0.6, r * 1.2);
-  mistGrad.addColorStop(0, 'rgba(125, 211, 252, 0.25)');
-  mistGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = mistGrad;
-  ctx.beginPath();
-  ctx.arc(0, r * 0.6, r * 1.2, 0, Math.PI * 2);
-  ctx.fill();
+  // C. Cuernos o espinas de hielo con quiebres estrictos de 45 grados
+  ctx.fillStyle = OUTLINE;
+  // Espina superior izquierda (diagonal 45°)
+  ctx.fillRect(-7 * P, -14 * P, 2 * P, 2 * P);
+  ctx.fillRect(-6 * P, -12 * P, 2 * P, 2 * P);
+  ctx.fillRect(-5 * P, -10 * P, 2 * P, 2 * P);
 
-  // D. Espalda con agujas de hielo que vibran al apuntar
-  const spikeJitter = isSniping ? Math.sin(now * 0.05) * 2.2 : 0;
-  ctx.fillStyle = '#0284c7';
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.2;
+  // Espina superior derecha (diagonal 45°)
+  ctx.fillRect(6 * P, -14 * P, 2 * P, 2 * P);
+  ctx.fillRect(5 * P, -12 * P, 2 * P, 2 * P);
+  ctx.fillRect(4 * P, -10 * P, 2 * P, 2 * P);
 
-  const needleAngles = [-0.4, -0.15, 0.15, 0.4];
-  needleAngles.forEach((nAng, idx) => {
-    const nLen = r * (1.1 + (idx % 2) * 0.35);
-    const ang = nAng + Math.PI + facing + spikeJitter * 0.05;
-    const sx = Math.cos(ang) * (r * 0.6);
-    const sy = -r * 0.8 + Math.sin(ang) * (r * 0.4);
+  // Relleno de espinas
+  ctx.fillStyle = ICE_WHITE;
+  ctx.fillRect(-6 * P, -13 * P, 1 * P, 1 * P);
+  ctx.fillRect(-5 * P, -11 * P, 1 * P, 1 * P);
+  ctx.fillRect(5 * P, -13 * P, 1 * P, 1 * P);
+  ctx.fillRect(4 * P, -11 * P, 1 * P, 1 * P);
 
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(ang + Math.PI / 2);
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.12, 0);
-    ctx.lineTo(0, -nLen);
-    ctx.lineTo(r * 0.12, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  });
+  // D. Caparazón angular tipo cristal de escarcha en azul ártico (#7DD3FC) y blanco nieve (#F8FAFC)
+  // Contorno del cuerpo cristalino
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(-6 * P, -9 * P, 12 * P, 13 * P);
+  ctx.fillRect(-8 * P, -6 * P, 16 * P, 8 * P);
+  ctx.fillRect(-4 * P, -12 * P, 8 * P, 3 * P); // Vértice superior
 
-  // E. Cuerpo angular de hielo translúcido (#38bdf8, 85% alpha)
-  ctx.save();
-  ctx.globalAlpha = 0.88;
-  ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#38bdf8';
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.8;
+  // Relleno angular del cristal
+  ctx.fillStyle = ICE_ARCTIC;
+  ctx.fillRect(-5 * P, -8 * P, 10 * P, 11 * P);
+  ctx.fillRect(-7 * P, -5 * P, 14 * P, 6 * P);
 
-  // Torso cristalino multifacético
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 1.6);         // Vértice superior cabeza
-  ctx.lineTo(-r * 0.55, -r * 1.25); // Cresta izq
-  ctx.lineTo(-r * 0.85, -r * 0.6);  // Costado izq
-  ctx.lineTo(-r * 0.45, r * 0.2);   // Pierna izq
-  ctx.lineTo(0, r * 0.4);           // Base
-  ctx.lineTo(r * 0.45, r * 0.2);    // Pierna der
-  ctx.lineTo(r * 0.85, -r * 0.6);   // Costado der
-  ctx.lineTo(r * 0.55, -r * 1.25);  // Cresta der
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  // Faceta interna iluminada (blanco nieve)
+  ctx.fillStyle = ICE_WHITE;
+  ctx.fillRect(-3 * P, -11 * P, 6 * P, 2 * P);
+  ctx.fillRect(-2 * P, -8 * P, 2 * P, 7 * P);
+  ctx.fillRect(-5 * P, -5 * P, 2 * P, 4 * P);
 
-  // Facetas angulares internas (prisma de cristal)
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-  ctx.lineWidth = 1.0;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 1.6);
-  ctx.lineTo(0, r * 0.4);
-  ctx.moveTo(-r * 0.85, -r * 0.6);
-  ctx.lineTo(0, -r * 0.7);
-  ctx.lineTo(r * 0.85, -r * 0.6);
-  ctx.stroke();
-  ctx.restore();
+  // Faceta interna de sombra (azul profundo)
+  ctx.fillStyle = ICE_DEEP;
+  ctx.fillRect(2 * P, -5 * P, 4 * P, 6 * P);
+  ctx.fillRect(0 * P, 1 * P, 4 * P, 2 * P);
 
-  // F. Ojos cristalinos azul profundo
-  ctx.fillStyle = '#0284c7';
-  ctx.beginPath();
-  ctx.arc(-r * 0.22, -r * 1.2, r * 0.08, 0, Math.PI * 2);
-  ctx.arc(r * 0.22, -r * 1.2, r * 0.08, 0, Math.PI * 2);
-  ctx.fill();
+  // E. Ojos cristalinos azul profundo (1 o 2 píxeles)
+  ctx.fillStyle = ICE_DEEP;
+  ctx.fillRect(-3 * P, -7 * P, 2 * P, 1 * P);
+  ctx.fillRect(2 * P, -7 * P, 2 * P, 1 * P);
 
-  // G. CORAZA FRONTAL (Escudo de hielo denso que reduce 80% daño de frente salvo fuego)
+  // F. CORAZA FRONTAL (Escudo de hielo denso en Pixel Art)
   if (!isBroken) {
     ctx.save();
-    // Orientado según facingAngle
-    const shieldDist = r * 0.85;
+    const shieldDist = 6 * P;
     const shX = Math.cos(facing) * shieldDist;
-    const shY = -r * 0.6 + Math.sin(facing) * shieldDist * 0.58;
-
+    const shY = -4 * P + Math.sin(facing) * shieldDist * 0.58;
     ctx.translate(shX, shY);
-    ctx.rotate(facing + Math.PI / 2);
 
-    const shW = r * 1.4;
-    const shH = r * 0.65;
+    // Escudo romboidal facetado en píxeles
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-6 * P, -6 * P, 12 * P, 12 * P);
+    ctx.fillRect(-7 * P, -4 * P, 14 * P, 8 * P);
 
-    // Escudo glacial brillante
-    const shGrad = ctx.createLinearGradient(-shW / 2, 0, shW / 2, 0);
-    shGrad.addColorStop(0, '#0284c7');
-    shGrad.addColorStop(0.5, '#e0f2fe');
-    shGrad.addColorStop(1, '#0284c7');
+    // Cara frontal brillante
+    ctx.fillStyle = ICE_WHITE;
+    ctx.fillRect(-5 * P, -5 * P, 5 * P, 10 * P);
+    ctx.fillStyle = ICE_CYAN;
+    ctx.fillRect(0 * P, -5 * P, 5 * P, 10 * P);
 
-    ctx.fillStyle = shGrad;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.2;
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 8;
-
-    ctx.beginPath();
-    ctx.moveTo(-shW / 2, -shH * 0.4);
-    ctx.lineTo(0, -shH);
-    ctx.lineTo(shW / 2, -shH * 0.4);
-    ctx.lineTo(shW * 0.35, shH * 0.6);
-    ctx.lineTo(0, shH);
-    ctx.lineTo(-shW * 0.35, shH * 0.6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Borde de diamante interior
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-shW * 0.2, -shH * 0.4, shW * 0.4, shH * 0.8);
+    // Runa o cresta central de diamante
+    ctx.fillStyle = ICE_DEEP;
+    ctx.fillRect(-2 * P, -2 * P, 4 * P, 4 * P);
+    ctx.fillStyle = ICE_WHITE;
+    ctx.fillRect(-1 * P, -1 * P, 2 * P, 2 * P);
 
     ctx.restore();
   } else {
-    // Si la coraza está rota por FUEGO: gotas de agua ardiente y vapor
-    ctx.fillStyle = 'rgba(255, 109, 0, 0.45)';
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.6, r * 0.9, 0, Math.PI * 2);
-    ctx.fill();
+    // Si la coraza está rota por fuego: gotas y esquirlas calientes dispersas
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(-4 * P, -4 * P, 2 * P, 2 * P);
+    ctx.fillRect(3 * P, -2 * P, 2 * P, 2 * P);
+    ctx.fillRect(0, 3 * P, 2 * P, 2 * P);
   }
 
   ctx.restore();
 }
 
-// 4. BARRA DE SALUD SEGMENTADA CON ICONO DE DEBILIDAD ELEMENTAL (OPTIMIZADA PARA ENJAMBRES Y ESCUADRONES)
+// 4. BARRA DE SALUD SEGMENTADA EN PIXEL ART 16-BIT
 export function drawEnemyHealthBar(ctx: CanvasRenderingContext2D, enemy: GameEnemy) {
   const r = enemy.radius;
-  const barW = Math.max(34, r * 2.2);
+  const barW = Math.max(36, Math.round(r * 2.2));
   const barH = 5;
   const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
   const iconSize = 12;
 
-  // Escalonamiento vertical sutil basado en el ID para evitar solapamiento caótico entre escuadrones cercanos
-  const verticalStagger = (enemy.id.charCodeAt(enemy.id.length - 1) % 2 === 0) ? 0 : -3;
-  const barX = -barW / 2 + iconSize * 0.5;
-  const barY = -r * 1.8 - 14 + verticalStagger;
+  const barX = Math.round(-barW / 2 + iconSize * 0.5);
+  const barY = Math.round(-r * 1.8 - 14);
 
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
 
-  // Placa de contraste oscura para mantener legibilidad absoluta durante combates en enjambre
-  const plateX = barX - iconSize - 4;
-  const plateW = barW + iconSize + 6;
-  const plateH = barH + 6;
-  ctx.fillStyle = 'rgba(10, 15, 29, 0.88)';
-  ctx.strokeStyle = 'rgba(51, 65, 85, 0.7)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(plateX, barY - 3, plateW, plateH, 3);
-  ctx.fill();
-  ctx.stroke();
-
-  // A. Icono de Debilidad Elemental a la izquierda
+  // A. Icono de debilidad elemental
   let weaknessIcon = '⚔️';
-  let weaknessBg = '#334155';
-  let weaknessBorder = '#64748b';
-
-  if (enemy.bestiaryType === 'pyre_golem' || enemy.weakness === 'ice') {
-    weaknessIcon = '❄️';
-    weaknessBg = '#083344';
-    weaknessBorder = '#06b6d4';
-  } else if (enemy.bestiaryType === 'storm_stalker' || enemy.weakness === 'earth') {
-    weaknessIcon = '🌍';
-    weaknessBg = '#14532d';
-    weaknessBorder = '#22c55e';
-  } else if (enemy.bestiaryType === 'frost_lurker' || enemy.weakness === 'fire') {
+  let weaknessColor = '#f59e0b';
+  if (enemy.weakness === 'fire') {
     weaknessIcon = '🔥';
-    weaknessBg = '#450a0a';
-    weaknessBorder = '#ef4444';
+    weaknessColor = '#ef4444';
+  } else if (enemy.weakness === 'ice') {
+    weaknessIcon = '❄️';
+    weaknessColor = '#38bdf8';
   } else if (enemy.weakness === 'lightning') {
     weaknessIcon = '⚡';
-    weaknessBg = '#422006';
-    weaknessBorder = '#eab308';
+    weaknessColor = '#facc15';
+  } else if (enemy.weakness === 'earth') {
+    weaknessIcon = '🌍';
+    weaknessColor = '#84cc16';
   }
 
-  const iconX = barX - iconSize - 1;
+  const iconX = barX - iconSize - 2;
   const iconY = barY + barH / 2;
 
-  // Círculo base para el icono
-  ctx.fillStyle = weaknessBg;
-  ctx.strokeStyle = weaknessBorder;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(iconX, iconY, iconSize * 0.55, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  // Borde pixel del icono
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(iconX - 7, barY - 1, 14, barH + 2);
+  ctx.fillStyle = weaknessColor;
+  ctx.fillRect(iconX - 6, barY, 12, barH);
 
-  // Glifo de debilidad
-  ctx.font = '8.5px sans-serif';
+  ctx.font = '8px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(weaknessIcon, iconX, iconY);
 
-  // B. Fondo de la Barra
+  // B. Fondo de la barra con doble borde pixel (#0F172A exterior)
   ctx.fillStyle = '#0f172a';
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(barX, barY, barW, barH);
+  ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+  ctx.fillStyle = '#18181b';
   ctx.fillRect(barX, barY, barW, barH);
 
   // C. Relleno segmentado de vida
-  const fillW = barW * hpPct;
-  const hpGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-  if (hpPct > 0.5) {
-    hpGrad.addColorStop(0, '#22c55e');
-    hpGrad.addColorStop(1, '#86efac');
-  } else if (hpPct > 0.25) {
-    hpGrad.addColorStop(0, '#f59e0b');
-    hpGrad.addColorStop(1, '#fde047');
-  } else {
-    hpGrad.addColorStop(0, '#ef4444');
-    hpGrad.addColorStop(1, '#fca5a5');
-  }
-  ctx.fillStyle = hpGrad;
-  ctx.fillRect(barX, barY, fillW, barH);
+  const fillW = Math.round(barW * hpPct);
+  if (fillW > 0) {
+    if (hpPct > 0.5) {
+      ctx.fillStyle = '#22c55e';
+    } else if (hpPct > 0.25) {
+      ctx.fillStyle = '#f59e0b';
+    } else {
+      ctx.fillStyle = '#ef4444';
+    }
+    ctx.fillRect(barX, barY, fillW, barH);
 
-  // D. Separadores de segmento (3 segmentos)
+    // Brillo superior de 1 píxel
+    ctx.fillStyle = hpPct > 0.5 ? '#86efac' : hpPct > 0.25 ? '#fde047' : '#fca5a5';
+    ctx.fillRect(barX, barY, fillW, 1);
+  }
+
+  // D. Separadores de segmento rígidos (3 bloques de vida)
   ctx.fillStyle = '#0f172a';
-  const segStep = barW / 3;
+  const segStep = Math.round(barW / 3);
   ctx.fillRect(barX + segStep, barY, 1, barH);
   ctx.fillRect(barX + segStep * 2, barY, 1, barH);
 
-  // E. Badges de estado activo
+  // E. Badges de estado activo en tipografía bitmap
   let statusText = '';
   if (enemy.statuses.some((s) => s.type === 'frozen')) statusText += '🧊 ';
   if (enemy.statuses.some((s) => s.type === 'burning')) statusText += '🔥 ';
   if (enemy.statuses.some((s) => s.type === 'shocked')) statusText += '⚡ ';
   if (enemy.statuses.some((s) => s.type === 'slowed')) statusText += '❄️ ';
-  if ((enemy.frenzyTimer ?? 0) > 0) statusText += '🔥FRENESÍ ';
-  if ((enemy.cooledDownTimer ?? 0) > 0) statusText += '🧊ENFRIADO ';
-  if ((enemy.shieldBrokenTimer ?? 0) > 0) statusText += '💔CORAZA ';
+  if ((enemy.frenzyTimer ?? 0) > 0) statusText += 'FRENESI ';
+  if ((enemy.cooledDownTimer ?? 0) > 0) statusText += 'ENFRIADO ';
+  if ((enemy.shieldBrokenTimer ?? 0) > 0) statusText += 'CORAZA ';
 
   if (statusText) {
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = '7px "Press Start 2P", monospace';
     ctx.textAlign = 'center';
+    ctx.fillStyle = '#000000';
+    ctx.fillText(statusText.trim(), barX + barW / 2 + 1, barY - 5);
     ctx.fillStyle = '#fde047';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 4;
-    ctx.fillText(statusText.trim(), barX + barW / 2, barY - 7);
-    ctx.shadowBlur = 0;
+    ctx.fillText(statusText.trim(), barX + barW / 2, barY - 6);
   }
 
   ctx.restore();
 }
 
-// 5. RENDERIZADO PROCEDURAL VECTORIAL PARA JEFES (Elimina todo emoji de Canvas)
+// 5. RENDERIZADO EN PIXEL ART PARA JEFES FALLBACK (Basalt Guardian, Storm Wraith, Obsidian Dragon)
 export function drawBossVector(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
+  const P = Math.max(1, Math.round(r / 12));
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
+
+  const OUTLINE = '#0f172a';
 
   if (enemy.bossType === 'basalt_guardian') {
-    // Sombra
+    // Sombra pixelada
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.8, r * 1.3, r * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(-14 * P, 8 * P, 28 * P, 3 * P);
 
     // Cuerpo monolítico de basalto
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-12 * P, -16 * P, 24 * P, 26 * P);
     ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#334155';
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.8, -r * 1.5);
-    ctx.lineTo(r * 0.8, -r * 1.5);
-    ctx.lineTo(r * 1.1, r * 0.4);
-    ctx.lineTo(-r * 1.1, r * 0.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillRect(-10 * P, -14 * P, 20 * P, 22 * P);
 
-    // Corona y runas doradas
+    // Placas de armadura y runas doradas
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(-8 * P, -12 * P, 16 * P, 4 * P);
     ctx.fillStyle = '#facc15';
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.6, r * 0.25, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(-r * 0.3, -r * 1.0, r * 0.08, r * 0.04, 0, 0, Math.PI * 2);
-    ctx.ellipse(r * 0.3, -r * 1.0, r * 0.08, r * 0.04, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(-3 * P, -6 * P, 6 * P, 6 * P);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1 * P, -4 * P, 2 * P, 2 * P);
   } else if (enemy.bossType === 'storm_wraith') {
     // Espectro de la Tormenta
-    const floatY = Math.sin(now * 0.005) * 6;
+    const floatY = (Math.floor(now * 0.005) % 2 === 0 ? 0 : 2) * P;
     ctx.translate(0, floatY);
-    ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#1e1b4b';
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 1.6);
-    ctx.lineTo(-r * 0.9, -r * 0.5);
-    ctx.lineTo(-r * 0.5, r * 0.7);
-    ctx.lineTo(0, r * 0.4);
-    ctx.lineTo(r * 0.5, r * 0.7);
-    ctx.lineTo(r * 0.9, -r * 0.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
 
-    // Filamentos eléctricos
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.2, -r * 1.0);
-    ctx.lineTo(r * 0.1, -r * 0.6);
-    ctx.lineTo(-r * 0.1, 0);
-    ctx.stroke();
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-12 * P, -18 * P, 24 * P, 28 * P);
+    ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#1e1b4b';
+    ctx.fillRect(-10 * P, -16 * P, 20 * P, 24 * P);
+
+    // Filamentos eléctricos de píxeles
+    ctx.fillStyle = '#00f0ff';
+    ctx.fillRect(-3 * P, -10 * P, 2 * P, 4 * P);
+    ctx.fillRect(1 * P, -8 * P, 4 * P, 2 * P);
+    ctx.fillRect(-1 * P, 0 * P, 3 * P, 5 * P);
+
+    // Ojos
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-5 * P, -12 * P, 2 * P, 2 * P);
+    ctx.fillRect(3 * P, -12 * P, 2 * P, 2 * P);
   } else {
     // Dragón de Obsidiana
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-14 * P, -16 * P, 28 * P, 26 * P);
     ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#1c1917';
-    ctx.strokeStyle = '#ea580c';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 1.5);
-    ctx.lineTo(-r * 1.2, -r * 0.6);
-    ctx.lineTo(-r * 0.6, r * 0.6);
-    ctx.lineTo(r * 0.6, r * 0.6);
-    ctx.lineTo(r * 1.2, -r * 0.6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillRect(-12 * P, -14 * P, 24 * P, 22 * P);
+
+    // Grietas de lava pura
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(-6 * P, -10 * P, 12 * P, 2 * P);
+    ctx.fillRect(-2 * P, -6 * P, 4 * P, 8 * P);
 
     // Ojos y fauces de fuego
     ctx.fillStyle = '#ff3d00';
-    ctx.beginPath();
-    ctx.arc(-r * 0.35, -r * 0.9, r * 0.1, 0, Math.PI * 2);
-    ctx.arc(r * 0.35, -r * 0.9, r * 0.1, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(-6 * P, -12 * P, 3 * P, 2 * P);
+    ctx.fillRect(3 * P, -12 * P, 3 * P, 2 * P);
   }
 
   ctx.restore();
