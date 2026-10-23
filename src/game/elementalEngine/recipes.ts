@@ -67,15 +67,15 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
   // Elementos Puros Concentrados (2 o más del mismo elemento)
   fire_inferno: {
     id: 'fire_inferno',
-    name: 'Corona Infernal',
+    name: 'Pilar Ígneo',
     elements: ['fire', 'fire'],
-    description: 'Onda ígnea expansiva que fija una corona de llamas persistentes en el suelo y culmina en una colosal detonación centrípeta.',
-    icon: '👑🔥',
+    description: 'Proyecta una detonación a distancia que erupciona en un devastador geiser de fuego y deja un cráter de ascuas ardientes.',
+    icon: '🌋🔥',
     color: '#ea580c',
     secondaryColor: '#fde047',
-    damage: 32,
-    knockback: 7.0,
-    cooldownMs: 5000,
+    damage: 38,
+    knockback: 6.5,
+    cooldownMs: 3800,
   },
   lightning_storm: {
     id: 'lightning_storm',

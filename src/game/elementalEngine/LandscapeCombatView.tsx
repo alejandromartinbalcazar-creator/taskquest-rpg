@@ -3424,7 +3424,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setElementQueue([]);
         return;
       }
-      // CORONA INFERNAL (FUEGO + FUEGO): Onda de fuego, anillo persistente con daño periódico y detonación centrípeta
+      // PILAR ÍGNEO / IGNICIÓN A DISTANCIA (FUEGO + FUEGO):
+      // Detonación telegrafiada a distancia en dirección del apuntado o bajo el enemigo más próximo
       else if (recipe.id === 'fire_inferno') {
         const crackAngles = [
           0.2 + (Math.random() - 0.5) * 0.2,
@@ -3434,44 +3435,78 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           4.45 + (Math.random() - 0.5) * 0.2,
           5.55 + (Math.random() - 0.5) * 0.2,
         ];
-        const statBonus = Math.floor(player.stats.attack * 0.35 + player.stats.knowledge * 0.35);
-        const baseRadius = isCharged ? 165 : 140;
+        const statBonus = Math.floor(player.stats.attack * 0.4 + player.stats.knowledge * 0.4);
+        const pillarRadius = isCharged ? 65 : 55; // Radio táctico del impacto (55px estándar)
+
+        // 1. Cálculo de Posicionamiento a Distancia (3.5 a 4.5 unidades ~ 185px)
+        const CAST_DISTANCE = 190;
+        let targetX = wizard.x;
+        let targetY = wizard.y;
+
+        // Buscar enemigo cercano prioritario en el cono de apuntado o en radio de combate (~380px)
+        const nearestEnemy = findNearestCombatTarget(
+          wizard,
+          g.enemyManager.enemies,
+          'fire',
+          g.tilemap?.puzzleWheel,
+          380,
+          wizard.isMoving ? wizard.facingAngle : null,
+          wizard.isMoving ? Math.PI * 0.6 : Math.PI
+        );
+
+        if (nearestEnemy) {
+          targetX = nearestEnemy.x;
+          targetY = nearestEnemy.y;
+        } else {
+          const ang = wizard.facingAngle;
+          targetX = wizard.x + Math.cos(ang) * CAST_DISTANCE;
+          targetY = wizard.y + Math.sin(ang) * CAST_DISTANCE;
+        }
+
+        // Si hay mapa de tiles, verificar que no quede atrapado dentro de un muro sólido
+        if (g.tilemap) {
+          const resolved = g.tilemap.resolveEntityCollision({ x: targetX, y: targetY, radius: 24 });
+          targetX = resolved.x;
+          targetY = resolved.y;
+        }
 
         g.infernalCrowns.push({
-          id: `infernal-crown-${now}-${Math.random()}`,
-          x: wizard.x,
-          y: wizard.y,
-          currentRadius: 20,
-          maxRadius: baseRadius,
-          phase: 'preparation',
+          id: `fire-pillar-${now}-${Math.random()}`,
+          x: targetX,
+          y: targetY,
+          currentRadius: 10,
+          maxRadius: pillarRadius,
+          phase: 'preparation', // 0 a 250 ms: Runa en suelo
           phaseTimer: 0,
-          prepDurationMs: 350,
-          expansionDurationMs: 400,
-          ringDurationMs: 2400,
-          detonationDurationMs: 450,
-          periodicDamage: (8 + statBonus * 0.25) * (isCharged ? 1.25 : 1.0),
-          periodicIntervalMs: 450,
-          detonationDamage: (recipe.damage + statBonus) * (isCharged ? 1.4 : 1.0),
-          knockback: (recipe.knockback || 7.0) * (isCharged ? 1.4 : 1.0),
+          prepDurationMs: 250, // 250 ms de conjuración y telegrafiado rúnico
+          expansionDurationMs: 0,
+          detonationDurationMs: 350, // 250 a 600 ms: Detonación del geiser / columna de fuego
+          ringDurationMs: 2400, // 600 a 3000 ms: Suelo ardiente residual (2.4s ~ 2.5s)
+          periodicDamage: (14 + statBonus * 0.28) * (isCharged ? 1.3 : 1.0), // Daño por tick de quemadura cada 400ms
+          periodicIntervalMs: 400,
+          detonationDamage: (recipe.damage + statBonus * 1.2) * (isCharged ? 1.45 : 1.15), // Daño explosivo inicial de alto impacto
+          knockback: (recipe.knockback || 6.5) * (isCharged ? 1.4 : 1.1),
           lastDamagePerEnemy: {},
           hasDetonated: false,
           crackAngles,
           isCharged,
         });
 
+        // Audio: Conjuración sutil de viento caliente
+        audioManager.playFirePillarConjure();
         elementalSound.playInfernalCrownIgnition();
-        g.screenShake = Math.max(g.screenShake, isCharged ? 7 : 4);
+        g.screenShake = Math.max(g.screenShake, isCharged ? 5 : 3);
 
         g.floatingTexts.push({
-          id: `crown-cast-${now}`,
-          x: wizard.x,
-          y: wizard.y - 25,
-          text: isCharged ? '👑🔥 ¡CORONA INFERNAL CARGADA!' : '👑🔥 ¡CORONA INFERNAL!',
-          color: '#f97316',
+          id: `pillar-cast-${now}`,
+          x: targetX,
+          y: targetY - 30,
+          text: isCharged ? '🌋🔥 ¡PILAR ÍGNEO CARGADO!' : '🌋🔥 ¡PILAR ÍGNEO!',
+          color: '#fbbf24',
           fontSize: 14,
           opacity: 1,
           vy: -1.3,
-          life: 38,
+          life: 35,
         });
       }
       // ATAQUES INDIVIDUALES:
@@ -6537,205 +6572,117 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // 4.2 Actualizar Corona Infernal (Fuego + Fuego: Fases A, B, C, D)
+      // 4.2 Actualizar Pilar Ígneo (Fuego + Fuego: Runa -> Detonación Columna -> Suelo Ardiente)
       for (let cIdx = g.infernalCrowns.length - 1; cIdx >= 0; cIdx--) {
         const crown = g.infernalCrowns[cIdx];
         crown.phaseTimer += dt;
 
-        // FASE A: PREPARACIÓN (350 ms)
+        // FASE 1: CONJURACIÓN Y RUNA (0 a 250 ms)
         if (crown.phase === 'preparation') {
-          // Partículas sutiles de brasas brotando de las grietas
-          if (Math.random() < 0.35) {
-            const rndAng = crown.crackAngles[Math.floor(Math.random() * crown.crackAngles.length)];
-            const rndDist = Math.random() * 45;
+          const prog = Math.min(1, crown.phaseTimer / crown.prepDurationMs);
+          crown.currentRadius = 15 + (crown.maxRadius - 15) * prog;
+
+          // Partículas sutiles de ascuas ascendentes que anticipan el estallido
+          if (Math.random() < 0.4) {
+            const rndAng = Math.random() * Math.PI * 2;
+            const rndDist = Math.random() * crown.currentRadius;
             g.particles.push({
-              id: `cr-ember-${frameNow}-${Math.random()}`,
+              id: `cr-prep-ember-${frameNow}-${Math.random()}`,
               x: crown.x + Math.cos(rndAng) * rndDist,
               y: crown.y + Math.sin(rndAng) * rndDist * 0.58,
-              vx: (Math.random() - 0.5) * 1.2,
-              vy: -1.8 - Math.random() * 1.4,
+              vx: (Math.random() - 0.5) * 0.9,
+              vy: -2.0 - Math.random() * 2.2,
               radius: 1.5 + Math.random() * 1.5,
               color: Math.random() < 0.6 ? '#f97316' : '#fef08a',
               alpha: 1,
-              life: 20,
+              life: 18,
             });
           }
 
           if (crown.phaseTimer >= crown.prepDurationMs) {
-            crown.phase = 'expansion';
-            crown.phaseTimer = 0;
-            elementalSound.playInfernalCrownExpand();
-            g.screenShake = Math.max(g.screenShake, crown.isCharged ? 8 : 6);
-          }
-        }
-
-        // FASE B: EXPANSIÓN EXPLOSIVA (400 ms)
-        else if (crown.phase === 'expansion') {
-          const progress = Math.min(1, crown.phaseTimer / crown.expansionDurationMs);
-          const easeOut = 1 - Math.pow(1 - progress, 2.2);
-          crown.currentRadius = 20 + (crown.maxRadius - 20) * easeOut;
-
-          // Chispas en el frente de choque
-          if (Math.random() < 0.6) {
-            const pAng = Math.random() * Math.PI * 2;
-            const px = crown.x + Math.cos(pAng) * crown.currentRadius;
-            const py = crown.y + Math.sin(pAng) * crown.currentRadius * 0.58;
-            g.particles.push({
-              id: `cr-exp-${frameNow}-${Math.random()}`,
-              x: px,
-              y: py,
-              vx: Math.cos(pAng) * 2.2,
-              vy: Math.sin(pAng) * 1.3,
-              radius: 2.2 + Math.random() * 2,
-              color: '#f97316',
-              alpha: 0.9,
-              life: 16,
-            });
-          }
-
-          // Contacto inicial con enemigos durante la expansión
-          enemies.forEach((enemy) => {
-            const d = Math.hypot(enemy.x - crown.x, (enemy.y - crown.y) / 0.58);
-            if (d <= crown.currentRadius + enemy.radius && !crown.lastDamagePerEnemy[enemy.id]) {
-              crown.lastDamagePerEnemy[enemy.id] = frameNow;
-              const hitDmg = Math.round(crown.periodicDamage * 1.25);
-              enemy.hp -= hitDmg;
-              enemy.hitFlash = 8;
-              g.enemyManager.applyStatus(enemy, 'burning', 180, 6);
-              g.floatingTexts.push({
-                id: `cr-exp-hit-${frameNow}-${enemy.id}`,
-                x: enemy.x,
-                y: enemy.y - 18,
-                text: `🔥 -${hitDmg}`,
-                color: '#f97316',
-                fontSize: 12,
-                opacity: 1,
-                vy: -1.2,
-                life: 25,
-              });
-            }
-          });
-
-          if (crown.phaseTimer >= crown.expansionDurationMs) {
-            crown.phase = 'ring';
-            crown.phaseTimer = 0;
-            crown.currentRadius = crown.maxRadius;
-          }
-        }
-
-        // FASE C: CORONA DE LLAMAS PERSISTENTE (2400 ms)
-        else if (crown.phase === 'ring') {
-          crown.currentRadius = crown.maxRadius;
-
-          // Daño periódico cada 450 ms por enemigo dentro del área
-          enemies.forEach((enemy) => {
-            const dist = Math.hypot(enemy.x - crown.x, (enemy.y - crown.y) / 0.58);
-            if (dist <= crown.maxRadius + enemy.radius) {
-              const lastTick = crown.lastDamagePerEnemy[enemy.id] || 0;
-              if (frameNow - lastTick >= crown.periodicIntervalMs) {
-                crown.lastDamagePerEnemy[enemy.id] = frameNow;
-                const dmg = Math.round(crown.periodicDamage);
-                enemy.hp -= dmg;
-                enemy.hitFlash = 7;
-                g.enemyManager.applyStatus(enemy, 'burning', 200, 6);
-                elementalSound.playContinuousTick('fire');
-                g.floatingTexts.push({
-                  id: `cr-tick-${frameNow}-${enemy.id}`,
-                  x: enemy.x + (Math.random() - 0.5) * 14,
-                  y: enemy.y - 18,
-                  text: `🔥 -${dmg}`,
-                  color: '#ea580c',
-                  fontSize: 12,
-                  opacity: 1,
-                  vy: -1.3,
-                  life: 28,
-                });
-              }
-            }
-          });
-
-          // Emisión visual de brasas vivas desde el anillo de llamas
-          if (Math.random() < 0.45) {
-            const rAng = Math.random() * Math.PI * 2;
-            const rx = crown.x + Math.cos(rAng) * crown.maxRadius;
-            const ry = crown.y + Math.sin(rAng) * crown.maxRadius * 0.58;
-            g.particles.push({
-              id: `cr-flame-${frameNow}-${Math.random()}`,
-              x: rx + (Math.random() - 0.5) * 6,
-              y: ry + (Math.random() - 0.5) * 4,
-              vx: (Math.random() - 0.5) * 0.8,
-              vy: -1.6 - Math.random() * 1.8,
-              radius: 2 + Math.random() * 2,
-              color: Math.random() < 0.5 ? '#f97316' : '#fef08a',
-              alpha: 0.9,
-              life: 22,
-            });
-          }
-
-          if (crown.phaseTimer >= crown.ringDurationMs) {
+            // ¡DETONACIÓN INSTANTÁNEA DEL PILAR ÍGNEO!
             crown.phase = 'detonation';
             crown.phaseTimer = 0;
-            crown.hasDetonated = false;
-          }
-        }
-
-        // FASE D: CONVERGENCIA Y DETONACIÓN FINAL (450 ms)
-        else if (crown.phase === 'detonation') {
-          // Primeros 180 ms: Inward collapse
-          if (crown.phaseTimer < 180) {
-            const collapseProg = crown.phaseTimer / 180;
-            crown.currentRadius = crown.maxRadius * (1 - collapseProg * 0.75);
-
-            // Chispas succionadas hacia el centro
-            if (Math.random() < 0.6) {
-              const inAng = Math.random() * Math.PI * 2;
-              const inDist = crown.currentRadius + 20;
-              g.particles.push({
-                id: `cr-implode-${frameNow}-${Math.random()}`,
-                x: crown.x + Math.cos(inAng) * inDist,
-                y: crown.y + Math.sin(inAng) * inDist * 0.58,
-                vx: -Math.cos(inAng) * 3.5,
-                vy: -Math.sin(inAng) * 2.0,
-                radius: 2,
-                color: '#ffffff',
-                alpha: 1,
-                life: 10,
-              });
-            }
-          } else if (!crown.hasDetonated) {
-            // A los 180 ms: ¡COLOSAL DETONACIÓN FINAL!
             crown.hasDetonated = true;
+            crown.currentRadius = crown.maxRadius;
+
+            // Audio: detonación sorda y profunda de combustión
+            audioManager.playFirePillarDetonation();
             elementalSound.playInfernalCrownDetonation();
-            g.screenShake = crown.isCharged ? 18 : 16;
+            g.screenShake = Math.max(g.screenShake, crown.isCharged ? 14 : 11);
 
-            const blastRadius = crown.maxRadius * 1.25;
-            const finalDamage = Math.round(crown.detonationDamage * 2.8);
+            const blastRadius = crown.maxRadius;
+            const initialDamage = Math.round(crown.detonationDamage);
 
-            // Daño y empuje radial a enemigos en el área
+            // Impacto explosivo a enemigos en el radio
             enemies.forEach((enemy) => {
               const dist = Math.hypot(enemy.x - crown.x, (enemy.y - crown.y) / 0.58);
               if (dist <= blastRadius + enemy.radius) {
-                enemy.hp -= finalDamage;
-                enemy.hitFlash = 16;
-                enemy.stunnedTimer = 25;
-                g.enemyManager.applyStatus(enemy, 'burning', 240, 8);
+                crown.lastDamagePerEnemy[enemy.id] = frameNow;
 
-                // Empuje violento hacia afuera
-                const knockAng = Math.atan2((enemy.y - crown.y) / 0.58, enemy.x - crown.x);
-                enemy.x += Math.cos(knockAng) * crown.knockback * 4.5;
-                enemy.y += Math.sin(knockAng) * crown.knockback * 2.6;
+                // Afinidad: Gólem de Escoria Ígnea
+                if (enemy.bestiaryType === 'pyre_golem' || enemy.avatar === '🔥🪨') {
+                  enemy.frenzyTimer = 180; // Aceleración / frenesí
+                  const heal = Math.max(1, Math.round(initialDamage * 0.35));
+                  enemy.hp = Math.min(enemy.maxHp, enemy.hp + heal);
+                  enemy.hitFlash = 6;
+                  g.floatingTexts.push({
+                    id: `cr-absorb-${frameNow}-${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 24,
+                    text: `🔥 ¡ABSORBE! (+${heal})`,
+                    color: '#ff6d00',
+                    fontSize: 14,
+                    opacity: 1,
+                    vy: -1.6,
+                    life: 40,
+                  });
+                }
+                // Afinidad: Acechador de Escarcha (Quiebre de armadura y daño crítico de vulnerabilidad)
+                else if (enemy.bestiaryType === 'frost_lurker' || enemy.avatar === '❄️🕷️' || enemy.weakness === 'fire') {
+                  enemy.shieldBrokenTimer = 240; // Quiebre de coraza
+                  const critDmg = Math.round(initialDamage * 1.85);
+                  enemy.hp -= critDmg;
+                  enemy.hitFlash = 16;
+                  enemy.stunnedTimer = 20;
+                  g.enemyManager.applyStatus(enemy, 'burning', 240, 8);
+                  g.floatingTexts.push({
+                    id: `cr-frost-crit-${frameNow}-${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 26,
+                    text: `💥 ¡ARMADURA QUEBRADA! -${critDmg}`,
+                    color: '#fef08a',
+                    fontSize: 15,
+                    opacity: 1,
+                    vy: -1.8,
+                    life: 45,
+                  });
+                }
+                // Enemigos ligeros (Espectro de Tormenta, etc.) y estándar
+                else {
+                  enemy.hp -= initialDamage;
+                  enemy.hitFlash = 14;
+                  enemy.stunnedTimer = 18;
+                  g.enemyManager.applyStatus(enemy, 'burning', 240, 7);
 
-                g.floatingTexts.push({
-                  id: `cr-det-crit-${frameNow}-${enemy.id}`,
-                  x: enemy.x,
-                  y: enemy.y - 24,
-                  text: `💥 ¡ESTALLIDO INFERNAL! -${finalDamage}`,
-                  color: '#fef08a',
-                  fontSize: 14,
-                  opacity: 1,
-                  vy: -1.8,
-                  life: 45,
-                });
+                  // Micro-knockback radial que dispersa a los enemigos
+                  const knockAng = Math.atan2((enemy.y - crown.y) / 0.58, enemy.x - crown.x);
+                  const knockForce = crown.knockback * 3.5;
+                  enemy.x += Math.cos(knockAng) * knockForce;
+                  enemy.y += Math.sin(knockAng) * knockForce * 0.58;
+
+                  g.floatingTexts.push({
+                    id: `cr-det-hit-${frameNow}-${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 22,
+                    text: `💥 -${initialDamage}`,
+                    color: '#f97316',
+                    fontSize: 14,
+                    opacity: 1,
+                    vy: -1.5,
+                    life: 35,
+                  });
+                }
               }
             });
 
@@ -6743,48 +6690,153 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.terrainManager.obstacles.forEach((obs) => {
               const dist = Math.hypot(obs.x - crown.x, (obs.y - crown.y) / 0.58);
               if (dist <= blastRadius + obs.radius) {
-                obs.hp -= finalDamage * 0.8;
+                obs.hp -= initialDamage * 0.8;
               }
             });
 
             // Anillo de onda de choque expansivo
             g.particles.push({
-              id: `cr-blast-ring-${frameNow}`,
+              id: `cr-shockwave-${frameNow}`,
               x: crown.x,
               y: crown.y,
               vx: 0,
               vy: 0,
-              radius: 15,
+              radius: 12,
               color: '#ffffff',
               alpha: 1,
-              life: 18,
-              maxLife: 18,
+              life: 16,
+              maxLife: 16,
               type: 'ring',
             });
 
-            // Ráfaga masiva de esquirlas y llamas radiales
-            for (let p = 0; p < 24; p++) {
-              const pAng = (p / 24) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-              const pSpeed = 4.0 + Math.random() * 5.0;
+            // Partículas explosivas iniciales de llamas
+            for (let p = 0; p < 18; p++) {
+              const pAng = (p / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+              const pSpeed = 3.5 + Math.random() * 4.5;
               g.particles.push({
-                id: `cr-det-burst-${frameNow}-${p}`,
+                id: `cr-pillar-burst-${frameNow}-${p}`,
                 x: crown.x,
                 y: crown.y,
                 vx: Math.cos(pAng) * pSpeed,
-                vy: Math.sin(pAng) * pSpeed * 0.58,
-                radius: 3 + Math.random() * 3,
+                vy: Math.sin(pAng) * pSpeed * 0.58 - (2.0 + Math.random() * 2.5),
+                radius: 2.5 + Math.random() * 2.5,
                 color: p % 2 === 0 ? '#fef08a' : (p % 3 === 0 ? '#ef4444' : '#f97316'),
                 alpha: 1,
-                life: 25 + Math.floor(Math.random() * 15),
+                life: 22 + Math.floor(Math.random() * 12),
               });
             }
           }
+        }
+
+        // FASE 2: DETONACIÓN DEL PILAR (250 a 600 ms, duración 350 ms)
+        else if (crown.phase === 'detonation') {
+          crown.currentRadius = crown.maxRadius;
+
+          // Ascuas y chispas ascendentes a gran velocidad mientras la columna está activa
+          if (Math.random() < 0.75) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = Math.random() * (crown.maxRadius * 0.7);
+            g.particles.push({
+              id: `cr-geyser-ember-${frameNow}-${Math.random()}`,
+              x: crown.x + Math.cos(pAng) * pDist,
+              y: crown.y + Math.sin(pAng) * pDist * 0.58,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: -4.5 - Math.random() * 4.0,
+              radius: 2 + Math.random() * 2.5,
+              color: Math.random() < 0.5 ? '#fef08a' : '#ea580c',
+              alpha: 1,
+              life: 20,
+            });
+          }
+
+          // Si un enemigo nuevo entra al pilar durante la erupción, recibe impacto
+          enemies.forEach((enemy) => {
+            const dist = Math.hypot(enemy.x - crown.x, (enemy.y - crown.y) / 0.58);
+            if (dist <= crown.maxRadius + enemy.radius && !crown.lastDamagePerEnemy[enemy.id]) {
+              crown.lastDamagePerEnemy[enemy.id] = frameNow;
+              const hitDmg = Math.round(crown.detonationDamage * 0.8);
+              enemy.hp -= hitDmg;
+              enemy.hitFlash = 10;
+              g.enemyManager.applyStatus(enemy, 'burning', 200, 6);
+              g.floatingTexts.push({
+                id: `cr-pillar-enter-${frameNow}-${enemy.id}`,
+                x: enemy.x,
+                y: enemy.y - 20,
+                text: `🔥 -${hitDmg}`,
+                color: '#f97316',
+                fontSize: 13,
+                opacity: 1,
+                vy: -1.3,
+                life: 30,
+              });
+            }
+          });
 
           if (crown.phaseTimer >= crown.detonationDurationMs) {
+            crown.phase = 'ring'; // Transición al suelo ardiente residual
+            crown.phaseTimer = 0;
+          }
+        }
+
+        // FASE 3: SUELO ARDIENTE RESIDUAL (600 a 3000 ms, duración 2400 ms)
+        else if (crown.phase === 'ring') {
+          crown.currentRadius = crown.maxRadius;
+
+          // Daño periódico cada periodicIntervalMs (400 ms) a enemigos dentro del cráter
+          enemies.forEach((enemy) => {
+            const dist = Math.hypot(enemy.x - crown.x, (enemy.y - crown.y) / 0.58);
+            if (dist <= crown.maxRadius + enemy.radius) {
+              const lastTick = crown.lastDamagePerEnemy[enemy.id] || 0;
+              if (frameNow - lastTick >= crown.periodicIntervalMs) {
+                crown.lastDamagePerEnemy[enemy.id] = frameNow;
+
+                if (enemy.bestiaryType === 'pyre_golem' || enemy.avatar === '🔥🪨') {
+                  enemy.hp = Math.min(enemy.maxHp, enemy.hp + 6);
+                } else {
+                  const dmg = Math.round(crown.periodicDamage);
+                  enemy.hp -= dmg;
+                  enemy.hitFlash = 7;
+                  g.enemyManager.applyStatus(enemy, 'burning', 180, 5);
+                  elementalSound.playContinuousTick('fire');
+                  g.floatingTexts.push({
+                    id: `cr-crater-tick-${frameNow}-${enemy.id}`,
+                    x: enemy.x + (Math.random() - 0.5) * 12,
+                    y: enemy.y - 18,
+                    text: `🔥 -${dmg}`,
+                    color: '#ea580c',
+                    fontSize: 12,
+                    opacity: 1,
+                    vy: -1.2,
+                    life: 26,
+                  });
+                }
+              }
+            }
+          });
+
+          // Pavesas flotantes sutiles del suelo caliente
+          if (Math.random() < 0.35) {
+            const rAng = Math.random() * Math.PI * 2;
+            const rDist = Math.random() * (crown.maxRadius * 0.85);
+            g.particles.push({
+              id: `cr-residual-ember-${frameNow}-${Math.random()}`,
+              x: crown.x + Math.cos(rAng) * rDist,
+              y: crown.y + Math.sin(rAng) * rDist * 0.58,
+              vx: (Math.random() - 0.5) * 0.7,
+              vy: -1.2 - Math.random() * 1.5,
+              radius: 1.5 + Math.random() * 1.5,
+              color: Math.random() < 0.6 ? '#f97316' : '#78350f',
+              alpha: 0.8,
+              life: 24,
+            });
+          }
+
+          if (crown.phaseTimer >= crown.ringDurationMs) {
             crown.phase = 'finished';
           }
         }
 
+        // Remoción al completar el ciclo de vida
         if (crown.phase === 'finished') {
           g.infernalCrowns.splice(cIdx, 1);
         }

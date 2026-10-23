@@ -364,6 +364,97 @@ export class AudioManager {
   }
 
   /**
+   * PILAR ÍGNEO (FUEGO + FUEGO) - Conjuración (Fase 1):
+   * Silbido sutil de viento caliente (envolvente rápida de ruido blanco/rosa filtrado en 150 ms).
+   */
+  public playFirePillarConjure(): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const duration = 0.18;
+
+    if (this.whiteNoiseBuffer) {
+      const noise = ctx.createBufferSource();
+      noise.buffer = this.whiteNoiseBuffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.Q.setValueAtTime(3.0, now);
+      bandpass.frequency.setValueAtTime(450, now);
+      bandpass.frequency.exponentialRampToValueAtTime(1250, now + 0.08);
+      bandpass.frequency.exponentialRampToValueAtTime(350, now + duration);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.24, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noise.connect(bandpass);
+      bandpass.connect(gain);
+      gain.connect(this.sfxGain);
+
+      noise.start(now);
+      noise.stop(now + duration);
+      this.scheduleCleanup(duration, noise, bandpass, gain);
+    }
+  }
+
+  /**
+   * PILAR ÍGNEO (FUEGO + FUEGO) - Detonación / Erupción (Fase 2):
+   * Explosión de combustión sorda (onda senoidal descendente de 110 Hz a 35 Hz + ráfaga de ruido filtrado en pasobajo).
+   */
+  public playFirePillarDetonation(): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const duration = 0.45;
+
+    // 1. Golpe sordo senoidal descendente (110 Hz -> 35 Hz)
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(35, now + 0.35);
+
+    oscGain.gain.setValueAtTime(0.35, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    osc.connect(oscGain);
+    oscGain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + duration);
+
+    // 2. Ráfaga de ruido filtrado en pasobajo para combustión pesada
+    if (this.whiteNoiseBuffer) {
+      const noise = ctx.createBufferSource();
+      noise.buffer = this.whiteNoiseBuffer;
+
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.setValueAtTime(450, now);
+      lowpass.frequency.exponentialRampToValueAtTime(95, now + duration);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.28, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noise.connect(lowpass);
+      lowpass.connect(noiseGain);
+      noiseGain.connect(this.sfxGain);
+
+      noise.start(now);
+      noise.stop(now + duration);
+      this.scheduleCleanup(duration, osc, oscGain, noise, lowpass, noiseGain);
+    } else {
+      this.scheduleCleanup(duration, osc, oscGain);
+    }
+  }
+
+  /**
    * RAYO / DESCARGA ELÉCTRICA (⚡):
    * Ráfaga corta de diente de sierra con modulación FM de alta frecuencia (1200 Hz a 150 Hz en 100 ms)
    * + modulación rápida caótica para crujido eléctrico (crackle).

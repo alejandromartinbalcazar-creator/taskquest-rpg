@@ -1,4 +1,4 @@
-﻿// Sintetizador Web Audio API Procedural de Alta Fidelidad para Magia Elemental
+// Sintetizador Web Audio API Procedural de Alta Fidelidad para Magia Elemental
 import { audioManager } from '../../services/AudioManager';
 
 class ElementalSoundEngine {
@@ -711,9 +711,9 @@ class ElementalSoundEngine {
     osc.stop(now + 0.05);
   }
 
-  // --- CORONA INFERNAL (FUEGO + FUEGO) ---
+  // --- PILAR ÍGNEO / IGNICIÓN A DISTANCIA (FUEGO + FUEGO) ---
 
-  // 1. Fase A: IgniciÃ³n y acumulaciÃ³n de energÃ­a Ã­gnea
+  // 1. Fase 1: Conjuración de la runa (silbido sutil de viento caliente en 150 ms)
   public playInfernalCrownIgnition() {
     if (this.isMuted) return;
     this.initCtx();
@@ -722,84 +722,63 @@ class ElementalSoundEngine {
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(110, now);
-    osc.frequency.exponentialRampToValueAtTime(320, now + 0.35);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(750, now + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(260, now + 0.18);
 
-    gain.gain.setValueAtTime(0.01, now);
-    gain.gain.linearRampToValueAtTime(0.22, now + 0.25);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.24, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(350, now);
-    filter.frequency.linearRampToValueAtTime(800, now + 0.35);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(500, now);
+    filter.frequency.linearRampToValueAtTime(950, now + 0.1);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.dest);
     osc.start(now);
-    osc.stop(now + 0.36);
+    osc.stop(now + 0.18);
   }
 
-  // 2. Fase B: ExpansiÃ³n violenta de la onda de fuego
-  public playInfernalCrownExpand() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(280, now);
-    osc.frequency.exponentialRampToValueAtTime(85, now + 0.38);
-
-    gain.gain.setValueAtTime(0.32, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-
-    osc.connect(gain);
-    gain.connect(this.dest);
-    osc.start(now);
-    osc.stop(now + 0.4);
-  }
-
-  // 3. Fase D: DetonaciÃ³n Final Contundente (Impacto con sub-graves masivos)
+  // 2. Fase 2: Detonación del Pilar (explosión de combustión sorda senoidal 110 Hz -> 35 Hz)
   public playInfernalCrownDetonation() {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    // Sub-bajo sÃ­smico profundo
+    // Sub-bajo sordo de combustión descendente (110 Hz -> 35 Hz)
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(95, now);
-    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.55);
+    subOsc.frequency.setValueAtTime(110, now);
+    subOsc.frequency.exponentialRampToValueAtTime(35, now + 0.32);
 
-    subGain.gain.setValueAtTime(0.48, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    subGain.gain.setValueAtTime(0.42, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
 
     subOsc.connect(subGain);
     subGain.connect(this.dest);
     subOsc.start(now);
-    subOsc.stop(now + 0.55);
+    subOsc.stop(now + 0.45);
 
-    // Onda de choque explosiva
+    // Resonador de estallido volcánico en bajas frecuencias
     const blastOsc = this.ctx.createOscillator();
     const blastGain = this.ctx.createGain();
     blastOsc.type = 'triangle';
-    blastOsc.frequency.setValueAtTime(160, now);
-    blastOsc.frequency.exponentialRampToValueAtTime(45, now + 0.42);
+    blastOsc.frequency.setValueAtTime(140, now);
+    blastOsc.frequency.exponentialRampToValueAtTime(40, now + 0.38);
 
-    blastGain.gain.setValueAtTime(0.38, now);
-    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    blastGain.gain.setValueAtTime(0.32, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
     blastOsc.connect(blastGain);
     blastGain.connect(this.dest);
     blastOsc.start(now);
-    blastOsc.stop(now + 0.42);
+    blastOsc.stop(now + 0.38);
   }
 
   // --- SOBRECARGA VOLTAICA (RAYO + RAYO) ---
