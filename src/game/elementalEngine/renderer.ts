@@ -52,6 +52,11 @@ import {
   LevelCheckpoint,
   MagmaTrenchEntity,
   SolarFusionBeamEntity,
+  GlacialAvalancheEntity,
+  GlacialAvalancheSpike,
+  BoilingHailEntity,
+  BoilingHailIcicle,
+  SuperconductorBlizzardEntity,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
@@ -131,7 +136,10 @@ export class IsometricRenderer {
     forestLevel?: ForestLevelData,
     tilemap?: Tilemap,
     magmaTrenches: MagmaTrenchEntity[] = [],
-    solarFusionBeams: SolarFusionBeamEntity[] = []
+    solarFusionBeams: SolarFusionBeamEntity[] = [],
+    glacialAvalanches: GlacialAvalancheEntity[] = [],
+    boilingHails: BoilingHailEntity[] = [],
+    superconductorBlizzards: SuperconductorBlizzardEntity[] = []
   ) {
     ctx.save();
 
@@ -227,6 +235,15 @@ export class IsometricRenderer {
 
     // 3.885 Dibujar Trincheras de Magma en el Suelo (Fuego + Fuego + Tierra)
     this.drawMagmaTrenches(ctx, magmaTrenches);
+
+    // 3.886 Dibujar Grietas y Escarcha de Alud Telúrico en el Suelo (Hielo + Hielo + Tierra)
+    this.drawGlacialAvalancheGround(ctx, glacialAvalanches);
+
+    // 3.887 Dibujar Runas de Impacto y Vapor de Granizo Hirviente en el Suelo (Hielo + Hielo + Fuego)
+    this.drawBoilingHailGround(ctx, boilingHails);
+
+    // 3.888 Dibujar Anillo y Glifo de Tormenta Crioelectrostática en el Suelo (Hielo + Hielo + Rayo)
+    this.drawSuperconductorBlizzardGround(ctx, superconductorBlizzards);
 
     // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
     if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
@@ -523,6 +540,34 @@ export class IsometricRenderer {
       }
     });
 
+    // Alud de Agujas Telúricas (Hielo + Hielo + Tierra) integradas en Depth Sorting
+    glacialAvalanches.forEach((avalanche) => {
+      if (!avalanche.finished) {
+        avalanche.spikes.forEach((spike) => {
+          if (spike.height > 0) {
+            renderList.push({
+              y: spike.y,
+              draw: () => this.drawGlacialAvalancheSpike(ctx, spike, avalanche),
+            });
+          }
+        });
+      }
+    });
+
+    // Carámbanos cayendo de la Lluvia de Granizo Hirviente (Hielo + Hielo + Fuego) integrados en Depth Sorting
+    boilingHails.forEach((hail) => {
+      if (!hail.finished) {
+        hail.icicles.forEach((icicle) => {
+          if (!icicle.hasImpacted && hail.elapsedMs >= icicle.delayMs) {
+            renderList.push({
+              y: icicle.currentY,
+              draw: () => this.drawBoilingHailIcicle(ctx, icicle),
+            });
+          }
+        });
+      }
+    });
+
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
@@ -572,6 +617,9 @@ export class IsometricRenderer {
 
     // 6.6 Dibujar Haz de Fusión Solar (Fuego + Fuego + Rayo) de Plasma Instantáneo
     this.drawSolarFusionBeams(ctx, solarFusionBeams);
+
+    // 6.7 Dibujar Tormenta Crioelectrostática (Hielo + Hielo + Rayo): Anillo Giratorio de Copos y Relámpagos
+    this.drawSuperconductorBlizzardVortex(ctx, superconductorBlizzards);
 
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
@@ -4221,6 +4269,403 @@ export class IsometricRenderer {
       ctx.fillRect(7, -5, 2, 10);
       ctx.fillRect(-5, -9, 10, 2);
       ctx.fillRect(-5, 7, 10, 2);
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // ALUD DE AGUJAS TELÚRICAS (HIELO + HIELO + TIERRA: FISURAS Y ESCARCHA EN SUELO)
+  // =========================================================================
+  private static drawGlacialAvalancheGround(
+    ctx: CanvasRenderingContext2D,
+    avalanches: GlacialAvalancheEntity[]
+  ) {
+    if (!avalanches || avalanches.length === 0) return;
+
+    avalanches.forEach((ava) => {
+      if (ava.finished) return;
+
+      const lifeRatio = Math.max(0, 1 - ava.elapsedMs / ava.durationMs);
+      const alpha = Math.min(1, lifeRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ava.spikes.forEach((spike) => {
+        if (ava.elapsedMs < spike.delayMs) return;
+
+        const bx = Math.round(spike.x);
+        const by = Math.round(spike.y);
+
+        // Base de roca fracturada (#18181B)
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(bx - 16, by - 6, 32, 12);
+        ctx.fillRect(bx - 12, by - 8, 24, 16);
+
+        // Bloques escalonados de roca telúrica (#27272A)
+        ctx.fillStyle = '#27272a';
+        ctx.fillRect(bx - 14, by - 5, 28, 10);
+        ctx.fillRect(bx - 10, by - 7, 20, 14);
+
+        // Fracturas de escarcha ártica (#38BDF8)
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(bx - 11, by - 2, 8, 3);
+        ctx.fillRect(bx + 3, by - 1, 9, 3);
+        ctx.fillRect(bx - 3, by - 5, 4, 10);
+
+        // Runa de hielo blanco puro (#FFFFFF) en el punto de brote
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bx - 2, by - 2, 4, 4);
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // ALUD DE AGUJAS TELÚRICAS (HIELO + HIELO + TIERRA: PICO TRIANGULAR ESCALONADO)
+  // =========================================================================
+  private static drawGlacialAvalancheSpike(
+    ctx: CanvasRenderingContext2D,
+    spike: GlacialAvalancheSpike,
+    avalanche: GlacialAvalancheEntity
+  ) {
+    const h = Math.round(spike.height);
+    if (h <= 2) return;
+
+    const bx = Math.round(spike.x);
+    const by = Math.round(spike.y);
+
+    const lifeRatio = Math.max(0, 1 - avalanche.elapsedMs / avalanche.durationMs);
+    const alpha = Math.min(1, lifeRatio * 1.5);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Dibujamos el pico como una pirámide/aguja escalonada en tramos de 4px de alto
+    const stepHeight = 4;
+    const totalSteps = Math.ceil(h / stepHeight);
+    const baseHalfW = Math.round(spike.width / 2);
+
+    for (let step = 0; step < totalSteps; step++) {
+      const stepY = by - (step + 1) * stepHeight;
+      const progress = step / totalSteps; // 0 en base, 1 en punta
+      const curHalfW = Math.max(2, Math.round(baseHalfW * (1 - progress * 0.85)));
+
+      // 1. Contorno oscuro (#0F172A)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(bx - curHalfW - 2, stepY, (curHalfW + 2) * 2, stepHeight);
+
+      // 2. Base y cara sombreada de roca oscura (#27272A)
+      if (progress < 0.35) {
+        ctx.fillStyle = '#27272a';
+      } else {
+        ctx.fillStyle = '#1e293b';
+      }
+      ctx.fillRect(bx - curHalfW, stepY, curHalfW * 2, stepHeight);
+
+      // 3. Faceta lateral en azul glaciar (#0284C7)
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(bx - curHalfW, stepY, Math.round(curHalfW * 0.8), stepHeight);
+
+      // 4. Arista central en azul ártico brillante (#38BDF8)
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(bx - 1, stepY, Math.max(2, Math.round(curHalfW * 0.6)), stepHeight);
+
+      // 5. Brillo superior y puntas filosas en blanco puro (#FFFFFF)
+      if (progress >= 0.7) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bx - 2, stepY, 4, stepHeight);
+      }
+    }
+
+    // Punta filosa terminal en blanco puro
+    const tipY = by - h;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx - 2, tipY - 3, 4, 4);
+    ctx.fillRect(bx - 1, tipY - 5, 2, 3);
+
+    // Esquirlas cuadradas de hielo que saltan hacia arriba
+    if (spike.erupted) {
+      const shardAnim = Math.floor(avalanche.elapsedMs * 0.02) % 3;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(bx - 6 - shardAnim * 2, tipY - 6 - shardAnim * 3, 3, 3);
+      ctx.fillRect(bx + 5 + shardAnim * 2, tipY - 4 - shardAnim * 4, 3, 3);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx - 3 + shardAnim, tipY - 9 - shardAnim * 2, 2, 2);
+      ctx.fillRect(bx + 2 - shardAnim, tipY - 8 - shardAnim * 3, 2, 2);
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // LLUVIA DE GRANIZO HIRVIENTE (HIELO + HIELO + FUEGO: RUNAS DE IMPACTO Y VAPOR)
+  // =========================================================================
+  private static drawBoilingHailGround(
+    ctx: CanvasRenderingContext2D,
+    hails: BoilingHailEntity[]
+  ) {
+    if (!hails || hails.length === 0) return;
+
+    hails.forEach((hail) => {
+      if (hail.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - hail.elapsedMs / hail.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.4);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const cx = Math.round(hail.centerX);
+      const cy = Math.round(hail.centerY);
+      const rad = hail.radius; // 90px
+      const squish = 0.58;
+
+      // 1. Círculo de runa térmica/escarcha exterior discontinuo en pixel art
+      ctx.fillStyle = '#38bdf8';
+      const steps = 16;
+      for (let i = 0; i < steps; i++) {
+        const ang = (i / steps) * Math.PI * 2 + hail.elapsedMs * 0.002;
+        const px = Math.round(cx + Math.cos(ang) * rad);
+        const py = Math.round(cy + Math.sin(ang) * rad * squish);
+        ctx.fillRect(px - 3, py - 2, 6, 4);
+      }
+
+      // 2. Anillo interior térmico naranja incandescente (#EA580C)
+      ctx.fillStyle = '#ea580c';
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2 - hail.elapsedMs * 0.003;
+        const px = Math.round(cx + Math.cos(ang) * (rad * 0.5));
+        const py = Math.round(cy + Math.sin(ang) * (rad * 0.5) * squish);
+        ctx.fillRect(px - 2, py - 2, 5, 4);
+      }
+
+      // 3. Impactos en suelo de carámbanos ya estrellados: vapor blanco y chispas rojas
+      hail.icicles.forEach((icicle) => {
+        if (!icicle.hasImpacted) return;
+
+        const ix = Math.round(icicle.targetX);
+        const iy = Math.round(icicle.targetY);
+
+        // Cráter gélido/ardiente
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(ix - 8, iy - 4, 16, 8);
+        ctx.fillStyle = '#ea580c';
+        ctx.fillRect(ix - 6, iy - 3, 12, 6);
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillRect(ix - 3, iy - 2, 6, 4);
+
+        // Nubes cuadradas de vapor blanco disipándose (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix - 10, iy - 8, 5, 5);
+        ctx.fillRect(ix + 6, iy - 10, 6, 6);
+        ctx.fillRect(ix - 2, iy - 14, 5, 5);
+
+        // Chispas rojas (#EF4444)
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(ix - 12, iy - 4, 3, 3);
+        ctx.fillRect(ix + 10, iy - 6, 3, 3);
+        ctx.fillRect(ix + 3, iy - 16, 3, 3);
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // LLUVIA DE GRANIZO HIRVIENTE (HIELO + HIELO + FUEGO: ROMBOIDE PIXELADO EN CAÍDA)
+  // =========================================================================
+  private static drawBoilingHailIcicle(
+    ctx: CanvasRenderingContext2D,
+    icicle: BoilingHailIcicle
+  ) {
+    const cx = Math.round(icicle.currentX);
+    const cy = Math.round(icicle.currentY);
+
+    ctx.save();
+    // Inclinación diagonal hacia la diana
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI * 0.22);
+
+    // 1. Contorno oscuro exterior (#0F172A)
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-2, -14, 4, 28);
+    ctx.fillRect(-5, -10, 10, 20);
+    ctx.fillRect(-7, -6, 14, 12);
+
+    // 2. Cuerpo gélido celeste (#7DD3FC)
+    ctx.fillStyle = '#7dd3fc';
+    ctx.fillRect(-1, -12, 2, 24);
+    ctx.fillRect(-4, -8, 8, 16);
+    ctx.fillRect(-6, -4, 12, 8);
+
+    // 3. Facetas en azul ártico (#38BDF8)
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-3, -6, 6, 12);
+
+    // 4. Núcleo incandescente térmico rojo/naranja (#EA580C)
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(-2, -3, 4, 6);
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(-1, -2, 2, 4);
+
+    // 5. Destello central blanco
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-1, -1, 2, 2);
+
+    // Estela de vapor blanco y chispas rojas tras el carámbano
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-2, -18, 3, 3);
+    ctx.fillRect(2, -22, 2, 2);
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(-3, -24, 2, 2);
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // TORMENTA CRIOELECTROSTÁTICA (HIELO + HIELO + RAYO: SUELO Y GLIFOS CONDUCTORES)
+  // =========================================================================
+  private static drawSuperconductorBlizzardGround(
+    ctx: CanvasRenderingContext2D,
+    blizzards: SuperconductorBlizzardEntity[]
+  ) {
+    if (!blizzards || blizzards.length === 0) return;
+
+    blizzards.forEach((blizz) => {
+      if (blizz.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - blizz.elapsedMs / blizz.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.4);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const cx = Math.round(blizz.centerX);
+      const cy = Math.round(blizz.centerY);
+      const rad = blizz.radius; // 80px
+      const squish = 0.58;
+
+      // 1. Fondo sombreado de vórtice magnético en suelo
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      ctx.fillRect(cx - rad, cy - Math.round(rad * squish), rad * 2, Math.round(rad * squish * 2));
+
+      // 2. Anillo exterior de escarcha superconductora (#BAE6FD)
+      ctx.fillStyle = '#bae6fd';
+      const steps = 18;
+      for (let i = 0; i < steps; i++) {
+        const ang = (i / steps) * Math.PI * 2 + blizz.angle;
+        const px = Math.round(cx + Math.cos(ang) * rad);
+        const py = Math.round(cy + Math.sin(ang) * rad * squish);
+        ctx.fillRect(px - 3, py - 2, 6, 4);
+      }
+
+      // 3. Anillo intermedio violeta superconductor (#A855F7)
+      ctx.fillStyle = '#a855f7';
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2 - blizz.angle * 1.5;
+        const px = Math.round(cx + Math.cos(ang) * (rad * 0.65));
+        const py = Math.round(cy + Math.sin(ang) * (rad * 0.65) * squish);
+        ctx.fillRect(px - 2, py - 2, 5, 4);
+      }
+
+      // 4. Glifo en cruz de condensador magnético en el centro
+      ctx.fillStyle = '#00f0ff';
+      ctx.fillRect(cx - 8, cy - 2, 16, 4);
+      ctx.fillRect(cx - 2, cy - Math.round(8 * squish), 4, Math.round(16 * squish));
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // TORMENTA CRIOELECTROSTÁTICA (HIELO + HIELO + RAYO: ANILLO GIRATORIO Y RELÁMPAGOS)
+  // =========================================================================
+  private static drawSuperconductorBlizzardVortex(
+    ctx: CanvasRenderingContext2D,
+    blizzards: SuperconductorBlizzardEntity[]
+  ) {
+    if (!blizzards || blizzards.length === 0) return;
+
+    blizzards.forEach((blizz) => {
+      if (blizz.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - blizz.elapsedMs / blizz.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.4);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const cx = Math.round(blizz.centerX);
+      const cy = Math.round(blizz.centerY);
+      const rad = blizz.radius; // 80px
+      const squish = 0.58;
+      const ang = blizz.angle;
+
+      // 1. Bloques cuadrados y copos giratorios de escarcha (#BAE6FD)
+      const flakeCount = 14;
+      for (let i = 0; i < flakeCount; i++) {
+        const fAng = ang + (i / flakeCount) * Math.PI * 2;
+        const fDist = rad * (0.45 + 0.5 * ((i % 3) / 2));
+        const fx = Math.round(cx + Math.cos(fAng) * fDist);
+        const fy = Math.round(cy + Math.sin(fAng) * fDist * squish - 12 - (i % 4) * 5);
+        const size = (i % 2 === 0) ? 5 : 4;
+
+        // Contorno oscuro de píxel
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(fx - 1, fy - 1, size + 2, size + 2);
+
+        // Copo de hielo
+        ctx.fillStyle = i % 2 === 0 ? '#bae6fd' : '#7dd3fc';
+        ctx.fillRect(fx, fy, size, size);
+
+        // Núcleo brillante
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(fx + 1, fy + 1, 2, 2);
+      }
+
+      // 2. Líneas quebradas de relámpago pixelado en violeta (#A855F7) y cian brillante (#00F0FF)
+      const boltBranches = 4;
+      for (let b = 0; b < boltBranches; b++) {
+        const branchAng = -ang * 2 + (b / boltBranches) * Math.PI * 2;
+        const color = (b % 2 === 0) ? '#a855f7' : '#00f0ff';
+        ctx.fillStyle = color;
+
+        let curX = cx;
+        let curY = cy - 10;
+        const segs = 4;
+
+        for (let s = 0; s < segs; s++) {
+          const nextDist = (rad * 0.85) * ((s + 1) / segs);
+          const jitterAng = branchAng + ((s % 2 === 0) ? 0.25 : -0.25);
+          const nextX = Math.round(cx + Math.cos(jitterAng) * nextDist);
+          const nextY = Math.round(cy + Math.sin(jitterAng) * nextDist * squish - 10);
+
+          // Trazar línea escalonada pixelada (Manhattan / 90° segments)
+          ctx.fillRect(curX - 1, curY - 1, (nextX - curX) + 2, 2);
+          ctx.fillRect(nextX - 1, curY - 1, 2, (nextY - curY) + 2);
+
+          // Chispa cuadrada en el quiebre
+          ctx.fillRect(nextX - 2, nextY - 2, 4, 4);
+
+          curX = nextX;
+          curY = nextY;
+        }
+      }
+
+      // 3. Chispas cuadradas flotantes violetas y cian en el torbellino
+      for (let s = 0; s < 6; s++) {
+        const sAng = ang * 3 + s * 1.1;
+        const sDist = rad * 0.35 + (s * 8);
+        const sx = Math.round(cx + Math.cos(sAng) * sDist);
+        const sy = Math.round(cy + Math.sin(sAng) * sDist * squish - 8);
+
+        ctx.fillStyle = s % 2 === 0 ? '#a855f7' : '#00f0ff';
+        ctx.fillRect(sx, sy, 3, 3);
+      }
 
       ctx.restore();
     });

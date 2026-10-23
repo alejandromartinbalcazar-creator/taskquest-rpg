@@ -333,6 +333,47 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // TRIPLES MIXTAS - DOMINANCIA HIELO (Cooldown: 0)
+  glacial_avalanche: {
+    id: 'glacial_avalanche',
+    name: 'Alud Telúrico',
+    elements: ['ice', 'ice', 'earth'],
+    description: 'Emergen 3 estalagmitas colosales de hielo y roca en un cono frontal, infligiendo daño contundente masivo y microaturdimiento (0.8s).',
+    icon: '🏔️🌍',
+    color: '#38bdf8',
+    secondaryColor: '#27272a',
+    damage: 82,
+    knockback: 6.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  boiling_hail: {
+    id: 'boiling_hail',
+    name: 'Granizo Hirviente',
+    elements: ['ice', 'ice', 'fire'],
+    description: 'Descarga una lluvia rápida de 6 carámbanos incandescentes en un área de 90px que dañan por frío y detonan en vapor quemante.',
+    icon: '☄️❄️',
+    color: '#7dd3fc',
+    secondaryColor: '#ea580c',
+    damage: 26,
+    knockback: 2.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  superconductor_blizzard: {
+    id: 'superconductor_blizzard',
+    name: 'Ventisca Conductora',
+    elements: ['ice', 'ice', 'lightning'],
+    description: 'Vórtice crioelectrostático persistente de 80px durante 2s que ralentiza un 50%, daña por pulsos y genera arcos voltaicos entre enemigos.',
+    icon: '🌪️⚡',
+    color: '#bae6fd',
+    secondaryColor: '#a855f7',
+    damage: 24,
+    knockback: 1.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -402,6 +443,11 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (count('fire') === 2 && count('earth') === 1) return RECIPES.magma_trench;
   if (count('fire') === 2 && count('ice') === 1) return RECIPES.thermal_deflagration;
   if (count('fire') === 2 && count('lightning') === 1) return RECIPES.solar_fusion_beam;
+
+  // 2.6 Triples Mixtas - Dominancia Hielo (cooldown: 0)
+  if (count('ice') === 2 && count('earth') === 1) return RECIPES.glacial_avalanche;
+  if (count('ice') === 2 && count('fire') === 1) return RECIPES.boiling_hail;
+  if (count('ice') === 2 && count('lightning') === 1) return RECIPES.superconductor_blizzard;
 
   // 3. Las 6 Combinaciones Prioritarias de 2 Elementos
   if (hasFire && hasIce) {

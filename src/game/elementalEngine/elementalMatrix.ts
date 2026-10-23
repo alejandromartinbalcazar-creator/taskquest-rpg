@@ -432,7 +432,13 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
   )
     return 'fire';
   if (spellType === 'crystal_field') return 'lightning';
-  if (spellType === 'permafrost_prison') return 'ice';
+  if (
+    spellType === 'permafrost_prison' ||
+    spellType === 'glacial_avalanche' ||
+    spellType === 'boiling_hail' ||
+    spellType === 'superconductor_blizzard'
+  )
+    return 'ice';
   if (spellType === 'obsidian_volcano') return 'earth';
   if (spellType === 'conductive_prison') return 'lightning';
   if (spellType === 'overload_core') return 'lightning';

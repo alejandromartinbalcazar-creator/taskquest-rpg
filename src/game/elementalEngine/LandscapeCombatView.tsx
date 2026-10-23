@@ -50,6 +50,11 @@ import {
   ForestLevelData,
   MagmaTrenchEntity,
   SolarFusionBeamEntity,
+  GlacialAvalancheEntity,
+  GlacialAvalancheSpike,
+  BoilingHailEntity,
+  BoilingHailIcicle,
+  SuperconductorBlizzardEntity,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
@@ -711,6 +716,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     elementalCataclysms: [] as ElementalCataclysmEntity[],
     magmaTrenches: [] as MagmaTrenchEntity[],
     solarFusionBeams: [] as SolarFusionBeamEntity[],
+    glacialAvalanches: [] as GlacialAvalancheEntity[],
+    boilingHails: [] as BoilingHailEntity[],
+    superconductorBlizzards: [] as SuperconductorBlizzardEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1046,6 +1054,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.elementalCataclysms = [];
       g.magmaTrenches = [];
       g.solarFusionBeams = [];
+      g.glacialAvalanches = [];
+      g.boilingHails = [];
+      g.superconductorBlizzards = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -1318,6 +1329,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       else if (recipe.id === 'magma_trench') elementalSound.playEarthToss();
       else if (recipe.id === 'thermal_deflagration') elementalSound.playFireShot();
       else if (recipe.id === 'solar_fusion_beam') elementalSound.playLightningBolt();
+      else if (recipe.id === 'glacial_avalanche') elementalSound.playEarthToss();
+      else if (recipe.id === 'boiling_hail') elementalSound.playIceShard();
+      else if (recipe.id === 'superconductor_blizzard') elementalSound.playLightningBolt();
       else elementalSound.playFireShot();
 
       // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico / Bombardeo Volcánico / Tornado de Plasma / Tormenta de Plasma Glacial)
@@ -1333,7 +1347,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         recipe.id === 'glacial_plasma_storm' ||
         recipe.id === 'magma_trench' ||
         recipe.id === 'thermal_deflagration' ||
-        recipe.id === 'solar_fusion_beam'
+        recipe.id === 'solar_fusion_beam' ||
+        recipe.id === 'glacial_avalanche' ||
+        recipe.id === 'boiling_hail' ||
+        recipe.id === 'superconductor_blizzard'
       ) {
         // Puntería manual prioritaria mediante arrastre táctil en botón de ataque o ratón en PC
         if (attackAimRef.current.isAiming) {
@@ -3690,6 +3707,142 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 30,
         });
       }
+      // ALUD DE AGUJAS TELÚRICAS (HIELO + HIELO + TIERRA):
+      // Emergen 3 estalagmitas colosales de hielo y roca en cono frontal con daño masivo y freeze/stun de 0.8s
+      else if (recipe.id === 'glacial_avalanche') {
+        g.screenShake = Math.max(g.screenShake, 7);
+        elementalSound.playEarthToss();
+        const baseDmg = Math.round((recipe.damage + statBonus) * chargeMultiplier);
+
+        const distFront = 160;
+        const angles = [aimAngle - 0.28, aimAngle, aimAngle + 0.28];
+        const dists = [distFront * 0.85, distFront * 1.05, distFront * 0.85];
+        const spikes: GlacialAvalancheSpike[] = [];
+
+        for (let i = 0; i < 3; i++) {
+          const spkX = wizard.x + Math.cos(angles[i]) * dists[i];
+          const spkY = wizard.y + Math.sin(angles[i]) * dists[i] * 0.58;
+          spikes.push({
+            x: spkX,
+            y: spkY,
+            height: 0,
+            maxHeight: 52 + i * 4,
+            width: 24,
+            delayMs: i * 60,
+            erupted: false,
+          });
+        }
+
+        g.glacialAvalanches.push({
+          id: `avalanche-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          angle: aimAngle,
+          durationMs: 1200,
+          elapsedMs: 0,
+          damage: baseDmg,
+          spikes,
+          hitEnemyIds: new Set<string>(),
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `avalanche-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 70,
+          y: wizard.y + Math.sin(aimAngle) * 70 - 20,
+          text: '🏔️ Alud Telúrico',
+          color: '#38bdf8',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // LLUVIA DE GRANIZO HIRVIENTE (HIELO + HIELO + FUEGO):
+      // Caída rápida de 6 carámbanos incandescentes en área de 90px con daño gélido y estallidos de calor quemante
+      else if (recipe.id === 'boiling_hail') {
+        g.screenShake = Math.max(g.screenShake, 5);
+        elementalSound.playIceShard();
+        const targetCenterX = wizard.x + Math.cos(aimAngle) * 200;
+        const targetCenterY = wizard.y + Math.sin(aimAngle) * 200 * 0.58;
+        const impactDmg = Math.round((recipe.damage + statBonus * 0.25) * chargeMultiplier);
+
+        const icicles: BoilingHailIcicle[] = [];
+        for (let i = 0; i < 6; i++) {
+          const rAng = Math.random() * Math.PI * 2;
+          const rDist = Math.random() * 75;
+          const tx = targetCenterX + Math.cos(rAng) * rDist;
+          const ty = targetCenterY + Math.sin(rAng) * rDist * 0.58;
+          icicles.push({
+            targetX: tx,
+            targetY: ty,
+            currentX: tx + 80,
+            currentY: ty - 160,
+            delayMs: i * 65,
+            flightDurationMs: 140,
+            hasImpacted: false,
+          });
+        }
+
+        g.boilingHails.push({
+          id: `hail-${now}-${Math.random()}`,
+          centerX: targetCenterX,
+          centerY: targetCenterY,
+          radius: 90,
+          durationMs: 700,
+          elapsedMs: 0,
+          impactDamage: impactDmg,
+          icicles,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `hail-cast-${now}`,
+          x: targetCenterX,
+          y: targetCenterY - 30,
+          text: '☄️ Granizo Hirviente',
+          color: '#7dd3fc',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // TORMENTA CRIOELECTROSTÁTICA (HIELO + HIELO + RAYO):
+      // Vórtice centrado a 160px durante 2s: -50% vel, daño por pulsos y arcos voltaicos entre enemigos contiguos
+      else if (recipe.id === 'superconductor_blizzard') {
+        g.screenShake = Math.max(g.screenShake, 6);
+        elementalSound.playLightningBolt();
+        const vortexCenterX = wizard.x + Math.cos(aimAngle) * 160;
+        const vortexCenterY = wizard.y + Math.sin(aimAngle) * 160 * 0.58;
+        const tickDmg = Math.round((recipe.damage + statBonus * 0.3) * chargeMultiplier);
+
+        g.superconductorBlizzards.push({
+          id: `sc-blizzard-${now}-${Math.random()}`,
+          centerX: vortexCenterX,
+          centerY: vortexCenterY,
+          radius: 80,
+          durationMs: 2000,
+          elapsedMs: 0,
+          damagePerTick: tickDmg,
+          tickIntervalMs: 250,
+          lastEnemyTick: {},
+          finished: false,
+          angle: 0,
+        });
+
+        g.floatingTexts.push({
+          id: `blizzard-cast-${now}`,
+          x: vortexCenterX,
+          y: vortexCenterY - 30,
+          text: '🌪️ Ventisca Conductora',
+          color: '#bae6fd',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4280,6 +4433,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.elementalCataclysms = [];
             g.magmaTrenches = [];
             g.solarFusionBeams = [];
+            g.glacialAvalanches = [];
+            g.boilingHails = [];
+            g.superconductorBlizzards = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -11352,6 +11508,200 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         });
       }
 
+      // 4.97 Actualizar Alud de Agujas Telúricas (Hielo + Hielo + Tierra: 3 estalagmitas, daño masivo, freeze/stun 0.8s)
+      for (let aIdx = g.glacialAvalanches.length - 1; aIdx >= 0; aIdx--) {
+        const ava = g.glacialAvalanches[aIdx];
+        ava.elapsedMs += dt;
+        if (ava.elapsedMs >= ava.durationMs) {
+          ava.finished = true;
+          g.glacialAvalanches.splice(aIdx, 1);
+          continue;
+        }
+
+        ava.spikes.forEach((spike) => {
+          if (ava.elapsedMs >= spike.delayMs) {
+            const growProg = Math.min(1.0, (ava.elapsedMs - spike.delayMs) / 180);
+            spike.height = spike.maxHeight * growProg;
+
+            if (!spike.erupted && growProg >= 0.8) {
+              spike.erupted = true;
+              g.screenShake = Math.max(g.screenShake, 5);
+              elementalSound.playGlacialFreezeImpact();
+
+              // Esquirlas de hielo que saltan hacia arriba
+              for (let s = 0; s < 6; s++) {
+                const sAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `ava-spk-${frameNow}-${Math.random()}`,
+                  x: spike.x,
+                  y: spike.y,
+                  vx: Math.cos(sAng) * 2.5,
+                  vy: -2.5 - Math.random() * 2.5,
+                  radius: 2.2,
+                  color: s % 2 === 0 ? '#38bdf8' : '#ffffff',
+                  alpha: 1,
+                  life: 16,
+                });
+              }
+
+              // Colisión con enemigos en la estalagmita
+              enemies.forEach((enemy) => {
+                if (enemy.hp <= 0 || ava.hitEnemyIds.has(enemy.id)) return;
+                const d = Math.hypot(enemy.x - spike.x, (enemy.y - spike.y) / 0.58);
+                if (d <= spike.width + enemy.radius) {
+                  ava.hitEnemyIds.add(enemy.id);
+                  applyDamageToEnemy(enemy, ava.damage, 'ice', g.floatingTexts, spike.x, spike.y);
+                  enemy.hitFlash = 12;
+                  enemy.stunnedTimer = 48; // microaturdimiento / congelamiento de 0.8s
+                  g.enemyManager.applyStatus(enemy, 'frozen', 48);
+                  g.floatingTexts.push({
+                    id: `ava-stun-${frameNow}-${enemy.id}`,
+                    x: enemy.x,
+                    y: enemy.y - 25,
+                    text: '❄️ ¡CONGELADO 0.8s!',
+                    color: '#38bdf8',
+                    fontSize: 12,
+                    opacity: 1,
+                    vy: -1.2,
+                    life: 35,
+                  });
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // 4.98 Actualizar Lluvia de Granizo Hirviente (Hielo + Hielo + Fuego: 6 carámbanos, daño gélido y estallidos de calor)
+      for (let hIdx = g.boilingHails.length - 1; hIdx >= 0; hIdx--) {
+        const hail = g.boilingHails[hIdx];
+        hail.elapsedMs += dt;
+        if (hail.elapsedMs >= hail.durationMs) {
+          hail.finished = true;
+          g.boilingHails.splice(hIdx, 1);
+          continue;
+        }
+
+        hail.icicles.forEach((icicle) => {
+          if (hail.elapsedMs >= icicle.delayMs && !icicle.hasImpacted) {
+            const flightElapsed = hail.elapsedMs - icicle.delayMs;
+            const prog = Math.min(1.0, flightElapsed / icicle.flightDurationMs);
+            const startX = icicle.targetX + 80;
+            const startY = icicle.targetY - 160;
+            icicle.currentX = startX + (icicle.targetX - startX) * prog;
+            icicle.currentY = startY + (icicle.targetY - startY) * prog;
+
+            if (prog >= 1.0) {
+              icicle.hasImpacted = true;
+              g.screenShake = Math.max(g.screenShake, 3);
+              elementalSound.playEnemyHit();
+
+              // Vapor blanco y chispas rojas al tocar el suelo
+              for (let p = 0; p < 5; p++) {
+                const pAng = Math.random() * Math.PI * 2;
+                g.particles.push({
+                  id: `hail-steam-${frameNow}-${Math.random()}`,
+                  x: icicle.targetX,
+                  y: icicle.targetY,
+                  vx: Math.cos(pAng) * 2,
+                  vy: -1.0 - Math.random() * 1.5,
+                  radius: 2.5,
+                  color: p % 2 === 0 ? '#ffffff' : '#ea580c',
+                  alpha: 0.9,
+                  life: 14,
+                });
+              }
+
+              // Daño en área de 40px por carámbano y quemadura
+              enemies.forEach((enemy) => {
+                if (enemy.hp <= 0) return;
+                const d = Math.hypot(enemy.x - icicle.targetX, (enemy.y - icicle.targetY) / 0.58);
+                if (d <= 40 + enemy.radius) {
+                  applyDamageToEnemy(enemy, hail.impactDamage, 'ice', g.floatingTexts, icicle.targetX, icicle.targetY);
+                  g.enemyManager.applyStatus(enemy, 'burning', 120);
+                  enemy.hitFlash = 6;
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // 4.99 Actualizar Tormenta Crioelectrostática (Hielo + Hielo + Rayo: 80px radio, 2s, -50% vel, daño por pulsos, arcos)
+      for (let bIdx = g.superconductorBlizzards.length - 1; bIdx >= 0; bIdx--) {
+        const blizz = g.superconductorBlizzards[bIdx];
+        blizz.elapsedMs += dt;
+        blizz.angle += 0.08;
+        if (blizz.elapsedMs >= blizz.durationMs) {
+          blizz.finished = true;
+          g.superconductorBlizzards.splice(bIdx, 1);
+          continue;
+        }
+
+        // Partículas de copos y bloques de escarcha
+        if (Math.random() < 0.6) {
+          const rAng = Math.random() * Math.PI * 2;
+          const rDist = Math.random() * blizz.radius;
+          g.particles.push({
+            id: `sc-part-${frameNow}-${Math.random()}`,
+            x: blizz.centerX + Math.cos(rAng) * rDist,
+            y: blizz.centerY + Math.sin(rAng) * rDist * 0.58,
+            vx: -Math.sin(rAng) * 2.2,
+            vy: Math.cos(rAng) * 1.3,
+            radius: Math.random() > 0.4 ? 2.2 : 1.6,
+            color: Math.random() > 0.5 ? '#bae6fd' : '#a855f7',
+            alpha: 0.85,
+            life: 15,
+          });
+        }
+
+        // Enemigos dentro del vórtice
+        const trappedEnemies: GameEnemy[] = [];
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const d = Math.hypot(enemy.x - blizz.centerX, (enemy.y - blizz.centerY) / 0.58);
+          if (d <= blizz.radius + enemy.radius) {
+            trappedEnemies.push(enemy);
+            enemy.moveSpeed = Math.min(enemy.moveSpeed, 1.0); // -50% velocidad
+
+            const lastTick = blizz.lastEnemyTick[enemy.id] || 0;
+            if (frameNow - lastTick >= blizz.tickIntervalMs) {
+              blizz.lastEnemyTick[enemy.id] = frameNow;
+              applyDamageToEnemy(enemy, blizz.damagePerTick, 'ice', g.floatingTexts, enemy.x, enemy.y);
+              enemy.hitFlash = 6;
+              g.enemyManager.applyStatus(enemy, 'shocked', 60);
+            }
+          }
+        });
+
+        // Arcos de corriente entre enemigos contiguos atrapados
+        if (trappedEnemies.length >= 2 && Math.random() < 0.35) {
+          const e1 = trappedEnemies[Math.floor(Math.random() * trappedEnemies.length)];
+          const e2 = trappedEnemies[Math.floor(Math.random() * trappedEnemies.length)];
+          if (e1.id !== e2.id) {
+            g.lightningBolts.push({
+              id: `sc-arc-${frameNow}`,
+              startX: e1.x,
+              startY: e1.y,
+              targetX: e2.x,
+              targetY: e2.y,
+              color: '#00f0ff',
+              glowColor: '#a855f7',
+              points: [
+                { x: e1.x, y: e1.y },
+                { x: (e1.x + e2.x) / 2 + (Math.random() - 0.5) * 20, y: (e1.y + e2.y) / 2 + (Math.random() - 0.5) * 20 },
+                { x: e2.x, y: e2.y }
+              ],
+              branches: [],
+              chainLines: [],
+              life: 4,
+              maxLife: 4,
+            });
+            applyDamageToEnemy(e2, Math.round(blizz.damagePerTick * 0.6), 'lightning', g.floatingTexts, e2.x, e2.y);
+          }
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -11474,7 +11824,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.forestLevel ?? undefined,
             g.tilemap ?? undefined,
             g.magmaTrenches,
-            g.solarFusionBeams
+            g.solarFusionBeams,
+            g.glacialAvalanches,
+            g.boilingHails,
+            g.superconductorBlizzards
           );
         }
       }

@@ -60,6 +60,10 @@ export type SpellCastType =
   | 'magma_trench'        // Fuego + Fuego + Tierra (🔥🔥🌍) - Trinchera de Magma
   | 'thermal_deflagration' // Fuego + Fuego + Hielo (🔥🔥❄️) - Deflagración Térmica
   | 'solar_fusion_beam'   // Fuego + Fuego + Rayo (🔥🔥⚡) - Haz de Fusión Solar
+  // Triples Mixtas - Dominancia Hielo
+  | 'glacial_avalanche'      // Hielo + Hielo + Tierra (❄️❄️🌍) - Alud de Agujas Telúricas
+  | 'boiling_hail'           // Hielo + Hielo + Fuego (❄️❄️🔥) - Lluvia de Granizo Hirviente
+  | 'superconductor_blizzard'// Hielo + Hielo + Rayo (❄️❄️⚡) - Tormenta Crioelectrostática
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -399,6 +403,68 @@ export interface SolarFusionBeamEntity {
   tickIntervalMs: number; // 125ms (4 ticks en 500ms)
   lastEnemyTick: Record<string, number>;
   finished: boolean;
+}
+
+// Alud de Agujas Telúricas (Hielo + Hielo + Tierra)
+export interface GlacialAvalancheSpike {
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number;
+  width: number;
+  delayMs: number;
+  erupted: boolean;
+}
+
+export interface GlacialAvalancheEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  angle: number;
+  durationMs: number; // ~1200ms
+  elapsedMs: number;
+  damage: number;
+  spikes: GlacialAvalancheSpike[];
+  hitEnemyIds: Set<string>;
+  finished: boolean;
+}
+
+// Lluvia de Granizo Hirviente (Hielo + Hielo + Fuego)
+export interface BoilingHailIcicle {
+  targetX: number;
+  targetY: number;
+  currentX: number;
+  currentY: number;
+  delayMs: number;
+  flightDurationMs: number;
+  hasImpacted: boolean;
+}
+
+export interface BoilingHailEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number; // 90px
+  durationMs: number; // ~600ms
+  elapsedMs: number;
+  impactDamage: number;
+  icicles: BoilingHailIcicle[];
+  finished: boolean;
+}
+
+// Tormenta Crioelectrostática (Hielo + Hielo + Rayo)
+export interface SuperconductorBlizzardEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number; // 80px
+  durationMs: number; // 2000ms
+  elapsedMs: number;
+  damagePerTick: number;
+  tickIntervalMs: number; // 250ms
+  lastEnemyTick: Record<string, number>;
+  finished: boolean;
+  angle: number;
 }
 
 export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';
