@@ -72,6 +72,11 @@ export type SpellCastType =
   | 'rolling_magma_boulder'  // Tierra + Tierra + Fuego (🌍🌍🔥) - Megalito Volcánico Rodante
   | 'glacial_bastion'        // Tierra + Tierra + Hielo (🌍🌍❄️) - Fortaleza Glacial de Picos
   | 'resonant_quake'         // Tierra + Tierra + Rayo (🌍🌍⚡) - Fisura Sísmica Resonante
+  // Nivel 4 - Cuádruples Puras Monoelementales (Tier 4, Cooldown: 0)
+  | 'thundergod_judgment'    // Rayo x4 (⚡⚡⚡⚡) - Juicio del Dios del Trueno
+  | 'primordial_supernova'   // Fuego x4 (🔥🔥🔥🔥) - Supernova Primordial
+  | 'absolute_zero_age'      // Hielo x4 (❄️❄️❄️❄️) - Era Glacial
+  | 'tectonic_cataclysm'     // Tierra x4 (🌍🌍🌍🌍) - Cataclismo Tectónico
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -582,6 +587,91 @@ export interface ResonantQuakeEntity {
   elapsedMs: number;
   damagePerWave: number;
   waves: ResonantQuakeWave[];
+  finished: boolean;
+}
+
+// Juicio del Dios del Trueno (Rayo x4)
+export interface ThundergodJudgmentEntity {
+  id: string;
+  targetX: number;
+  targetY: number;
+  strikeWidth: number; // 60px
+  impactRadius: number; // 120px
+  durationMs: number; // 550ms
+  elapsedMs: number;
+  damage: number;
+  struck: boolean;
+  finished: boolean;
+}
+
+// Supernova Primordial (Fuego x4)
+export interface PrimordialSupernovaLavaPatch {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export interface PrimordialSupernovaEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  currentX: number;
+  currentY: number;
+  vx: number;
+  vy: number;
+  travelDist: number;
+  maxDist: number; // 180px
+  damage: number;
+  orbRadius: number; // 36px
+  explosionRadius: number; // 140px
+  exploded: boolean;
+  explosionProgress: number; // 0..1
+  explosionDurationMs: number; // 400ms
+  lavaDurationMs: number; // 3500ms
+  elapsedMs: number;
+  lavaPatches: PrimordialSupernovaLavaPatch[];
+  lastBurnTickMs: number;
+  finished: boolean;
+}
+
+// Era Glacial (Hielo x4)
+export interface AbsoluteZeroSpike {
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number;
+}
+
+export interface AbsoluteZeroAgeEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  durationMs: number; // 3000ms
+  elapsedMs: number;
+  spikes: AbsoluteZeroSpike[];
+  frostOverlayAlpha: number;
+  finished: boolean;
+}
+
+// Cataclismo Tectónico (Tierra x4)
+export interface TectonicCataclysmMonolith {
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number;
+  width: number;
+  collapsed: boolean;
+  delayMs: number;
+}
+
+export interface TectonicCataclysmEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  durationMs: number; // 2400ms
+  elapsedMs: number;
+  damage: number;
+  monoliths: TectonicCataclysmMonolith[];
   finished: boolean;
 }
 

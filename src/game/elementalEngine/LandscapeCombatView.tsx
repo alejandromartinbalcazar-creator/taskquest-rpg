@@ -62,6 +62,13 @@ import {
   GlacialBastionEntity,
   ResonantQuakeEntity,
   ResonantQuakeWave,
+  ThundergodJudgmentEntity,
+  PrimordialSupernovaEntity,
+  PrimordialSupernovaLavaPatch,
+  AbsoluteZeroAgeEntity,
+  AbsoluteZeroSpike,
+  TectonicCataclysmEntity,
+  TectonicCataclysmMonolith,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
@@ -732,6 +739,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     rollingMagmaBoulders: [] as RollingMagmaBoulderEntity[],
     glacialBastions: [] as GlacialBastionEntity[],
     resonantQuakes: [] as ResonantQuakeEntity[],
+    thundergodJudgments: [] as ThundergodJudgmentEntity[],
+    primordialSupernovas: [] as PrimordialSupernovaEntity[],
+    absoluteZeroAges: [] as AbsoluteZeroAgeEntity[],
+    tectonicCataclysms: [] as TectonicCataclysmEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1076,6 +1087,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.rollingMagmaBoulders = [];
       g.glacialBastions = [];
       g.resonantQuakes = [];
+      g.thundergodJudgments = [];
+      g.primordialSupernovas = [];
+      g.absoluteZeroAges = [];
+      g.tectonicCataclysms = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -4140,6 +4155,218 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 30,
         });
       }
+      // JUICIO DEL DIOS DEL TRUENO (RAYO x4 — TIER 4):
+      // Columna de rayo colosal de 60px, desintegra proyectiles hostiles en 120px y paraliza 1.5s
+      else if (recipe.id === 'thundergod_judgment') {
+        g.screenShake = Math.max(g.screenShake, 14);
+        elementalSound.playLightningBolt();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.7) * chargeMultiplier);
+
+        // Ubicar al enemigo más peligroso (jefe o más cercano) o disparar al frente
+        let targetX = wizard.x + Math.cos(aimAngle) * 180;
+        let targetY = wizard.y + Math.sin(aimAngle) * 180 * 0.58;
+        const boss = g.enemyManager.enemies.find((e) => e.hp > 0 && e.archetype === 'boss');
+        if (boss) {
+          targetX = boss.x;
+          targetY = boss.y;
+        } else {
+          let nearestDist = Infinity;
+          for (const e of g.enemyManager.enemies) {
+            if (e.hp <= 0) continue;
+            const d = Math.hypot(e.x - wizard.x, (e.y - wizard.y) / 0.58);
+            if (d < nearestDist && d < 380) {
+              nearestDist = d;
+              targetX = e.x;
+              targetY = e.y;
+            }
+          }
+        }
+
+        // Desintegrar proyectiles hostiles en 120px
+        g.projectiles = g.projectiles.filter((p) => {
+          if (!p.isHostile) return true;
+          const d = Math.hypot(p.x - targetX, (p.y - targetY) / 0.58);
+          return d > 120;
+        });
+
+        // Aplicar daño masivo y parálisis 1.5s a todos en 120px
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const d = Math.hypot(enemy.x - targetX, (enemy.y - targetY) / 0.58);
+          if (d <= 120 + enemy.radius) {
+            applyDamageToEnemy(enemy, baseDmg, 'lightning', g.floatingTexts, targetX, targetY);
+            enemy.hitFlash = 16;
+            enemy.stunnedTimer = 90; // 1.5s de parálisis
+            g.enemyManager.applyStatus(enemy, 'shocked', 120);
+          }
+        });
+
+        g.thundergodJudgments.push({
+          id: `tg-judgment-${now}-${Math.random()}`,
+          targetX,
+          targetY,
+          strikeWidth: 60,
+          impactRadius: 120,
+          durationMs: 550,
+          elapsedMs: 0,
+          damage: baseDmg,
+          struck: true,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `tg-cast-${now}`,
+          x: targetX,
+          y: targetY - 50,
+          text: '⚡👑 ¡JUICIO DEL DIOS DEL TRUENO!',
+          color: '#ffffff',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // SUPERNOVA PRIMORDIAL (FUEGO x4 — TIER 4):
+      // Sol colosal de 36px que avanza y detona en 140px, cubriendo el suelo de lava ardiente durante 3.5s
+      else if (recipe.id === 'primordial_supernova') {
+        g.screenShake = Math.max(g.screenShake, 14);
+        elementalSound.playAoEExplosion();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.8) * chargeMultiplier);
+        const speed = 4.8;
+
+        g.primordialSupernovas.push({
+          id: `supernova-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          currentX: wizard.x,
+          currentY: wizard.y,
+          vx: Math.cos(aimAngle) * speed,
+          vy: Math.sin(aimAngle) * speed * 0.58,
+          travelDist: 0,
+          maxDist: 180,
+          damage: baseDmg,
+          orbRadius: 36,
+          explosionRadius: 140,
+          exploded: false,
+          explosionProgress: 0,
+          explosionDurationMs: 400,
+          lavaDurationMs: 3500,
+          elapsedMs: 0,
+          lavaPatches: [],
+          lastBurnTickMs: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `supernova-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 60,
+          y: wizard.y + Math.sin(aimAngle) * 60 - 30,
+          text: '☀️🔥 ¡SUPERNOVA PRIMORDIAL!',
+          color: '#fde047',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // ERA GLACIAL (HIELO x4 — TIER 4):
+      // Congelación expansiva en pantalla completa (3s), estalagmitas y destrucción de proyectiles
+      else if (recipe.id === 'absolute_zero_age') {
+        g.screenShake = Math.max(g.screenShake, 12);
+        elementalSound.playGlacialFreezeImpact();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.5) * chargeMultiplier);
+
+        // Destruir todos los proyectiles hostiles en vuelo
+        g.projectiles = g.projectiles.filter((p) => !p.isHostile);
+
+        // Congelar a todos los enemigos en el viewport durante 3 segundos (180 frames)
+        const spikes: AbsoluteZeroSpike[] = [];
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          applyDamageToEnemy(enemy, baseDmg, 'ice', g.floatingTexts, wizard.x, wizard.y);
+          enemy.hitFlash = 16;
+          enemy.stunnedTimer = 180; // 3 segundos de congelación absoluta
+          g.enemyManager.applyStatus(enemy, 'frozen', 180);
+          spikes.push({
+            x: enemy.x,
+            y: enemy.y,
+            height: 0,
+            maxHeight: 38 + Math.random() * 12,
+          });
+        });
+
+        g.absoluteZeroAges.push({
+          id: `az-age-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          durationMs: 3000,
+          elapsedMs: 0,
+          spikes,
+          frostOverlayAlpha: 1.0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `az-cast-${now}`,
+          x: wizard.x,
+          y: wizard.y - 50,
+          text: '❄️🌐 ¡ERA GLACIAL (3s Congelación Total)!',
+          color: '#bae6fd',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 45,
+        });
+      }
+      // CATACLISMO TECTÓNICO (TIERRA x4 — TIER 4):
+      // Terremoto con 4 monolitos colosales que emergen y colapsan, daño masivo, aturdimiento de 2s y micro-empuje
+      else if (recipe.id === 'tectonic_cataclysm') {
+        g.screenShake = Math.max(g.screenShake, 15);
+        elementalSound.playEarthToss();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.7) * chargeMultiplier);
+
+        // 4 monolitos masivos en cruz/cuadrantes alrededor del mago
+        const monoliths: TectonicCataclysmMonolith[] = [
+          { x: wizard.x - 110, y: wizard.y - 45, height: 0, maxHeight: 60, width: 28, collapsed: false, delayMs: 60 },
+          { x: wizard.x + 110, y: wizard.y - 45, height: 0, maxHeight: 60, width: 28, collapsed: false, delayMs: 140 },
+          { x: wizard.x - 65, y: wizard.y + 60, height: 0, maxHeight: 68, width: 32, collapsed: false, delayMs: 220 },
+          { x: wizard.x + 65, y: wizard.y + 60, height: 0, maxHeight: 68, width: 32, collapsed: false, delayMs: 300 },
+        ];
+
+        // Daño, aturdimiento de 2 segundos (120 frames) y micro-empuje a todos los enemigos visibles
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const kAng = Math.atan2(enemy.y - wizard.y, enemy.x - wizard.x);
+          enemy.x += Math.cos(kAng) * 20;
+          enemy.y += Math.sin(kAng) * 12;
+          applyDamageToEnemy(enemy, baseDmg, 'earth', g.floatingTexts, wizard.x, wizard.y);
+          enemy.hitFlash = 14;
+          enemy.stunnedTimer = 120; // 2 segundos de aturdimiento
+        });
+
+        g.tectonicCataclysms.push({
+          id: `tc-cataclysm-${now}-${Math.random()}`,
+          centerX: wizard.x,
+          centerY: wizard.y,
+          durationMs: 2400,
+          elapsedMs: 0,
+          damage: baseDmg,
+          monoliths,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `tc-cast-${now}`,
+          x: wizard.x,
+          y: wizard.y - 50,
+          text: '🌋🌍 ¡CATACLISMO TECTÓNICO (2s Aturdimiento)!',
+          color: '#78350f',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 45,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4739,6 +4966,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.rollingMagmaBoulders = [];
             g.glacialBastions = [];
             g.resonantQuakes = [];
+            g.thundergodJudgments = [];
+            g.primordialSupernovas = [];
+            g.absoluteZeroAges = [];
+            g.tectonicCataclysms = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -12332,6 +12563,204 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.997 Actualizar Juicio del Dios del Trueno (Rayo x4: rayo colosal de 60px y chispas descendentes)
+      for (let jIdx = g.thundergodJudgments.length - 1; jIdx >= 0; jIdx--) {
+        const jd = g.thundergodJudgments[jIdx];
+        jd.elapsedMs += dt;
+
+        // Chispas cuadradas descendentes dentro de la columna de 60px
+        if (Math.random() < 0.8) {
+          const sx = jd.targetX + (Math.random() - 0.5) * jd.strikeWidth;
+          const sy = jd.targetY - Math.random() * 220;
+          g.particles.push({
+            id: `tg-spk-${frameNow}-${Math.random()}`,
+            x: sx,
+            y: sy,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 4 + Math.random() * 4,
+            radius: 2.5,
+            color: Math.random() > 0.4 ? '#ffffff' : '#a855f7',
+            alpha: 1,
+            life: 12,
+          });
+        }
+
+        if (jd.elapsedMs >= jd.durationMs) {
+          jd.finished = true;
+          g.thundergodJudgments.splice(jIdx, 1);
+        }
+      }
+
+      // 4.998 Actualizar Supernova Primordial (Fuego x4: sol colosal, estallido en 140px y lava durante 3.5s)
+      for (let sIdx = g.primordialSupernovas.length - 1; sIdx >= 0; sIdx--) {
+        const sn = g.primordialSupernovas[sIdx];
+
+        if (!sn.exploded) {
+          sn.currentX += sn.vx;
+          sn.currentY += sn.vy;
+          sn.travelDist += Math.hypot(sn.vx, sn.vy / 0.58);
+
+          // Llamaradas solares en la trayectoria
+          if (Math.random() < 0.9) {
+            g.particles.push({
+              id: `sn-trail-${frameNow}-${Math.random()}`,
+              x: sn.currentX + (Math.random() - 0.5) * 28,
+              y: sn.currentY + (Math.random() - 0.5) * 20,
+              vx: -sn.vx * 0.2 + (Math.random() - 0.5) * 2,
+              vy: -sn.vy * 0.2 + (Math.random() - 0.5) * 2,
+              radius: 3.5,
+              color: Math.random() > 0.4 ? '#fde047' : '#ea580c',
+              alpha: 0.9,
+              life: 16,
+            });
+          }
+
+          let collided = sn.travelDist >= sn.maxDist;
+          if (!collided) {
+            for (const enemy of enemies) {
+              if (enemy.hp <= 0) continue;
+              const ed = Math.hypot(enemy.x - sn.currentX, (enemy.y - sn.currentY) / 0.58);
+              if (ed <= sn.orbRadius + enemy.radius) {
+                collided = true;
+                break;
+              }
+            }
+          }
+
+          if (collided) {
+            sn.exploded = true;
+            g.screenShake = Math.max(g.screenShake, 14);
+            elementalSound.playAoEExplosion();
+
+            // Daño masivo instantáneo en 140px y quemadura
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const ed = Math.hypot(enemy.x - sn.currentX, (enemy.y - sn.currentY) / 0.58);
+              if (ed <= sn.explosionRadius + enemy.radius) {
+                applyDamageToEnemy(enemy, sn.damage, 'fire', g.floatingTexts, sn.currentX, sn.currentY);
+                enemy.hitFlash = 16;
+                g.enemyManager.applyStatus(enemy, 'burning', 240); // 4s quemadura
+              }
+            });
+
+            // Generar parches de lava ardiente sobre el suelo
+            for (let p = 0; p < 10; p++) {
+              const pAng = Math.random() * Math.PI * 2;
+              const pDist = Math.random() * 115;
+              sn.lavaPatches.push({
+                x: sn.currentX + Math.cos(pAng) * pDist,
+                y: sn.currentY + Math.sin(pAng) * pDist * 0.58,
+                radius: 18 + Math.random() * 14,
+              });
+            }
+
+            // Anillo masivo de ascuas en bloques
+            for (let b = 0; b < 24; b++) {
+              const bAng = (b / 24) * Math.PI * 2;
+              const spd = 4 + Math.random() * 4;
+              g.particles.push({
+                id: `sn-exp-${frameNow}-${b}`,
+                x: sn.currentX,
+                y: sn.currentY,
+                vx: Math.cos(bAng) * spd,
+                vy: Math.sin(bAng) * spd * 0.58,
+                radius: 4,
+                color: b % 3 === 0 ? '#fde047' : (b % 3 === 1 ? '#ea580c' : '#7f1d1d'),
+                alpha: 1,
+                life: 24,
+              });
+            }
+          }
+        } else {
+          sn.elapsedMs += dt;
+          sn.explosionProgress = Math.min(1.0, sn.elapsedMs / sn.explosionDurationMs);
+
+          // Daño continuo por lava cada 500ms
+          if (sn.elapsedMs - sn.lastBurnTickMs >= 500) {
+            sn.lastBurnTickMs = sn.elapsedMs;
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              for (const patch of sn.lavaPatches) {
+                const pd = Math.hypot(enemy.x - patch.x, (enemy.y - patch.y) / 0.58);
+                if (pd <= patch.radius + enemy.radius) {
+                  applyDamageToEnemy(enemy, 24, 'fire', g.floatingTexts, patch.x, patch.y);
+                  enemy.hitFlash = 6;
+                  g.enemyManager.applyStatus(enemy, 'burning', 90);
+                  break;
+                }
+              }
+            });
+          }
+
+          if (sn.elapsedMs >= sn.lavaDurationMs) {
+            sn.finished = true;
+            g.primordialSupernovas.splice(sIdx, 1);
+          }
+        }
+      }
+
+      // 4.999 Actualizar Era Glacial (Hielo x4: congelación de 3s, estalagmitas y destrucción de proyectiles)
+      for (let aIdx = g.absoluteZeroAges.length - 1; aIdx >= 0; aIdx--) {
+        const az = g.absoluteZeroAges[aIdx];
+        az.elapsedMs += dt;
+        az.frostOverlayAlpha = Math.max(0, 1 - az.elapsedMs / az.durationMs);
+
+        // Crecer estalagmitas bajo los enemigos
+        az.spikes.forEach((spike) => {
+          const prog = Math.min(1, az.elapsedMs / 250);
+          spike.height = spike.maxHeight * prog;
+        });
+
+        // Asegurar que ningún proyectil hostil vuele durante la Era Glacial
+        if (g.projectiles.some((p) => p.isHostile)) {
+          g.projectiles = g.projectiles.filter((p) => !p.isHostile);
+        }
+
+        if (az.elapsedMs >= az.durationMs) {
+          az.finished = true;
+          g.absoluteZeroAges.splice(aIdx, 1);
+        }
+      }
+
+      // 5.000 Actualizar Cataclismo Tectónico (Tierra x4: 4 monolitos colosales que emergen y colapsan en 2.4s)
+      for (let tIdx = g.tectonicCataclysms.length - 1; tIdx >= 0; tIdx--) {
+        const tc = g.tectonicCataclysms[tIdx];
+        tc.elapsedMs += dt;
+
+        tc.monoliths.forEach((m) => {
+          if (tc.elapsedMs >= m.delayMs) {
+            const growProg = Math.min(1, (tc.elapsedMs - m.delayMs) / 250);
+            m.height = m.maxHeight * growProg;
+          }
+
+          // Colapso en escombros a los 1600ms
+          if (tc.elapsedMs >= 1600 && !m.collapsed) {
+            m.collapsed = true;
+            g.screenShake = Math.max(g.screenShake, 7);
+
+            // Escombros pixelados cayendo
+            for (let r = 0; r < 8; r++) {
+              g.particles.push({
+                id: `tc-rubble-${frameNow}-${Math.random()}`,
+                x: m.x + (Math.random() - 0.5) * m.width,
+                y: m.y + (Math.random() - 0.5) * 10,
+                vx: (Math.random() - 0.5) * 3,
+                vy: -2 + Math.random() * 4,
+                radius: 3.2,
+                color: r % 2 === 0 ? '#3f3f46' : '#78350f',
+                alpha: 1,
+                life: 20,
+              });
+            }
+          }
+        });
+
+        if (tc.elapsedMs >= tc.durationMs) {
+          tc.finished = true;
+          g.tectonicCataclysms.splice(tIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -12463,7 +12892,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.cryoArcFlashes,
             g.rollingMagmaBoulders,
             g.glacialBastions,
-            g.resonantQuakes
+            g.resonantQuakes,
+            g.thundergodJudgments,
+            g.primordialSupernovas,
+            g.absoluteZeroAges,
+            g.tectonicCataclysms
           );
         }
       }

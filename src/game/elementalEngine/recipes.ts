@@ -456,6 +456,62 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // =========================================================================
+  // NIVEL 4 — CUÁDRUPLES PURAS MONOELEMENTALES (Tier 4, Cooldown: 0)
+  // =========================================================================
+  thundergod_judgment: {
+    id: 'thundergod_judgment',
+    name: 'Juicio del Trueno',
+    elements: ['lightning', 'lightning', 'lightning', 'lightning'],
+    description: 'Invoca un rayo colosal vertical de 60px de ancho que impacta en área (120px), desintegra proyectiles hostiles y paraliza 1.5s.',
+    icon: '⚡👑',
+    color: '#ffffff',
+    secondaryColor: '#a855f7',
+    damage: 195,
+    knockback: 9.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  primordial_supernova: {
+    id: 'primordial_supernova',
+    name: 'Supernova Primordial',
+    elements: ['fire', 'fire', 'fire', 'fire'],
+    description: 'Proyecta un sol colosal que estalla en 140px de radio, infligiendo daño ígneo masivo y cubriendo el suelo de lava ardiente durante 3.5s.',
+    icon: '☀️🔥',
+    color: '#fde047',
+    secondaryColor: '#ea580c',
+    damage: 210,
+    knockback: 10.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  absolute_zero_age: {
+    id: 'absolute_zero_age',
+    name: 'Era Glacial',
+    elements: ['ice', 'ice', 'ice', 'ice'],
+    description: 'Congelación expansiva en pantalla completa centrada en el mago. Congela a todos los enemigos durante 3s y destruye proyectiles en vuelo.',
+    icon: '❄️🌐',
+    color: '#bae6fd',
+    secondaryColor: '#38bdf8',
+    damage: 130,
+    knockback: 3.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  tectonic_cataclysm: {
+    id: 'tectonic_cataclysm',
+    name: 'Cataclismo Tectónico',
+    elements: ['earth', 'earth', 'earth', 'earth'],
+    description: 'Terremoto en el área visible con 4 monolitos colosales que emergen y colapsan, causando daño masivo, aturdimiento de 2s y micro-empuje.',
+    icon: '🌋🌍',
+    color: '#78350f',
+    secondaryColor: '#3f3f46',
+    damage: 175,
+    knockback: 8.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -491,6 +547,12 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (hasFire && hasLightning && hasIce && hasEarth) {
     return RECIPES.elemental_cataclysm;
   }
+
+  // 1.1 Nivel 4 - Cuádruples Puras Monoelementales (cooldown: 0)
+  if (count('lightning') >= 4) return RECIPES.thundergod_judgment;
+  if (count('fire') >= 4) return RECIPES.primordial_supernova;
+  if (count('ice') >= 4) return RECIPES.absolute_zero_age;
+  if (count('earth') >= 4) return RECIPES.tectonic_cataclysm;
 
   // 1.5 Combinaciones Triples Puras (3 o más elementos idénticos)
   if (count('fire') >= 3) {

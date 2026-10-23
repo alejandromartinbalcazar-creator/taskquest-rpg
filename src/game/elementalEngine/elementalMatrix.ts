@@ -428,28 +428,32 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'explosive_overload' ||
     spellType === 'magma_trench' ||
     spellType === 'thermal_deflagration' ||
-    spellType === 'solar_fusion_beam'
+    spellType === 'solar_fusion_beam' ||
+    spellType === 'primordial_supernova'
   )
     return 'fire';
   if (
     spellType === 'crystal_field' ||
     spellType === 'lightning_rod_pylon' ||
     spellType === 'plasma_hyper_orb' ||
-    spellType === 'cryo_arc_flash'
+    spellType === 'cryo_arc_flash' ||
+    spellType === 'thundergod_judgment'
   )
     return 'lightning';
   if (
     spellType === 'permafrost_prison' ||
     spellType === 'glacial_avalanche' ||
     spellType === 'boiling_hail' ||
-    spellType === 'superconductor_blizzard'
+    spellType === 'superconductor_blizzard' ||
+    spellType === 'absolute_zero_age'
   )
     return 'ice';
   if (
     spellType === 'obsidian_volcano' ||
     spellType === 'rolling_magma_boulder' ||
     spellType === 'glacial_bastion' ||
-    spellType === 'resonant_quake'
+    spellType === 'resonant_quake' ||
+    spellType === 'tectonic_cataclysm'
   )
     return 'earth';
   if (spellType === 'conductive_prison') return 'lightning';
