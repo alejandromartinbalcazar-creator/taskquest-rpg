@@ -50,6 +50,8 @@ import {
   FireBarrierEntity,
   AmbientLeafParticle,
   LevelCheckpoint,
+  MagmaTrenchEntity,
+  SolarFusionBeamEntity,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
@@ -127,7 +129,9 @@ export class IsometricRenderer {
     glacialPlasmaStorms: GlacialPlasmaStormEntity[] = [],
     elementalCataclysms: ElementalCataclysmEntity[] = [],
     forestLevel?: ForestLevelData,
-    tilemap?: Tilemap
+    tilemap?: Tilemap,
+    magmaTrenches: MagmaTrenchEntity[] = [],
+    solarFusionBeams: SolarFusionBeamEntity[] = []
   ) {
     ctx.save();
 
@@ -220,6 +224,9 @@ export class IsometricRenderer {
 
     // 3.88 Dibujar Suelo, Runa Primordial Tetra-Elemental, Fisuras Tectónicas y Escarcha de Cataclismo Elemental (Fuego + Rayo + Hielo + Tierra)
     this.drawElementalCataclysmGround(ctx, elementalCataclysms);
+
+    // 3.885 Dibujar Trincheras de Magma en el Suelo (Fuego + Fuego + Tierra)
+    this.drawMagmaTrenches(ctx, magmaTrenches);
 
     // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
     if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
@@ -562,6 +569,9 @@ export class IsometricRenderer {
 
     // 6.5 Dibujar Rayos Criogénicos (Hielo + Rayo) Penetrantes con Núcleo Gélido y Espirales Voltaicas
     this.drawCryoBeams(ctx, wizard, cryoBeams);
+
+    // 6.6 Dibujar Haz de Fusión Solar (Fuego + Fuego + Rayo) de Plasma Instantáneo
+    this.drawSolarFusionBeams(ctx, solarFusionBeams);
 
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
@@ -2716,6 +2726,25 @@ export class IsometricRenderer {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(-4, -4, 8, 8);
       }
+      // D.2 DEFLAGRACIÓN TÉRMICA (FUEGO + FUEGO + HIELO): Bloque entrelazado rojo y celeste
+      else if (p.spellType === 'thermal_deflagration') {
+        const pr = 13;
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-pr - 1, -pr - 1, pr * 2 + 2, pr * 2 + 2);
+
+        // Píxeles rojos (#EF4444) y celestes (#38BDF8) entrelazados en patrón de bloques
+        const cSize = 6;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            const isRed = (r + c) % 2 === 0;
+            ctx.fillStyle = isRed ? '#ef4444' : '#38bdf8';
+            ctx.fillRect(-pr + c * cSize, -pr + r * cSize, cSize, cSize);
+          }
+        }
+        // Núcleo blanco brillante de alta temperatura
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-3, -3, 6, 6);
+      }
       // E. ERUPCIÓN DE MAGMA: Bloques de roca volcánica y fuego
       else if (p.spellType === 'magma_eruption') {
         ctx.fillStyle = OUTLINE;
@@ -4067,6 +4096,131 @@ export class IsometricRenderer {
         ctx.fill();
       }
       ctx.restore();
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // TRINCHERA DE MAGMA (FUEGO + FUEGO + TIERRA: GRIETA SEGMENTADA Y LAVA)
+  // =========================================================================
+  private static drawMagmaTrenches(ctx: CanvasRenderingContext2D, trenches: MagmaTrenchEntity[]) {
+    if (!trenches || trenches.length === 0) return;
+
+    trenches.forEach((trench) => {
+      if (trench.finished) return;
+
+      ctx.save();
+      ctx.translate(Math.round(trench.startX), Math.round(trench.startY));
+      ctx.rotate(trench.angle);
+
+      const lifeRatio = Math.max(0, 1 - trench.elapsedMs / trench.durationMs);
+      const alpha = Math.min(1, lifeRatio * 1.4);
+      ctx.globalAlpha = alpha;
+
+      const len = trench.length;
+      const halfW = Math.round(trench.width / 2);
+
+      // 1. Bordes de roca carbonizada (#18181B)
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0, -halfW - 3, len, trench.width + 6);
+
+      // Bloques escalonados de roca volcánica en los bordes para estilo pixel art
+      ctx.fillStyle = '#27272a';
+      for (let x = 0; x < len; x += 14) {
+        const stepTop = ((x / 14) % 2 === 0) ? 2 : 0;
+        const stepBot = ((x / 14) % 3 === 0) ? 2 : 0;
+        ctx.fillRect(x, -halfW - 3 - stepTop, 10, stepTop);
+        ctx.fillRect(x, halfW + 3, 10, stepBot);
+      }
+
+      // 2. Fondo profundo de hendidura de magma
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fillRect(2, -halfW, len - 4, trench.width);
+
+      // 3. Grietas y bloques de lava en naranja (#EA580C)
+      ctx.fillStyle = '#ea580c';
+      for (let x = 4; x < len - 6; x += 12) {
+        const wobble = Math.floor(Math.sin(x * 0.2 + trench.elapsedMs * 0.006) * 3);
+        ctx.fillRect(x, -halfW + 3 + wobble, 9, trench.width - 6);
+      }
+
+      // 4. Grietas angulares en amarillo puro (#FDE047)
+      ctx.fillStyle = '#fde047';
+      for (let x = 8; x < len - 10; x += 16) {
+        const wobbleY = Math.floor(Math.cos(x * 0.25 + trench.elapsedMs * 0.009) * 2);
+        ctx.fillRect(x, -2 + wobbleY, 7, 4);
+        ctx.fillRect(x + 3, -4 + wobbleY, 4, 8);
+      }
+
+      // 5. Núcleos incandescentes blanco puro
+      ctx.fillStyle = '#ffffff';
+      for (let x = 16; x < len - 16; x += 28) {
+        ctx.fillRect(x, -1, 4, 3);
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // HAZ DE FUSIÓN SOLAR (FUEGO + FUEGO + RAYO: HAZ DE PLASMA INSTANTÁNEO)
+  // =========================================================================
+  private static drawSolarFusionBeams(ctx: CanvasRenderingContext2D, beams: SolarFusionBeamEntity[]) {
+    if (!beams || beams.length === 0) return;
+
+    beams.forEach((beam) => {
+      if (beam.finished) return;
+
+      ctx.save();
+      ctx.translate(Math.round(beam.originX), Math.round(beam.originY));
+      ctx.rotate(beam.aimAngle);
+
+      const remainingRatio = Math.max(0, 1 - beam.elapsedMs / beam.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+      ctx.globalAlpha = alpha;
+
+      const len = beam.length;
+      const halfW = Math.round(beam.width / 2);
+      const pulse = Math.floor(beam.elapsedMs * 0.05) % 2;
+
+      // 1. Contorno pixel art oscuro exterior
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, -halfW - 2, len, beam.width + 4);
+
+      // 2. Franja exterior de bordes amarillos (#FACC15)
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(0, -halfW, len, beam.width);
+
+      // Dientes de sierra / escalonado de plasma naranja (#F97316) en los límites
+      ctx.fillStyle = '#f97316';
+      for (let x = 0; x < len; x += 10) {
+        const h = ((x / 10 + pulse) % 2 === 0) ? 3 : 1;
+        ctx.fillRect(x, -halfW - h, 7, h);
+        ctx.fillRect(x, halfW, 7, h);
+      }
+
+      // 3. Franja central de píxeles blanco puro (#FFFFFF)
+      ctx.fillStyle = '#ffffff';
+      const centerH = Math.round(beam.width * 0.45);
+      ctx.fillRect(0, -Math.round(centerH / 2), len, centerH);
+
+      // 4. Chispas cuadradas rojas que parpadean a lo largo del rayo (#EF4444)
+      ctx.fillStyle = '#ef4444';
+      for (let x = 8; x < len - 12; x += 20) {
+        const spkOffset = ((x / 20 + pulse) % 3 - 1) * (halfW - 3);
+        ctx.fillRect(x, spkOffset - 2, 4, 4);
+        ctx.fillRect(x + 2, spkOffset - 4, 2, 8);
+      }
+
+      // 5. Orbe de ignición solar concentrado en el origen
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-7, -7, 14, 14);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-9, -5, 2, 10);
+      ctx.fillRect(7, -5, 2, 10);
+      ctx.fillRect(-5, -9, 10, 2);
+      ctx.fillRect(-5, 7, 10, 2);
 
       ctx.restore();
     });

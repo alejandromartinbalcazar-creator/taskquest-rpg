@@ -56,6 +56,10 @@ export type SpellCastType =
   | 'conductive_prison' // Hielo + Tierra + Rayo
   | 'overload_core'     // Fuego + Tierra + Rayo
   | 'glacial_plasma_storm' // Fuego + Rayo + Hielo
+  // Triples Mixtas - Dominancia Fuego
+  | 'magma_trench'        // Fuego + Fuego + Tierra (🔥🔥🌍) - Trinchera de Magma
+  | 'thermal_deflagration' // Fuego + Fuego + Hielo (🔥🔥❄️) - Deflagración Térmica
+  | 'solar_fusion_beam'   // Fuego + Fuego + Rayo (🔥🔥⚡) - Haz de Fusión Solar
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -356,6 +360,45 @@ export interface GameEnemy {
   breathActive?: boolean;
   teleportTimer?: number;
   custodianState?: CustodianState;
+  fracturedArmorTimer?: number; // Deflagración Térmica: fractura de armadura (+30% daño recibido)
+}
+
+// Trinchera de Magma (Fuego + Fuego + Tierra)
+export interface MagmaTrenchEntity {
+  id: string;
+  startX: number;
+  startY: number;
+  angle: number;
+  length: number; // ~300px (6 tiles)
+  width: number;  // ~32px
+  durationMs: number; // 2500ms
+  elapsedMs: number;
+  damagePerTick: number;
+  tickIntervalMs: number; // 250ms
+  lastEnemyTick: Record<string, number>;
+  finished: boolean;
+  segments: Array<{
+    dist: number;
+    w: number;
+    h: number;
+    seed: number;
+  }>;
+}
+
+// Haz de Fusión Solar (Fuego + Fuego + Rayo)
+export interface SolarFusionBeamEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  length: number; // 400px
+  width: number;  // 24px
+  durationMs: number; // 500ms
+  elapsedMs: number;
+  damagePerTick: number;
+  tickIntervalMs: number; // 125ms (4 ticks en 500ms)
+  lastEnemyTick: Record<string, number>;
+  finished: boolean;
 }
 
 export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';

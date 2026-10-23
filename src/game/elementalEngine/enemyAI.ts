@@ -293,6 +293,7 @@ export class EnemyManager {
       if (e.cooledDownTimer && e.cooledDownTimer > 0) e.cooledDownTimer--;
       if (e.frenzyTimer && e.frenzyTimer > 0) e.frenzyTimer--;
       if (e.shieldBrokenTimer && e.shieldBrokenTimer > 0) e.shieldBrokenTimer--;
+      if (e.fracturedArmorTimer && e.fracturedArmorTimer > 0) e.fracturedArmorTimer--;
       if (e.teleportCooldown && e.teleportCooldown > 0) e.teleportCooldown--;
 
       // Modificadores de velocidad por reacciones del Bestiario

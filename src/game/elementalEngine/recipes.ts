@@ -292,6 +292,47 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // TRIPLES MIXTAS - DOMINANCIA FUEGO (Cooldown: 0)
+  magma_trench: {
+    id: 'magma_trench',
+    name: 'Trinchera de Magma',
+    elements: ['fire', 'fire', 'earth'],
+    description: 'Abre una grieta de magma en el suelo durante 2.5s que calcina continuamente e inflige una ralentización del 35%.',
+    icon: '🌋🔥',
+    color: '#ea580c',
+    secondaryColor: '#fde047',
+    damage: 34,
+    knockback: 2.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  thermal_deflagration: {
+    id: 'thermal_deflagration',
+    name: 'Deflagración Térmica',
+    elements: ['fire', 'fire', 'ice'],
+    description: 'Proyectil veloz de vapor y fuego que detona en 70px, inflige daño explosivo, micro-empuje y fractura la armadura (+30% daño por 4s).',
+    icon: '💥❄️',
+    color: '#ef4444',
+    secondaryColor: '#38bdf8',
+    damage: 78,
+    knockback: 4.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  solar_fusion_beam: {
+    id: 'solar_fusion_beam',
+    name: 'Haz de Fusión Solar',
+    elements: ['fire', 'fire', 'lightning'],
+    description: 'Haz penetrante continuo de plasma de 400px durante 500ms que perfora a todos los enemigos con 4 impactos ultra-rápidos.',
+    icon: '☀️⚡',
+    color: '#facc15',
+    secondaryColor: '#ffffff',
+    damage: 28,
+    knockback: 1.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -356,6 +397,11 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (hasFire && hasLightning && hasIce) {
     return RECIPES.glacial_plasma_storm;
   }
+
+  // 2.5 Triples Mixtas - Dominancia Fuego (cooldown: 0)
+  if (count('fire') === 2 && count('earth') === 1) return RECIPES.magma_trench;
+  if (count('fire') === 2 && count('ice') === 1) return RECIPES.thermal_deflagration;
+  if (count('fire') === 2 && count('lightning') === 1) return RECIPES.solar_fusion_beam;
 
   // 3. Las 6 Combinaciones Prioritarias de 2 Elementos
   if (hasFire && hasIce) {

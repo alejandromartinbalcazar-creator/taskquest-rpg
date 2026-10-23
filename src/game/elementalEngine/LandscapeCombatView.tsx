@@ -48,6 +48,8 @@ import {
   CataclysmFissure,
   CataclysmRockSlab,
   ForestLevelData,
+  MagmaTrenchEntity,
+  SolarFusionBeamEntity,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
@@ -294,8 +296,10 @@ function triggerAoEExplosion(
     type: 'ring',
   });
 
-  // 2. Chispas radiales
-  const sparkColor = p.spellType === 'explosive_overload' ? '#c084fc' : p.color;
+  // 2. Chispas radiales y partículas temáticas según el hechizo
+  const sparkColor = p.spellType === 'explosive_overload'
+    ? '#c084fc'
+    : (p.spellType === 'thermal_deflagration' ? '#38bdf8' : p.color);
   for (let s = 0; s < 14; s++) {
     const ang = Math.random() * Math.PI * 2;
     const spd = 2.5 + Math.random() * 4.0;
@@ -306,10 +310,29 @@ function triggerAoEExplosion(
       vx: Math.cos(ang) * spd,
       vy: Math.sin(ang) * spd,
       radius: 2 + Math.random() * 2,
-      color: sparkColor,
+      color: p.spellType === 'thermal_deflagration' && s % 2 === 0 ? '#ffffff' : sparkColor,
       alpha: 1,
       life: 16,
     });
+  }
+
+  // Si es Deflagración Térmica: Nube densa de vapor pixelado (cian y blanco) que se disipa rápido
+  if (p.spellType === 'thermal_deflagration') {
+    for (let v = 0; v < 16; v++) {
+      const vAng = Math.random() * Math.PI * 2;
+      const vSpd = 1.0 + Math.random() * 3.5;
+      particles.push({
+        id: `steam-pix-${Date.now()}-${v}`,
+        x: p.x + (Math.random() - 0.5) * 20,
+        y: p.y + (Math.random() - 0.5) * 20,
+        vx: Math.cos(vAng) * vSpd,
+        vy: Math.sin(vAng) * vSpd - 0.6,
+        radius: 3 + Math.random() * 2.5,
+        color: v % 2 === 0 ? '#38bdf8' : '#e0f2fe',
+        alpha: 0.85,
+        life: 18,
+      });
+    }
   }
 
   // 3. Daño elemental y estados a enemigos en radio según la matriz del Bestiario
@@ -330,6 +353,21 @@ function triggerAoEExplosion(
       }
       if (p.spellType === 'explosive_overload') {
         enemy.stunnedTimer = 45;
+      }
+      if (p.spellType === 'thermal_deflagration') {
+        // Fractura de armadura: reciben +30% de daño durante 4 segundos (240 frames)
+        enemy.fracturedArmorTimer = 240;
+        floatingTexts.push({
+          id: `fracture-${Date.now()}-${enemy.id}`,
+          x: enemy.x,
+          y: enemy.y - 28,
+          text: '🛡️💥 ¡ARMADURA FRACTURADA! (+30%)',
+          color: '#38bdf8',
+          fontSize: 12,
+          opacity: 1,
+          vy: -1.3,
+          life: 42,
+        });
       }
     }
   });
@@ -671,6 +709,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     overloadCores: [] as OverloadCoreEntity[],
     glacialPlasmaStorms: [] as GlacialPlasmaStormEntity[],
     elementalCataclysms: [] as ElementalCataclysmEntity[],
+    magmaTrenches: [] as MagmaTrenchEntity[],
+    solarFusionBeams: [] as SolarFusionBeamEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1004,6 +1044,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.overloadCores = [];
       g.glacialPlasmaStorms = [];
       g.elementalCataclysms = [];
+      g.magmaTrenches = [];
+      g.solarFusionBeams = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -1273,6 +1315,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         // Tormenta de Plasma Glacial gestiona sus propios sonidos sintetizados de lanzamiento, arcos, implosión y detonación
       }
       else if (recipe.id === 'elemental_cataclysm') elementalSound.playCataclysm();
+      else if (recipe.id === 'magma_trench') elementalSound.playEarthToss();
+      else if (recipe.id === 'thermal_deflagration') elementalSound.playFireShot();
+      else if (recipe.id === 'solar_fusion_beam') elementalSound.playLightningBolt();
       else elementalSound.playFireShot();
 
       // Cálculo de dirección de apuntado (Manual para Erupción Glacial / Puño Tectónico / Bombardeo Volcánico / Tornado de Plasma / Tormenta de Plasma Glacial)
@@ -1281,7 +1326,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       let targetX = wizard.x + Math.cos(aimAngle) * 110;
       let targetY = wizard.y + Math.sin(aimAngle) * 110;
 
-      if (recipe.id === 'ice_lance' || recipe.id === 'cryo_storm' || recipe.id === 'explosive_overload' || recipe.id === 'glacial_plasma_storm') {
+      if (
+        recipe.id === 'ice_lance' ||
+        recipe.id === 'cryo_storm' ||
+        recipe.id === 'explosive_overload' ||
+        recipe.id === 'glacial_plasma_storm' ||
+        recipe.id === 'magma_trench' ||
+        recipe.id === 'thermal_deflagration' ||
+        recipe.id === 'solar_fusion_beam'
+      ) {
         // Puntería manual prioritaria mediante arrastre táctil en botón de ataque o ratón en PC
         if (attackAimRef.current.isAiming) {
           const adx = attackAimRef.current.currX - attackAimRef.current.startX;
@@ -3511,6 +3564,132 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 35,
         });
       }
+      // TRINCHERA DE MAGMA (FUEGO + FUEGO + TIERRA):
+      // Grieta lineal de 300px en el suelo durante 2.5s con daño ígneo continuo (250ms) y -35% velocidad
+      else if (recipe.id === 'magma_trench') {
+        g.screenShake = Math.max(g.screenShake, 5);
+        elementalSound.playEarthToss();
+        const trenchLength = 300;
+        const trenchWidth = 32;
+        const tickDmg = Math.round((recipe.damage + statBonus * 0.35) * chargeMultiplier);
+
+        const segments: MagmaTrenchEntity['segments'] = [];
+        const segCount = 8;
+        for (let s = 0; s < segCount; s++) {
+          segments.push({
+            dist: (s / segCount) * trenchLength,
+            w: 36,
+            h: 24,
+            seed: Math.random() * 100,
+          });
+        }
+
+        g.magmaTrenches.push({
+          id: `trench-${now}-${Math.random()}`,
+          startX: wizard.x + Math.cos(aimAngle) * 16,
+          startY: wizard.y + Math.sin(aimAngle) * 16,
+          angle: aimAngle,
+          length: trenchLength,
+          width: trenchWidth,
+          durationMs: 2500,
+          elapsedMs: 0,
+          damagePerTick: tickDmg,
+          tickIntervalMs: 250,
+          lastEnemyTick: {},
+          finished: false,
+          segments,
+        });
+
+        g.floatingTexts.push({
+          id: `trench-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 70,
+          y: wizard.y + Math.sin(aimAngle) * 70 - 22,
+          text: '🌋 Trinchera de Magma',
+          color: '#ea580c',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // DEFLAGRACIÓN TÉRMICA (FUEGO + FUEGO + HIELO):
+      // Proyectil veloz (~250px) que estalla en radio 70px, micro-empuja y fractura la armadura (+30% daño por 4s)
+      else if (recipe.id === 'thermal_deflagration') {
+        g.screenShake = Math.max(g.screenShake, 4);
+        elementalSound.playFireShot();
+        const speed = 9.5;
+        const maxDist = 250;
+        const lifeFrames = Math.round(maxDist / speed);
+        const deflagDmg = Math.round((recipe.damage + statBonus) * chargeMultiplier);
+
+        g.projectiles.push({
+          id: `deflag-${now}-${Math.random()}`,
+          x: wizard.x + Math.cos(aimAngle) * 18,
+          y: wizard.y + Math.sin(aimAngle) * 18,
+          vx: Math.cos(aimAngle) * speed,
+          vy: Math.sin(aimAngle) * speed,
+          radius: 12,
+          color: '#ef4444',
+          secondaryColor: '#38bdf8',
+          damage: deflagDmg,
+          knockback: recipe.knockback || 4.5,
+          life: lifeFrames,
+          maxLife: lifeFrames,
+          pierce: 1,
+          piercedIds: [],
+          isHostile: false,
+          spellType: 'thermal_deflagration',
+          areaOfEffect: 70,
+        });
+
+        g.floatingTexts.push({
+          id: `deflag-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 45,
+          y: wizard.y + Math.sin(aimAngle) * 45 - 20,
+          text: '💥 Deflagración Térmica',
+          color: '#ef4444',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // HAZ DE FUSIÓN SOLAR (FUEGO + FUEGO + RAYO):
+      // Línea de plasma instantánea de 400px x 24px durante 500ms con 4 ticks perforantes continuos
+      else if (recipe.id === 'solar_fusion_beam') {
+        g.screenShake = Math.max(g.screenShake, 6);
+        elementalSound.playLightningBolt();
+        const beamLength = 400;
+        const beamWidth = 24;
+        const tickDmg = Math.round((recipe.damage + statBonus * 0.28) * chargeMultiplier);
+
+        g.solarFusionBeams.push({
+          id: `solar-beam-${now}-${Math.random()}`,
+          originX: wizard.x + Math.cos(aimAngle) * 16,
+          originY: wizard.y + Math.sin(aimAngle) * 16,
+          aimAngle,
+          length: beamLength,
+          width: beamWidth,
+          durationMs: 500,
+          elapsedMs: 0,
+          damagePerTick: tickDmg,
+          tickIntervalMs: 125,
+          lastEnemyTick: {},
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `solar-beam-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 80,
+          y: wizard.y + Math.sin(aimAngle) * 80 - 24,
+          text: '☀️ Haz de Fusión Solar',
+          color: '#facc15',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4099,6 +4278,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.overloadCores = [];
             g.glacialPlasmaStorms = [];
             g.elementalCataclysms = [];
+            g.magmaTrenches = [];
+            g.solarFusionBeams = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -11068,6 +11249,109 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.95 Actualizar Trincheras de Magma (Fuego + Fuego + Tierra: Grieta 300px, 2.5s, daño cada 250ms, -35% vel)
+      for (let tIdx = g.magmaTrenches.length - 1; tIdx >= 0; tIdx--) {
+        const trench = g.magmaTrenches[tIdx];
+        trench.elapsedMs += dt;
+        if (trench.elapsedMs >= trench.durationMs) {
+          trench.finished = true;
+          g.magmaTrenches.splice(tIdx, 1);
+          continue;
+        }
+
+        // Partículas de ceniza y humo que ascienden verticalmente
+        if (Math.random() < 0.65) {
+          const pDist = Math.random() * trench.length;
+          const px = trench.startX + Math.cos(trench.angle) * pDist + (Math.random() - 0.5) * (trench.width * 0.7);
+          const py = trench.startY + Math.sin(trench.angle) * pDist + (Math.random() - 0.5) * (trench.width * 0.7);
+          g.particles.push({
+            id: `trench-smoke-${frameNow}-${Math.random()}`,
+            x: px,
+            y: py,
+            vx: (Math.random() - 0.5) * 0.7,
+            vy: -1.2 - Math.random() * 1.5,
+            radius: Math.random() > 0.4 ? 2.5 : 1.8,
+            color: Math.random() > 0.35 ? '#ea580c' : '#71717a',
+            alpha: 0.85,
+            life: 18,
+          });
+        }
+
+        // Daño continuo y ralentización a enemigos en la línea
+        const cosA = Math.cos(trench.angle);
+        const sinA = Math.sin(trench.angle);
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const ex = enemy.x - trench.startX;
+          const ey = enemy.y - trench.startY;
+          const proj = ex * cosA + ey * sinA;
+          if (proj >= -10 && proj <= trench.length + 10) {
+            const perpDist = Math.abs(-ex * sinA + ey * cosA);
+            if (perpDist <= trench.width * 0.5 + enemy.radius) {
+              enemy.moveSpeed = Math.min(enemy.moveSpeed, 1.25);
+
+              const lastTick = trench.lastEnemyTick[enemy.id] || 0;
+              if (frameNow - lastTick >= trench.tickIntervalMs) {
+                trench.lastEnemyTick[enemy.id] = frameNow;
+                applyDamageToEnemy(enemy, trench.damagePerTick, 'fire', g.floatingTexts, enemy.x, enemy.y);
+                enemy.hitFlash = 6;
+              }
+            }
+          }
+        });
+      }
+
+      // 4.96 Actualizar Haz de Fusión Solar (Fuego + Fuego + Rayo: 400px x 24px, 500ms, 4 ticks perforantes)
+      for (let sIdx = g.solarFusionBeams.length - 1; sIdx >= 0; sIdx--) {
+        const beam = g.solarFusionBeams[sIdx];
+        beam.elapsedMs += dt;
+        if (beam.elapsedMs >= beam.durationMs) {
+          beam.finished = true;
+          g.solarFusionBeams.splice(sIdx, 1);
+          continue;
+        }
+
+        // Chispas cuadradas rojas que parpadean a lo largo del rayo
+        for (let s = 0; s < 2; s++) {
+          const pDist = Math.random() * beam.length;
+          const px = beam.originX + Math.cos(beam.aimAngle) * pDist + (Math.random() - 0.5) * beam.width;
+          const py = beam.originY + Math.sin(beam.aimAngle) * pDist + (Math.random() - 0.5) * beam.width;
+          g.particles.push({
+            id: `solar-spk-${frameNow}-${s}`,
+            x: px,
+            y: py,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: (Math.random() - 0.5) * 1.5,
+            radius: 2,
+            color: '#ef4444',
+            alpha: 0.9,
+            life: 10,
+          });
+        }
+
+        // Colisión y 4 ticks perforantes
+        const cosA = Math.cos(beam.aimAngle);
+        const sinA = Math.sin(beam.aimAngle);
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const ex = enemy.x - beam.originX;
+          const ey = enemy.y - beam.originY;
+          const proj = ex * cosA + ey * sinA;
+          if (proj >= -5 && proj <= beam.length + 5) {
+            const perpDist = Math.abs(-ex * sinA + ey * cosA);
+            if (perpDist <= beam.width * 0.5 + enemy.radius) {
+              const lastTick = beam.lastEnemyTick[enemy.id] || 0;
+              if (frameNow - lastTick >= beam.tickIntervalMs) {
+                beam.lastEnemyTick[enemy.id] = frameNow;
+                applyDamageToEnemy(enemy, beam.damagePerTick, 'fire', g.floatingTexts, enemy.x, enemy.y);
+                enemy.hitFlash = 8;
+                g.screenShake = Math.max(g.screenShake, 3);
+              }
+            }
+          }
+        });
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -11188,7 +11472,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.glacialPlasmaStorms,
             g.elementalCataclysms,
             g.forestLevel ?? undefined,
-            g.tilemap ?? undefined
+            g.tilemap ?? undefined,
+            g.magmaTrenches,
+            g.solarFusionBeams
           );
         }
       }

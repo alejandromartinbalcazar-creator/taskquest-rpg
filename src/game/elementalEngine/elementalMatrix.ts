@@ -259,6 +259,11 @@ export function calculateElementalDamage(
     }
   }
 
+  // Modificador por Armadura Fracturada (Deflagración Térmica: +30% de daño recibido)
+  if (enemy.fracturedArmorTimer && enemy.fracturedArmorTimer > 0) {
+    multiplier *= 1.30;
+  }
+
   const finalDamage = Math.max(1, Math.round(rawDamage * multiplier));
   let floatingText = `-${finalDamage}`;
   let textColor = '#ffffff';
@@ -417,7 +422,14 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
   if (spellType.includes('earth') || spellType.includes('tectonic') || spellType === 'telluric_barrier')
     return 'earth';
 
-  if (spellType === 'thermal_shock' || spellType === 'magma_eruption' || spellType === 'explosive_overload')
+  if (
+    spellType === 'thermal_shock' ||
+    spellType === 'magma_eruption' ||
+    spellType === 'explosive_overload' ||
+    spellType === 'magma_trench' ||
+    spellType === 'thermal_deflagration' ||
+    spellType === 'solar_fusion_beam'
+  )
     return 'fire';
   if (spellType === 'crystal_field') return 'lightning';
   if (spellType === 'permafrost_prison') return 'ice';
