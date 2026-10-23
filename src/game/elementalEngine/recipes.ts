@@ -374,6 +374,47 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // TRIPLES MIXTAS - DOMINANCIA RAYO (Cooldown: 0)
+  lightning_rod_pylon: {
+    id: 'lightning_rod_pylon',
+    name: 'Pilón de Pararrayos',
+    elements: ['lightning', 'lightning', 'earth'],
+    description: 'Planta un obelisco conductor que atrae magnéticamente a los enemigos en 90px y descarga rayos radiales cada 500ms durante 3s.',
+    icon: '⚡🌍',
+    color: '#facc15',
+    secondaryColor: '#1e293b',
+    damage: 34,
+    knockback: 1.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  plasma_hyper_orb: {
+    id: 'plasma_hyper_orb',
+    name: 'Bomba de Plasma',
+    elements: ['lightning', 'lightning', 'fire'],
+    description: 'Lanza un pesado orbe de plasma inestable que viaja emitiendo chispas y detona en una violenta supernova de 80px con daño masivo y fuerte empuje.',
+    icon: '💥⚡',
+    color: '#a855f7',
+    secondaryColor: '#ea580c',
+    damage: 96,
+    knockback: 8.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  cryo_arc_flash: {
+    id: 'cryo_arc_flash',
+    name: 'Descarga Cero Absoluto',
+    elements: ['lightning', 'lightning', 'ice'],
+    description: 'Libera un pulso electromagnético criogénico en abanico frontal de 120° y 260px, causando daño eléctrico y congelación/parálisis absoluta garantizada de 1.5s.',
+    icon: '⚡❄️',
+    color: '#38bdf8',
+    secondaryColor: '#e0f2fe',
+    damage: 48,
+    knockback: 2.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -448,6 +489,11 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (count('ice') === 2 && count('earth') === 1) return RECIPES.glacial_avalanche;
   if (count('ice') === 2 && count('fire') === 1) return RECIPES.boiling_hail;
   if (count('ice') === 2 && count('lightning') === 1) return RECIPES.superconductor_blizzard;
+
+  // 2.7 Triples Mixtas - Dominancia Rayo (cooldown: 0)
+  if (count('lightning') === 2 && count('earth') === 1) return RECIPES.lightning_rod_pylon;
+  if (count('lightning') === 2 && count('fire') === 1) return RECIPES.plasma_hyper_orb;
+  if (count('lightning') === 2 && count('ice') === 1) return RECIPES.cryo_arc_flash;
 
   // 3. Las 6 Combinaciones Prioritarias de 2 Elementos
   if (hasFire && hasIce) {

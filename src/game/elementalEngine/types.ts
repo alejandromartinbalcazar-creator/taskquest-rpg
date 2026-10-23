@@ -64,6 +64,10 @@ export type SpellCastType =
   | 'glacial_avalanche'      // Hielo + Hielo + Tierra (❄️❄️🌍) - Alud de Agujas Telúricas
   | 'boiling_hail'           // Hielo + Hielo + Fuego (❄️❄️🔥) - Lluvia de Granizo Hirviente
   | 'superconductor_blizzard'// Hielo + Hielo + Rayo (❄️❄️⚡) - Tormenta Crioelectrostática
+  // Triples Mixtas - Dominancia Rayo
+  | 'lightning_rod_pylon'    // Rayo + Rayo + Tierra (⚡⚡🌍) - Pilón de Pararrayos
+  | 'plasma_hyper_orb'       // Rayo + Rayo + Fuego (⚡⚡🔥) - Bomba de Plasma Inestable
+  | 'cryo_arc_flash'         // Rayo + Rayo + Hielo (⚡⚡❄️) - Descarga de Cero Absoluto
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -465,6 +469,57 @@ export interface SuperconductorBlizzardEntity {
   lastEnemyTick: Record<string, number>;
   finished: boolean;
   angle: number;
+}
+
+// Pilón de Pararrayos (Rayo + Rayo + Tierra)
+export interface LightningRodPylonEntity {
+  id: string;
+  x: number;
+  y: number;
+  durationMs: number; // 3000ms
+  elapsedMs: number;
+  pulseIntervalMs: number; // 500ms
+  lastPulseMs: number;
+  pullRadius: number; // 90px
+  damagePerPulse: number;
+  pulseWaveAlpha: number;
+  finished: boolean;
+}
+
+// Bomba de Plasma Inestable (Rayo + Rayo + Fuego)
+export interface PlasmaHyperOrbEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  currentX: number;
+  currentY: number;
+  vx: number;
+  vy: number;
+  travelDist: number;
+  maxDist: number; // 220px
+  damage: number;
+  radius: number; // 14px
+  explosionRadius: number; // 80px
+  exploded: boolean;
+  explosionProgress: number; // 0..1
+  explosionDurationMs: number; // 320ms
+  elapsedMs: number;
+  finished: boolean;
+}
+
+// Descarga de Cero Absoluto (Rayo + Rayo + Hielo)
+export interface CryoArcFlashEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  coneAngle: number; // 120° (Math.PI * 2 / 3)
+  range: number; // 260px
+  durationMs: number; // 360ms
+  elapsedMs: number;
+  damage: number;
+  freezeDurationFrames: number; // 90 frames (1.5s)
+  finished: boolean;
 }
 
 export type InfernalCrownPhase = 'preparation' | 'expansion' | 'ring' | 'detonation' | 'finished';

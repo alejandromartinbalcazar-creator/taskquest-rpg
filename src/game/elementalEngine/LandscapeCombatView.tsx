@@ -55,6 +55,9 @@ import {
   BoilingHailEntity,
   BoilingHailIcicle,
   SuperconductorBlizzardEntity,
+  LightningRodPylonEntity,
+  PlasmaHyperOrbEntity,
+  CryoArcFlashEntity,
 } from './types';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
@@ -719,6 +722,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     glacialAvalanches: [] as GlacialAvalancheEntity[],
     boilingHails: [] as BoilingHailEntity[],
     superconductorBlizzards: [] as SuperconductorBlizzardEntity[],
+    lightningRodPylons: [] as LightningRodPylonEntity[],
+    plasmaHyperOrbs: [] as PlasmaHyperOrbEntity[],
+    cryoArcFlashes: [] as CryoArcFlashEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1057,6 +1063,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.glacialAvalanches = [];
       g.boilingHails = [];
       g.superconductorBlizzards = [];
+      g.lightningRodPylons = [];
+      g.plasmaHyperOrbs = [];
+      g.cryoArcFlashes = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -3843,6 +3852,148 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 30,
         });
       }
+      // PILÓN DE PARARRAYOS (RAYO + RAYO + TIERRA):
+      // Obelisco conductor a 180px que dura 3s, atrae enemigos en 90px y descarga rayos radiales cada 500ms
+      else if (recipe.id === 'lightning_rod_pylon') {
+        g.screenShake = Math.max(g.screenShake, 7);
+        elementalSound.playLightningBolt();
+        elementalSound.playEarthToss();
+        const targetX = wizard.x + Math.cos(aimAngle) * 180;
+        const targetY = wizard.y + Math.sin(aimAngle) * 180 * 0.58;
+        const pulseDmg = Math.round((recipe.damage + statBonus * 0.3) * chargeMultiplier);
+
+        g.lightningRodPylons.push({
+          id: `pylon-${now}-${Math.random()}`,
+          x: targetX,
+          y: targetY,
+          durationMs: 3000,
+          elapsedMs: 0,
+          pulseIntervalMs: 500,
+          lastPulseMs: 0,
+          pullRadius: 90,
+          damagePerPulse: pulseDmg,
+          pulseWaveAlpha: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `pylon-cast-${now}`,
+          x: targetX,
+          y: targetY - 40,
+          text: '⚡ Pilón de Pararrayos',
+          color: '#facc15',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // BOMBA DE PLASMA INESTABLE (RAYO + RAYO + FUEGO):
+      // Orbe pesado a media velocidad (~220px alcance) que detona en supernova de 80px con daño masivo y gran empuje radial
+      else if (recipe.id === 'plasma_hyper_orb') {
+        g.screenShake = Math.max(g.screenShake, 8);
+        elementalSound.playLightningBolt();
+        elementalSound.playFireShot();
+        const baseDmg = Math.round((recipe.damage + statBonus) * chargeMultiplier);
+        const speed = 5.5;
+
+        g.plasmaHyperOrbs.push({
+          id: `plasma-orb-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          currentX: wizard.x,
+          currentY: wizard.y,
+          vx: Math.cos(aimAngle) * speed,
+          vy: Math.sin(aimAngle) * speed * 0.58,
+          travelDist: 0,
+          maxDist: 220,
+          damage: baseDmg,
+          radius: 14,
+          explosionRadius: 80,
+          exploded: false,
+          explosionProgress: 0,
+          explosionDurationMs: 320,
+          elapsedMs: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `plasma-orb-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 50,
+          y: wizard.y + Math.sin(aimAngle) * 50 - 20,
+          text: '💥 Bomba de Plasma',
+          color: '#a855f7',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
+      // DESCARGA DE CERO ABSOLUTO (RAYO + RAYO + HIELO):
+      // Pulso electromagnético criogénico instantáneo en abanico frontal de 120° y 260px con parálisis de 1.5s
+      else if (recipe.id === 'cryo_arc_flash') {
+        g.screenShake = Math.max(g.screenShake, 9);
+        elementalSound.playLightningBolt();
+        elementalSound.playGlacialFreezeImpact();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.4) * chargeMultiplier);
+        const coneAngle = (Math.PI * 2) / 3; // 120°
+        const range = 260;
+
+        g.cryoArcFlashes.push({
+          id: `cryo-flash-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          coneAngle,
+          range,
+          durationMs: 360,
+          elapsedMs: 0,
+          damage: baseDmg,
+          freezeDurationFrames: 90, // 1.5s a 60fps
+          finished: false,
+        });
+
+        // Aplicación inmediata a los enemigos dentro del cono frontal
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const dx = enemy.x - wizard.x;
+          const dy = (enemy.y - wizard.y) / 0.58;
+          const dist = Math.hypot(dx, dy);
+          if (dist <= range + enemy.radius) {
+            const enemyAng = Math.atan2(dy, dx);
+            const diff = Math.atan2(Math.sin(enemyAng - aimAngle), Math.cos(enemyAng - aimAngle));
+            if (Math.abs(diff) <= coneAngle / 2) {
+              applyDamageToEnemy(enemy, baseDmg, 'lightning', g.floatingTexts, wizard.x, wizard.y);
+              enemy.hitFlash = 14;
+              enemy.stunnedTimer = 90; // 1.5s parálisis absoluta
+              g.enemyManager.applyStatus(enemy, 'frozen', 90);
+              g.floatingTexts.push({
+                id: `cryo-stun-${now}-${enemy.id}`,
+                x: enemy.x,
+                y: enemy.y - 25,
+                text: '⚡❄️ ¡PARÁLISIS CERO ABSOLUTO 1.5s!',
+                color: '#38bdf8',
+                fontSize: 12,
+                opacity: 1,
+                vy: -1.2,
+                life: 40,
+              });
+            }
+          }
+        });
+
+        g.floatingTexts.push({
+          id: `cryo-flash-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 80,
+          y: wizard.y + Math.sin(aimAngle) * 80 - 25,
+          text: '⚡❄️ Descarga Cero Absoluto',
+          color: '#38bdf8',
+          fontSize: 13,
+          opacity: 1,
+          vy: -1.2,
+          life: 30,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4436,6 +4587,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.glacialAvalanches = [];
             g.boilingHails = [];
             g.superconductorBlizzards = [];
+            g.lightningRodPylons = [];
+            g.plasmaHyperOrbs = [];
+            g.cryoArcFlashes = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -11702,6 +11856,178 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 4.991 Actualizar Pilón de Pararrayos (Rayo + Rayo + Tierra: atracción en 90px y rayos cada 500ms durante 3s)
+      for (let pIdx = g.lightningRodPylons.length - 1; pIdx >= 0; pIdx--) {
+        const pylon = g.lightningRodPylons[pIdx];
+        pylon.elapsedMs += dt;
+        if (pylon.pulseWaveAlpha > 0) {
+          pylon.pulseWaveAlpha = Math.max(0, pylon.pulseWaveAlpha - 0.05);
+        }
+        if (pylon.elapsedMs >= pylon.durationMs) {
+          pylon.finished = true;
+          g.lightningRodPylons.splice(pIdx, 1);
+          continue;
+        }
+
+        // Chispas flotantes alrededor del obelisco
+        if (Math.random() < 0.4) {
+          g.particles.push({
+            id: `pylon-spk-${frameNow}-${Math.random()}`,
+            x: pylon.x + (Math.random() - 0.5) * 20,
+            y: pylon.y - 10 - Math.random() * 30,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: -1.0 - Math.random() * 1.5,
+            radius: 1.8,
+            color: '#facc15',
+            alpha: 1,
+            life: 14,
+          });
+        }
+
+        // Atracción magnética suave constante en 90px
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const d = Math.hypot(enemy.x - pylon.x, (enemy.y - pylon.y) / 0.58);
+          if (d <= pylon.pullRadius + enemy.radius) {
+            const pullAng = Math.atan2(pylon.y - enemy.y, pylon.x - enemy.x);
+            enemy.x += Math.cos(pullAng) * 0.9;
+            enemy.y += Math.sin(pullAng) * 0.52;
+          }
+        });
+
+        // Pulso radial de rayo cada 500ms
+        if (pylon.elapsedMs - pylon.lastPulseMs >= pylon.pulseIntervalMs) {
+          pylon.lastPulseMs = pylon.elapsedMs;
+          pylon.pulseWaveAlpha = 1.0;
+          g.screenShake = Math.max(g.screenShake, 4);
+          elementalSound.playLightningBolt();
+
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const d = Math.hypot(enemy.x - pylon.x, (enemy.y - pylon.y) / 0.58);
+            if (d <= pylon.pullRadius + enemy.radius) {
+              applyDamageToEnemy(enemy, pylon.damagePerPulse, 'lightning', g.floatingTexts, pylon.x, pylon.y);
+              enemy.hitFlash = 8;
+              g.enemyManager.applyStatus(enemy, 'shocked', 60);
+
+              // Rayo desde la punta del pilón (y - 36) hasta el monstruo
+              g.lightningBolts.push({
+                id: `pylon-arc-${frameNow}-${enemy.id}`,
+                startX: pylon.x,
+                startY: pylon.y - 36,
+                targetX: enemy.x,
+                targetY: enemy.y,
+                color: '#facc15',
+                glowColor: '#fef08a',
+                points: [
+                  { x: pylon.x, y: pylon.y - 36 },
+                  { x: (pylon.x + enemy.x) / 2 + (Math.random() - 0.5) * 16, y: (pylon.y - 36 + enemy.y) / 2 + (Math.random() - 0.5) * 16 },
+                  { x: enemy.x, y: enemy.y }
+                ],
+                branches: [],
+                chainLines: [],
+                life: 5,
+                maxLife: 5,
+              });
+            }
+          });
+        }
+      }
+
+      // 4.992 Actualizar Bomba de Plasma Inestable (Rayo + Rayo + Fuego: orbe pesado con supernova de 80px y knockback)
+      for (let oIdx = g.plasmaHyperOrbs.length - 1; oIdx >= 0; oIdx--) {
+        const orb = g.plasmaHyperOrbs[oIdx];
+
+        if (!orb.exploded) {
+          orb.currentX += orb.vx;
+          orb.currentY += orb.vy;
+          orb.travelDist += Math.hypot(orb.vx, orb.vy / 0.58);
+
+          // Chispas de plasma violeta y fuego naranja en la estela
+          if (Math.random() < 0.8) {
+            g.particles.push({
+              id: `plasma-tr-${frameNow}-${Math.random()}`,
+              x: orb.currentX + (Math.random() - 0.5) * 12,
+              y: orb.currentY + (Math.random() - 0.5) * 12,
+              vx: -orb.vx * 0.2 + (Math.random() - 0.5),
+              vy: -orb.vy * 0.2 + (Math.random() - 0.5),
+              radius: Math.random() > 0.5 ? 2.5 : 1.8,
+              color: Math.random() > 0.4 ? '#a855f7' : '#ea580c',
+              alpha: 0.9,
+              life: 14,
+            });
+          }
+
+          // Detección de colisión con enemigos o alcance máximo (220px)
+          let collided = orb.travelDist >= orb.maxDist;
+          if (!collided) {
+            for (const enemy of enemies) {
+              if (enemy.hp <= 0) continue;
+              const ed = Math.hypot(enemy.x - orb.currentX, (enemy.y - orb.currentY) / 0.58);
+              if (ed <= orb.radius + enemy.radius) {
+                collided = true;
+                break;
+              }
+            }
+          }
+
+          if (collided) {
+            orb.exploded = true;
+            g.screenShake = Math.max(g.screenShake, 10);
+            elementalSound.playAoEExplosion();
+
+            // Daño masivo mixto y fuerte empuje radial (knockback 8.0) a enemigos en 80px
+            enemies.forEach((enemy) => {
+              if (enemy.hp <= 0) return;
+              const dist = Math.hypot(enemy.x - orb.currentX, (enemy.y - orb.currentY) / 0.58);
+              if (dist <= orb.explosionRadius + enemy.radius) {
+                const kAng = Math.atan2(enemy.y - orb.currentY, enemy.x - orb.currentX);
+                enemy.x += Math.cos(kAng) * 24;
+                enemy.y += Math.sin(kAng) * 14;
+                applyDamageToEnemy(enemy, orb.damage, 'lightning', g.floatingTexts, orb.currentX, orb.currentY);
+                enemy.hitFlash = 12;
+                g.enemyManager.applyStatus(enemy, 'burning', 120);
+                g.enemyManager.applyStatus(enemy, 'shocked', 90);
+              }
+            });
+
+            // Partículas de supernova desintegrándose en bloques individuales
+            for (let p = 0; p < 18; p++) {
+              const pAng = (p / 18) * Math.PI * 2;
+              const spd = 3.5 + Math.random() * 3.5;
+              g.particles.push({
+                id: `sn-part-${frameNow}-${p}`,
+                x: orb.currentX,
+                y: orb.currentY,
+                vx: Math.cos(pAng) * spd,
+                vy: Math.sin(pAng) * spd * 0.58,
+                radius: 3.2,
+                color: p % 3 === 0 ? '#ffffff' : (p % 3 === 1 ? '#a855f7' : '#ea580c'),
+                alpha: 1,
+                life: 20,
+              });
+            }
+          }
+        } else {
+          orb.elapsedMs += dt;
+          orb.explosionProgress = Math.min(1.0, orb.elapsedMs / orb.explosionDurationMs);
+          if (orb.explosionProgress >= 1.0) {
+            orb.finished = true;
+            g.plasmaHyperOrbs.splice(oIdx, 1);
+          }
+        }
+      }
+
+      // 4.993 Actualizar Descarga de Cero Absoluto (Rayo + Rayo + Hielo: ciclo visual de 360ms)
+      for (let cIdx = g.cryoArcFlashes.length - 1; cIdx >= 0; cIdx--) {
+        const flash = g.cryoArcFlashes[cIdx];
+        flash.elapsedMs += dt;
+        if (flash.elapsedMs >= flash.durationMs) {
+          flash.finished = true;
+          g.cryoArcFlashes.splice(cIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -11827,7 +12153,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.solarFusionBeams,
             g.glacialAvalanches,
             g.boilingHails,
-            g.superconductorBlizzards
+            g.superconductorBlizzards,
+            g.lightningRodPylons,
+            g.plasmaHyperOrbs,
+            g.cryoArcFlashes
           );
         }
       }

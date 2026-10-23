@@ -57,6 +57,9 @@ import {
   BoilingHailEntity,
   BoilingHailIcicle,
   SuperconductorBlizzardEntity,
+  LightningRodPylonEntity,
+  PlasmaHyperOrbEntity,
+  CryoArcFlashEntity,
 } from './types';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
@@ -139,7 +142,10 @@ export class IsometricRenderer {
     solarFusionBeams: SolarFusionBeamEntity[] = [],
     glacialAvalanches: GlacialAvalancheEntity[] = [],
     boilingHails: BoilingHailEntity[] = [],
-    superconductorBlizzards: SuperconductorBlizzardEntity[] = []
+    superconductorBlizzards: SuperconductorBlizzardEntity[] = [],
+    lightningRodPylons: LightningRodPylonEntity[] = [],
+    plasmaHyperOrbs: PlasmaHyperOrbEntity[] = [],
+    cryoArcFlashes: CryoArcFlashEntity[] = []
   ) {
     ctx.save();
 
@@ -244,6 +250,12 @@ export class IsometricRenderer {
 
     // 3.888 Dibujar Anillo y Glifo de Tormenta Crioelectrostática en el Suelo (Hielo + Hielo + Rayo)
     this.drawSuperconductorBlizzardGround(ctx, superconductorBlizzards);
+
+    // 3.889 Dibujar Suelo y Campo Magnético de Pilón de Pararrayos (Rayo + Rayo + Tierra)
+    this.drawLightningRodPylonGround(ctx, lightningRodPylons);
+
+    // 3.890 Dibujar Escarcha Residual de Descarga Cero Absoluto (Rayo + Rayo + Hielo)
+    this.drawCryoArcFlashGround(ctx, cryoArcFlashes);
 
     // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
     if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
@@ -568,6 +580,26 @@ export class IsometricRenderer {
       }
     });
 
+    // Pilón de Pararrayos (Rayo + Rayo + Tierra) integrado en Depth Sorting
+    lightningRodPylons.forEach((pylon) => {
+      if (!pylon.finished) {
+        renderList.push({
+          y: pylon.y,
+          draw: () => this.drawLightningRodPylonObelisk(ctx, pylon),
+        });
+      }
+    });
+
+    // Bomba de Plasma Inestable (Rayo + Rayo + Fuego) integrada en Depth Sorting
+    plasmaHyperOrbs.forEach((orb) => {
+      if (!orb.finished) {
+        renderList.push({
+          y: orb.currentY,
+          draw: () => this.drawPlasmaHyperOrb(ctx, orb),
+        });
+      }
+    });
+
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
@@ -620,6 +652,12 @@ export class IsometricRenderer {
 
     // 6.7 Dibujar Tormenta Crioelectrostática (Hielo + Hielo + Rayo): Anillo Giratorio de Copos y Relámpagos
     this.drawSuperconductorBlizzardVortex(ctx, superconductorBlizzards);
+
+    // 6.8 Dibujar Arcos Radiales de Pilón de Pararrayos (Rayo + Rayo + Tierra)
+    this.drawLightningRodPylonArcs(ctx, lightningRodPylons);
+
+    // 6.9 Dibujar Rayos Dentados y Esquirlas de Descarga Cero Absoluto (Rayo + Rayo + Hielo)
+    this.drawCryoArcFlashVortex(ctx, cryoArcFlashes);
 
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
@@ -4665,6 +4703,382 @@ export class IsometricRenderer {
 
         ctx.fillStyle = s % 2 === 0 ? '#a855f7' : '#00f0ff';
         ctx.fillRect(sx, sy, 3, 3);
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // PILÓN DE PARARRAYOS (RAYO + RAYO + TIERRA: SUELO Y CAMPO MAGNÉTICO)
+  // =========================================================================
+  private static drawLightningRodPylonGround(
+    ctx: CanvasRenderingContext2D,
+    pylons: LightningRodPylonEntity[]
+  ) {
+    if (!pylons || pylons.length === 0) return;
+
+    pylons.forEach((pylon) => {
+      if (pylon.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - pylon.elapsedMs / pylon.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const px = Math.round(pylon.x);
+      const py = Math.round(pylon.y);
+      const rad = pylon.pullRadius; // 90px
+      const squish = 0.58;
+
+      // 1. Sombra isométrica y losa base en el suelo (#0F172A)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(px - 16, py - 6, 32, 12);
+      ctx.fillRect(px - 12, py - 9, 24, 18);
+
+      // Plinto de piedra tallada (#1E293B)
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(px - 14, py - 5, 28, 10);
+      ctx.fillRect(px - 10, py - 7, 20, 14);
+
+      // Grietas de anclaje telúrico (#FACC15)
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(px - 11, py - 2, 7, 3);
+      ctx.fillRect(px + 4, py - 2, 7, 3);
+      ctx.fillRect(px - 2, py - 6, 4, 12);
+
+      // 2. Anillo magnético perimetral de 90px con trazos discontinuos
+      ctx.fillStyle = '#facc15';
+      const steps = 18;
+      for (let i = 0; i < steps; i++) {
+        const ang = (i / steps) * Math.PI * 2 + pylon.elapsedMs * 0.003;
+        const bx = Math.round(px + Math.cos(ang) * rad);
+        const by = Math.round(py + Math.sin(ang) * rad * squish);
+        ctx.fillRect(bx - 3, by - 2, 6, 4);
+      }
+
+      // 3. Onda expansiva de pulso magnético radial
+      if (pylon.pulseWaveAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = pylon.pulseWaveAlpha * alpha;
+        ctx.fillStyle = '#fef08a';
+        const waveRad = Math.round(rad * (1 - pylon.pulseWaveAlpha * 0.7));
+        for (let i = 0; i < 16; i++) {
+          const ang = (i / 16) * Math.PI * 2;
+          const wx = Math.round(px + Math.cos(ang) * waveRad);
+          const wy = Math.round(py + Math.sin(ang) * waveRad * squish);
+          ctx.fillRect(wx - 2, wy - 2, 5, 4);
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // PILÓN DE PARARRAYOS (RAYO + RAYO + TIERRA: OBELISCO Y RUNAS)
+  // =========================================================================
+  private static drawLightningRodPylonObelisk(
+    ctx: CanvasRenderingContext2D,
+    pylon: LightningRodPylonEntity
+  ) {
+    const px = Math.round(pylon.x);
+    const py = Math.round(pylon.y);
+
+    const remainingRatio = Math.max(0, 1 - pylon.elapsedMs / pylon.durationMs);
+    const alpha = Math.min(1, remainingRatio * 1.5);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const obeliskHeight = 46;
+    const stepHeight = 4;
+    const totalSteps = Math.ceil(obeliskHeight / stepHeight);
+    const baseHalfW = 10;
+
+    // Dibujar obelisco escalonado de piedra gris grafito (#1E293B)
+    for (let step = 0; step < totalSteps; step++) {
+      const stepY = py - (step + 1) * stepHeight;
+      const progress = step / totalSteps;
+      const curHalfW = Math.max(3, Math.round(baseHalfW * (1 - progress * 0.65)));
+
+      // Contorno oscuro exterior (#0F172A)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(px - curHalfW - 2, stepY, (curHalfW + 2) * 2, stepHeight);
+
+      // Bloques de piedra grafito (#1E293B)
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(px - curHalfW, stepY, curHalfW * 2, stepHeight);
+
+      // Faceta iluminada en grafito claro (#334155)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(px - curHalfW, stepY, Math.round(curHalfW * 0.7), stepHeight);
+
+      // Runa central incandescente (#FACC15)
+      if (step >= 2 && step <= totalSteps - 2 && step % 2 === 0) {
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(px - 2, stepY + 1, 4, stepHeight - 2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(px - 1, stepY + 1, 2, 2);
+      }
+    }
+
+    // Cúpula conductora y vara de pararrayos
+    const topY = py - obeliskHeight;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(px - 4, topY - 12, 8, 14);
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(px - 3, topY - 3, 6, 4);
+
+    // Vara metálica vertical en blanco puro y amarillo (#FFFFFF / #FACC15)
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(px - 2, topY - 10, 4, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px - 1, topY - 14, 2, 6);
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // PILÓN DE PARARRAYOS (RAYO + RAYO + TIERRA: RAYOS RADIALES EN LÍNEAS QUEBRADAS)
+  // =========================================================================
+  private static drawLightningRodPylonArcs(
+    ctx: CanvasRenderingContext2D,
+    pylons: LightningRodPylonEntity[]
+  ) {
+    if (!pylons || pylons.length === 0) return;
+
+    pylons.forEach((pylon) => {
+      if (pylon.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - pylon.elapsedMs / pylon.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const px = Math.round(pylon.x);
+      const tipY = Math.round(pylon.y - 58);
+
+      // Chispas permanentes en la punta
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px - 2, tipY - 2, 4, 4);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(px - 4, tipY, 2, 2);
+      ctx.fillRect(px + 3, tipY, 2, 2);
+      ctx.fillRect(px, tipY - 4, 2, 2);
+
+      // Rayos radiales en líneas quebradas de 2px de ancho
+      const branches = 3;
+      for (let b = 0; b < branches; b++) {
+        const branchAng = (b / branches) * Math.PI * 2 + pylon.elapsedMs * 0.01;
+        ctx.fillStyle = b % 2 === 0 ? '#facc15' : '#ffffff';
+
+        let curX = px;
+        let curY = tipY;
+        const segs = 3;
+
+        for (let s = 0; s < segs; s++) {
+          const dist = 16 + s * 14;
+          const jitter = (s % 2 === 0 ? 0.3 : -0.3);
+          const nextX = Math.round(px + Math.cos(branchAng + jitter) * dist);
+          const nextY = Math.round(tipY + Math.sin(branchAng + jitter) * dist * 0.7);
+
+          ctx.fillRect(curX, curY, nextX - curX + 2, 2);
+          ctx.fillRect(nextX, curY, 2, nextY - curY + 2);
+
+          curX = nextX;
+          curY = nextY;
+        }
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // BOMBA DE PLASMA INESTABLE (RAYO + RAYO + FUEGO: ORBE Y SUPERNOVA DETONANTE)
+  // =========================================================================
+  private static drawPlasmaHyperOrb(
+    ctx: CanvasRenderingContext2D,
+    orb: PlasmaHyperOrbEntity
+  ) {
+    const ox = Math.round(orb.currentX);
+    const oy = Math.round(orb.currentY);
+
+    ctx.save();
+
+    if (!orb.exploded) {
+      // 1. Orbe pesado en vuelo: Núcleo cuadrado escalonado blanco con capas violeta y fuego naranja
+      const pulse = Math.floor(orb.travelDist * 0.2) % 2;
+
+      // Capa exterior naranja fuego (#EA580C) con contorno
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(ox - 10, oy - 10, 20, 20);
+
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(ox - 9, oy - 9, 18, 18);
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(ox - 11 + pulse * 2, oy - 6, 3, 12);
+      ctx.fillRect(ox + 8 - pulse * 2, oy - 6, 3, 12);
+
+      // Capa media violeta brillante (#A855F7)
+      ctx.fillStyle = '#a855f7';
+      ctx.fillRect(ox - 7, oy - 7, 14, 14);
+      ctx.fillStyle = '#c084fc';
+      ctx.fillRect(ox - 5, oy - 5, 10, 10);
+
+      // Núcleo cuadrado escalonado en blanco puro (#FFFFFF)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(ox - 3, oy - 3, 6, 6);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(ox - 1, oy - 1, 2, 2);
+    } else {
+      // 2. Supernova de Plasma: Anillo expansivo de bloques de energía desintegrándose en píxeles individuales
+      const prog = orb.explosionProgress;
+      const alpha = Math.max(0, 1 - prog);
+      ctx.globalAlpha = alpha;
+
+      const curRad = Math.round(orb.explosionRadius * Math.sin(prog * Math.PI / 2));
+      const squish = 0.58;
+
+      // Anillo de bloques de energía (4x4 px)
+      const blockCount = 20;
+      for (let i = 0; i < blockCount; i++) {
+        const ang = (i / blockCount) * Math.PI * 2;
+        const bx = Math.round(ox + Math.cos(ang) * curRad);
+        const by = Math.round(oy + Math.sin(ang) * curRad * squish);
+
+        ctx.fillStyle = i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? '#a855f7' : '#ea580c');
+        ctx.fillRect(bx - 2, by - 2, 5, 4);
+
+        // Píxeles individuales desintegrándose hacia los bordes
+        const scatterDist = curRad * (1 + (i % 3) * 0.18 * prog);
+        const sx = Math.round(ox + Math.cos(ang + 0.1) * scatterDist);
+        const sy = Math.round(oy + Math.sin(ang + 0.1) * scatterDist * squish);
+        ctx.fillRect(sx - 1, sy - 1, 3, 3);
+      }
+
+      // Núcleo inicial blanco intenso
+      if (prog < 0.4) {
+        ctx.fillStyle = '#ffffff';
+        const coreSize = Math.round(18 * (1 - prog / 0.4));
+        ctx.fillRect(ox - Math.round(coreSize / 2), oy - Math.round(coreSize * squish / 2), coreSize, Math.round(coreSize * squish));
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // DESCARGA DE CERO ABSOLUTO (RAYO + RAYO + HIELO: SUELO Y ESCARCHA RESIDUAL)
+  // =========================================================================
+  private static drawCryoArcFlashGround(
+    ctx: CanvasRenderingContext2D,
+    flashes: CryoArcFlashEntity[]
+  ) {
+    if (!flashes || flashes.length === 0) return;
+
+    flashes.forEach((flash) => {
+      if (flash.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - flash.elapsedMs / flash.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const ox = Math.round(flash.originX);
+      const oy = Math.round(flash.originY);
+      const cone = flash.coneAngle; // 120°
+      const range = flash.range; // 260px
+      const squish = 0.58;
+
+      // Arco de escarcha residual y huella táctica en suelo
+      ctx.fillStyle = '#38bdf8';
+      const steps = 14;
+      for (let i = 0; i <= steps; i++) {
+        const ang = flash.aimAngle - cone / 2 + (i / steps) * cone;
+        const dist = range * 0.85;
+        const px = Math.round(ox + Math.cos(ang) * dist);
+        const py = Math.round(oy + Math.sin(ang) * dist * squish);
+        ctx.fillRect(px - 3, py - 2, 7, 4);
+
+        // Bloques escalonados de hielo azul glaciar (#E0F2FE)
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(px - 1, py - 4, 3, 2);
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // DESCARGA DE CERO ABSOLUTO (RAYO + RAYO + HIELO: RELÁMPAGOS DENTADOS Y ESQUIRLAS)
+  // =========================================================================
+  private static drawCryoArcFlashVortex(
+    ctx: CanvasRenderingContext2D,
+    flashes: CryoArcFlashEntity[]
+  ) {
+    if (!flashes || flashes.length === 0) return;
+
+    flashes.forEach((flash) => {
+      if (flash.finished) return;
+
+      const remainingRatio = Math.max(0, 1 - flash.elapsedMs / flash.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.6);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const ox = Math.round(flash.originX);
+      const oy = Math.round(flash.originY - 14);
+      const cone = flash.coneAngle; // 120°
+      const range = flash.range; // 260px
+      const squish = 0.58;
+
+      // 1. Relámpagos dentados en cian eléctrico (#38BDF8) y blanco puro (#FFFFFF)
+      const rays = 8;
+      for (let r = 0; r < rays; r++) {
+        const rayAng = flash.aimAngle - cone / 2 + (r / (rays - 1)) * cone;
+        ctx.fillStyle = r % 2 === 0 ? '#38bdf8' : '#ffffff';
+
+        let curX = ox;
+        let curY = oy;
+        const segs = 5;
+
+        for (let s = 0; s < segs; s++) {
+          const segDist = (range / segs) * (s + 1);
+          const jitter = (s % 2 === 0 ? 0.18 : -0.18);
+          const nextX = Math.round(ox + Math.cos(rayAng + jitter) * segDist);
+          const nextY = Math.round(oy + Math.sin(rayAng + jitter) * segDist * squish);
+
+          // Trazos escalonados en ángulo recto / pixel outline
+          ctx.fillRect(curX - 1, curY - 1, nextX - curX + 2, 3);
+          ctx.fillRect(nextX - 1, curY - 1, 3, nextY - curY + 2);
+
+          // Chispa cuadrada en el nudo
+          ctx.fillRect(nextX - 2, nextY - 2, 5, 4);
+
+          curX = nextX;
+          curY = nextY;
+        }
+      }
+
+      // 2. Fragmentos y esquirlas de hielo en blanco (#FFFFFF) y azul glaciar (#E0F2FE)
+      const shardCount = 12;
+      for (let i = 0; i < shardCount; i++) {
+        const sAng = flash.aimAngle - cone / 2 + ((i + 0.5) / shardCount) * cone;
+        const sDist = range * (0.35 + 0.55 * ((i % 4) / 3));
+        const sx = Math.round(ox + Math.cos(sAng) * sDist);
+        const sy = Math.round(oy + Math.sin(sAng) * sDist * squish - 8);
+
+        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#e0f2fe';
+        ctx.fillRect(sx - 2, sy - 2, 4, 4);
+        ctx.fillRect(sx - 1, sy - 3, 2, 6);
       }
 
       ctx.restore();

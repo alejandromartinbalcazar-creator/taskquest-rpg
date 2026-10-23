@@ -431,7 +431,13 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'solar_fusion_beam'
   )
     return 'fire';
-  if (spellType === 'crystal_field') return 'lightning';
+  if (
+    spellType === 'crystal_field' ||
+    spellType === 'lightning_rod_pylon' ||
+    spellType === 'plasma_hyper_orb' ||
+    spellType === 'cryo_arc_flash'
+  )
+    return 'lightning';
   if (
     spellType === 'permafrost_prison' ||
     spellType === 'glacial_avalanche' ||
