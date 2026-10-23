@@ -14,6 +14,73 @@ export interface VersionEntry {
 
 export const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-10-23',
+    title: 'Habilidades Cuádruples Puras Tier 4 y Optimización Móvil 60 FPS',
+    changes: [
+      {
+        type: 'engine',
+        description: 'Optimización de Rendimiento Móvil: Object Pooling de memoria fija con ParticlePool (máx 250) y ProjectilePool (máx 100) para eliminar picos de Garbage Collector y micro-stuttering en Android WebView.',
+      },
+      {
+        type: 'engine',
+        description: 'Batching de Color en Canvas 2D: Agrupación de dibujado por paletas cromáticas dominantes, reduciendo cientos de llamadas a ctx.fillStyle y eliminando ctx.save() y ctx.restore() del bucle de partículas.',
+      },
+      {
+        type: 'engine',
+        description: 'Aceleración GPU en Canvas: Inclusión de will-change: transform; transform: translateZ(0) y contexto 2D desincronizado (desynchronized: true) con cache de referencia para 60 FPS estables.',
+      },
+      {
+        type: 'feature',
+        description: 'Juicio del Dios del Trueno (Rayo x4): Habilidad Cuádruple Pura Tier 4 con haz vertical colosal de 60px, desintegración de proyectiles hostiles en 120px, parálisis de 1.5s y 0 cooldown.',
+      },
+      {
+        type: 'feature',
+        description: 'Supernova Primordial (Fuego x4): Habilidad Cuádruple Pura Tier 4 con sol colosal de plasma que detona en 140px y deja el suelo cubierto de lava ardiente durante 3.5 segundos con 0 cooldown.',
+      },
+      {
+        type: 'feature',
+        description: 'Era Glacial (Hielo x4): Habilidad Cuádruple Pura Tier 4 con congelación de pantalla completa durante 3 segundos, destrucción de proyectiles y viñeta de escarcha procedural (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Cataclismo Tectónico (Tierra x4): Habilidad Cuádruple Pura Tier 4 con terremoto masivo, 4 monolitos de piedra colapsables, aturdimiento de 2 segundos y micro-empuje radial (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Megalito Volcánico Rodante (Tierra + Tierra + Fuego): Proyectil pesado que rueda 320px arrollando enemigos y estalla en fragmentos de lava (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Fortaleza Glacial de Picos (Tierra + Tierra + Hielo): Púas de permafrost radiales en 360° (110px) con rechazo frontal y ralentización del 40% (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Fisura Sísmica Resonante (Tierra + Tierra + Rayo): Tres ondas tectónicas en abanico frontal con micro-aturdimiento continuo y daño múltiple por pulsos (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Pilón de Pararrayos (Rayo + Rayo + Tierra): Monolito conductor activo durante 3s que atrae enjambres dentro de 90px y descarga rayos radiales periódicos (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Bomba de Plasma Inestable (Rayo + Rayo + Fuego): Orbe pesado que viaja y detona en supernova de plasma (radio 80px) con knockback radial masivo (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Descarga de Cero Absoluto (Rayo + Rayo + Hielo): Abanico frontal crioelectromagnético de 120° (260px) con parálisis absoluta de 1.5s (0 cooldown).',
+      },
+      {
+        type: 'feature',
+        description: 'Alud Telúrico (Hielo + Hielo + Tierra), Granizo Hirviente (Hielo + Hielo + Fuego) y Ventisca Superconductora (Hielo + Hielo + Rayo) implementadas con cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Trinchera de Magma (Fuego + Fuego + Tierra), Deflagración Térmica (Fuego + Fuego + Hielo) y Haz de Fusión Solar (Fuego + Fuego + Rayo) implementadas con cooldown 0.',
+      },
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-10-21',
     title: 'Sistema de Penalización Severa: Deleveling y Consecuencias Reales',

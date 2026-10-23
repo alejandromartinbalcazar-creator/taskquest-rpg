@@ -69,6 +69,7 @@ import {
   AbsoluteZeroAgeEntity,
   TectonicCataclysmEntity,
 } from './types';
+import { PooledParticle } from '../combat/ParticlePool';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
 import {
@@ -2808,8 +2809,11 @@ export class IsometricRenderer {
   // DIBUJO DE PROYECTILES EN PIXEL ART 16-BIT (Bloques geométricos, estelas en dientes de sierra y cero arcos suaves)
   private static drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
     projectiles.forEach((p) => {
+      // Ignorar proyectiles inactivos de la piscina de memoria
+      if ((p as any).active === false || p.life <= 0) return;
+
       ctx.save();
-      ctx.translate(Math.round(p.x), Math.round(p.y));
+      ctx.translate((p.x) | 0, (p.y) | 0);
 
       const angle = Math.atan2(p.vy, p.vx);
       ctx.rotate(p.rotation !== undefined ? p.rotation : angle);
@@ -2999,23 +3003,85 @@ export class IsometricRenderer {
     });
   }
 
-  // Dibuja Partículas (16-Bit Pixel Art: Cuadrados y Bloques Sin Suavizado)
-  private static drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
-    particles.forEach((pt) => {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, pt.alpha);
-      if (pt.type === 'ring') {
-        ctx.strokeStyle = pt.color;
-        ctx.lineWidth = 2;
-        const r = Math.round(pt.radius);
-        ctx.strokeRect(Math.round(pt.x - r), Math.round(pt.y - r), r * 2, r * 2);
-      } else {
-        ctx.fillStyle = pt.color;
-        const size = Math.max(2, Math.round(pt.radius * 1.8));
-        ctx.fillRect(Math.round(pt.x - size / 2), Math.round(pt.y - size / 2), size, size);
+  // =========================================================================
+  // DIBUJO DE PARTÍCULAS BATCHED POR COLOR (Cero Save/Restore + Coordenadas Truncadas | 0)
+  // Optimización móvil para eliminar microcongelamientos (GC) y reducir Draw Calls en Canvas 2D
+  // =========================================================================
+  private static drawParticles(ctx: CanvasRenderingContext2D, particles: (Particle | PooledParticle)[]) {
+    if (!particles || particles.length === 0) return;
+
+    // Paletas cromáticas dominantes de TaskQuest RPG para un único fillStyle por lote
+    const DOMINANT_PALETTES = [
+      '#ffffff', // Chispas puras y destellos
+      '#facc15', // Rayo primario
+      '#fde047', // Rayo brillante / amarillo
+      '#38bdf8', // Hielo ártico
+      '#bae6fd', // Escarcha celeste
+      '#7dd3fc', // Cristal de hielo
+      '#ea580c', // Fuego primario
+      '#f97316', // Fuego naranja
+      '#ef4444', // Fuego rojo
+      '#7f1d1d', // Roca volcánica oscura
+      '#a855f7', // Plasma violeta
+      '#c084fc', // Plasma núcleo
+      '#ec4899', // Cataclismo rosa/magenta
+      '#78716c', // Polvo / tierra gris
+      '#78350f', // Tierra ámbar / roca
+      '#94a3b8', // Muros / esquirlas de piedra
+      '#0f172a', // Humo oscuro
+    ];
+
+    const len = particles.length;
+
+    // 1. Lotes por color dominante (Omisión de save/restore y coordenadas enteras bitwise | 0)
+    for (let c = 0; c < DOMINANT_PALETTES.length; c++) {
+      const targetColor = DOMINANT_PALETTES[c];
+      let styleApplied = false;
+
+      for (let i = 0; i < len; i++) {
+        const pt = particles[i] as PooledParticle;
+        if (pt.active === false || pt.life <= 0) continue;
+        if (pt.type === 'ring') continue;
+
+        if (pt.color === targetColor || pt.color?.toLowerCase() === targetColor) {
+          if (!styleApplied) {
+            ctx.fillStyle = targetColor;
+            styleApplied = true;
+          }
+          const sz = pt.size || Math.max(2, (pt.radius * 1.8) | 0);
+          const halfSz = sz >> 1;
+          ctx.fillRect((pt.x - halfSz) | 0, (pt.y - halfSz) | 0, sz, sz);
+        }
       }
-      ctx.restore();
-    });
+    }
+
+    // 2. Pase residual: anillos de choque y partículas fuera de la paleta dominante
+    for (let i = 0; i < len; i++) {
+      const pt = particles[i] as PooledParticle;
+      if (pt.active === false || pt.life <= 0) continue;
+
+      if (pt.type === 'ring') {
+        ctx.strokeStyle = pt.color || '#38bdf8';
+        ctx.lineWidth = 2;
+        const r = pt.radius | 0;
+        ctx.strokeRect((pt.x - r) | 0, (pt.y - r) | 0, r << 1, r << 1);
+      } else {
+        const col = pt.color?.toLowerCase();
+        let wasBatched = false;
+        for (let c = 0; c < DOMINANT_PALETTES.length; c++) {
+          if (col === DOMINANT_PALETTES[c]) {
+            wasBatched = true;
+            break;
+          }
+        }
+        if (!wasBatched) {
+          ctx.fillStyle = pt.color || '#ffffff';
+          const sz = pt.size || Math.max(2, (pt.radius * 1.8) | 0);
+          const halfSz = sz >> 1;
+          ctx.fillRect((pt.x - halfSz) | 0, (pt.y - halfSz) | 0, sz, sz);
+        }
+      }
+    }
   }
 
   // Dibuja Textos Flotantes (Tipografía Bitmap 'Press Start 2P' y Sombra de Bloque Sólido)

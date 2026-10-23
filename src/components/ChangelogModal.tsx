@@ -24,13 +24,14 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose 
   const [filter, setFilter] = useState<ChangeType | 'all'>('all');
   const [copied, setCopied] = useState(false);
   const [expandedVersions, setExpandedVersions] = useState<Record<string, boolean>>({
+    '0.5.0': true,
     '0.4.0': true,
     '0.3.5': true,
   });
 
   if (!isOpen) return null;
 
-  const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0';
+  const currentVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.5.0';
   const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '2026-10-21';
   const commitHash = typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : 'dev';
 

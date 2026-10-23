@@ -70,6 +70,8 @@ import {
   TectonicCataclysmEntity,
   TectonicCataclysmMonolith,
 } from './types';
+import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
+import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
 import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
 import { identifyRecipe } from './recipes';
@@ -634,6 +636,35 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
 
+  // Optimización móvil: Cache del contexto 2D y Object Pools de memoria fija (Cero GC Stutter)
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const particlePoolRef = useRef(new ParticlePool(250));
+  const projectilePoolRef = useRef(new ProjectilePool(100));
+
+  const particlePool = particlePoolRef.current;
+  const projectilePool = projectilePoolRef.current;
+
+  // Interceptar .push en las piscinas para compatibilidad transparente y CERO asignación en heap
+  if (!(particlePool.pool as any).__pooled) {
+    (particlePool.pool as any).__pooled = true;
+    (particlePool.pool as any).push = (...items: any[]) => {
+      for (let i = 0; i < items.length; i++) {
+        particlePool.spawn(items[i]);
+      }
+      return particlePool.getActiveCount();
+    };
+  }
+
+  if (!(projectilePool.pool as any).__pooled) {
+    (projectilePool.pool as any).__pooled = true;
+    (projectilePool.pool as any).push = (...items: any[]) => {
+      for (let i = 0; i < items.length; i++) {
+        projectilePool.spawn(items[i]);
+      }
+      return projectilePool.getActive().length;
+    };
+  }
+
   // Referencias mutables para el bucle a 60 FPS
   const gameStateRef = useRef({
     wizard: {
@@ -707,7 +738,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       opacity: 0,
       isPressing: false,
     },
-    projectiles: [] as Projectile[],
+    particlePool,
+    projectilePool,
+    projectiles: projectilePool.pool as unknown as Projectile[],
     lightningBolts: [] as LightningBoltEffect[],
     infernalCrowns: [] as InfernalCrownEntity[],
     voltaicChains: [] as VoltaicChainEntity[],
@@ -747,7 +780,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
     lastExtinguishSizzleTime: 0,
-    particles: [] as Particle[],
+    particles: particlePool.pool as unknown as Particle[],
     floatingTexts: [] as FloatingText[],
     screenShake: 0,
     terrainManager: new TerrainManager(),
@@ -1056,7 +1089,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       stopChanneledAttack();
       g.roomIndex = nextIndex;
       g.roomCleared = false;
-      g.projectiles = [];
+      g.projectilePool.clear();
+      g.particlePool.clear();
       g.infernalCrowns = [];
       g.voltaicChains = [];
       g.glacialEruptions = [];
@@ -4182,9 +4216,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           }
         }
 
-        // Desintegrar proyectiles hostiles en 120px
-        g.projectiles = g.projectiles.filter((p) => {
-          if (!p.isHostile) return true;
+        // Desintegrar proyectiles hostiles en 120px sin asignación en memoria
+        g.projectilePool.filterHostile((p) => {
           const d = Math.hypot(p.x - targetX, (p.y - targetY) / 0.58);
           return d > 120;
         });
@@ -4276,8 +4309,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         elementalSound.playGlacialFreezeImpact();
         const baseDmg = Math.round((recipe.damage + statBonus * 0.5) * chargeMultiplier);
 
-        // Destruir todos los proyectiles hostiles en vuelo
-        g.projectiles = g.projectiles.filter((p) => !p.isHostile);
+        // Destruir todos los proyectiles hostiles en vuelo sin asignaciones de heap
+        g.projectilePool.clearHostile();
 
         // Congelar a todos los enemigos en el viewport durante 3 segundos (180 frames)
         const spikes: AbsoluteZeroSpike[] = [];
@@ -4935,7 +4968,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             wizard.respawnFadeTimer = 0;
 
             // 5. Limpieza de proyectiles hostiles en vuelo y efectos de daño periódico
-            g.projectiles = [];
+            g.projectilePool.clear();
+            g.particlePool.clear();
             g.lastFireBarrierBurnTime = 0;
             g.infernalCrowns = [];
             g.glacialEruptions = [];
@@ -7099,9 +7133,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         });
       }
 
-      // 4. Actualizar Proyectiles y Colisiones
+      // 4. Actualizar Proyectiles y Colisiones (con Culling y Object Pooling)
+      g.projectilePool.culling(g.camera.x, g.camera.y, 600, 420, 96);
+
       for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {
-        const p = g.projectiles[pIdx];
+        const p = g.projectiles[pIdx] as PooledProjectile;
+        if (!p.active || p.life <= 0) continue;
         p.x += p.vx;
         p.y += p.vy;
         p.life--;
@@ -7202,7 +7239,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               life: 14,
             });
           }
-          g.projectiles.splice(pIdx, 1);
+          g.projectilePool.deactivate(p);
           continue;
         }
 
@@ -7247,7 +7284,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
             g.terrainManager.spawnFrostPatch(p.x, p.y, 40);
           }
-          g.projectiles.splice(pIdx, 1);
+          g.projectilePool.deactivate(p);
           continue;
         }
 
@@ -7285,7 +7322,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
 
         if (hitPermafrost) {
-          g.projectiles.splice(pIdx, 1);
+          g.projectilePool.deactivate(p);
           continue;
         }
 
@@ -7293,7 +7330,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (p.isHostile) {
           if (!wizard.isDashing && checkCircleCollision(p.x, p.y, p.radius, wizard.x, wizard.y, wizard.radius)) {
             applyDamageToPlayer(p.damage, p.x, p.y);
-            g.projectiles.splice(pIdx, 1);
+            g.projectilePool.deactivate(p);
             continue;
           }
         }
@@ -7320,7 +7357,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                     g.screenShake = Math.max(g.screenShake, amt);
                   }
                 );
-                g.projectiles.splice(pIdx, 1);
+                g.projectilePool.deactivate(p);
                 break;
               }
 
@@ -7411,7 +7448,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               }
 
               if (p.pierce <= 0) {
-                g.projectiles.splice(pIdx, 1);
+                g.projectilePool.deactivate(p);
                 break;
               }
             }
@@ -7432,7 +7469,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               }
             );
           }
-          g.projectiles.splice(pIdx, 1);
+          g.projectilePool.deactivate(p);
         }
       }
 
@@ -9286,8 +9323,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             const pdy = (p.y - tornado.y) / 0.58;
             const pDist = Math.hypot(pdx, pdy);
             if (pDist <= tornado.radius + p.radius + 6) {
-              // Absorción y desintegración del proyectil
-              g.projectiles.splice(pIdx, 1);
+              // Absorción y desintegración del proyectil sin mutación de array
+              g.projectilePool.deactivate(p as PooledProjectile);
               elementalSound.playPlasmaDisintegrate();
 
               // Chispas de ionización por proyectil absorbido
@@ -10230,7 +10267,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             // Detección física en la órbita de la roca
             if (checkCircleCollision(rock.x, rock.y, rock.radius + 6, p.x, p.y, p.radius)) {
               // 1. Destruir proyectil hostil
-              g.projectiles.splice(pIdx, 1);
+              g.projectilePool.deactivate(p as PooledProjectile);
               elementalSound.playTelluricDeflect();
 
               // Chispas de impacto cinético y fragmentos de piedra
@@ -10728,7 +10765,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               const p = g.projectiles[pIdx];
               if (!p.isHostile || p.life <= 0) continue;
               if (checkCircleCollision(pillar.x, pillar.y, pillar.radius + 4, p.x, p.y, p.radius)) {
-                g.projectiles.splice(pIdx, 1);
+                g.projectilePool.deactivate(p as PooledProjectile);
                 pillar.hitFlash = 6;
                 pillar.hp -= 30;
                 elementalSound.playConductivePrisonPillarHit();
@@ -11890,8 +11927,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
             // En versión cargada (Hold): Vaporiza proyectiles hostiles enemigos en toda la arena
             if (isCharged) {
-              g.projectiles = g.projectiles.filter((p) => {
-                if (!p.isHostile) return true;
+              g.projectilePool.filterHostile((p) => {
                 const pd = Math.hypot(p.x - cx, (p.y - cy) / 0.58);
                 if (pd <= cataclysm.radius) {
                   // Partícula de vaporización
@@ -12712,9 +12748,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         });
 
         // Asegurar que ningún proyectil hostil vuele durante la Era Glacial
-        if (g.projectiles.some((p) => p.isHostile)) {
-          g.projectiles = g.projectiles.filter((p) => !p.isHostile);
-        }
+        g.projectilePool.clearHostile();
 
         if (az.elapsedMs >= az.durationMs) {
           az.finished = true;
@@ -12817,33 +12851,24 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (t.life <= 0) g.floatingTexts.splice(i, 1);
       }
 
-      // 6.1 Actualizar y Limpiar Partículas (Garantiza 60 FPS fijos y evita acumulación en memoria)
-      for (let i = g.particles.length - 1; i >= 0; i--) {
-        const pt = g.particles[i];
-        pt.x += pt.vx;
-        pt.y += pt.vy;
-        pt.life--;
-        pt.alpha = pt.life / (pt.maxLife || 18);
-        if (pt.type === 'ring') {
-          pt.radius += 3.2; // Expansión del anillo de onda de choque
-        }
-        if (pt.life <= 0) {
-          g.particles.splice(i, 1);
-        }
-      }
-      if (g.particles.length > 55) {
-        g.particles.splice(0, g.particles.length - 55);
-      }
+      // 6.1 Actualizar y Limpiar Partículas con Object Pooling (Cero Asignación Dinámica + Culling Fuera de Cámara)
+      g.particlePool.update(g.camera.x, g.camera.y, 550, 380, 64);
 
-      // 7. Renderizado en Canvas 2.5D con Cámara Cercana
+      // 7. Renderizado en Canvas 2.5D con Cámara Cercana y Hardware Acceleration
       const canvas = canvasRef.current;
       if (canvas) {
-        const ctx = canvas.getContext('2d');
+        let ctx = ctxRef.current;
+        if (!ctx) {
+          ctx = (canvas.getContext('2d', { alpha: false, desynchronized: true }) || canvas.getContext('2d')) as CanvasRenderingContext2D | null;
+          ctxRef.current = ctx;
+          if (ctx) {
+            ctx.imageSmoothingEnabled = false;
+            (ctx as any).webkitImageSmoothingEnabled = false;
+            (ctx as any).mozImageSmoothingEnabled = false;
+            (ctx as any).msImageSmoothingEnabled = false;
+          }
+        }
         if (ctx) {
-          ctx.imageSmoothingEnabled = false;
-          (ctx as any).webkitImageSmoothingEnabled = false;
-          (ctx as any).mozImageSmoothingEnabled = false;
-          (ctx as any).msImageSmoothingEnabled = false;
 
           IsometricRenderer.render(
             ctx,
@@ -12987,11 +13012,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         </div>
       </div>
 
-      {/* CANVAS PRINCIPAL CON CÁMARA CERCANA */}
+      {/* CANVAS PRINCIPAL CON CÁMARA CERCANA (Aceleración por Hardware GPU para WebView Android) */}
       <canvas
         ref={canvasRef}
         width={1000}
         height={620}
+        style={{ willChange: 'transform', transform: 'translateZ(0)' }}
         className="w-full h-full object-contain max-w-full max-h-full pixelated"
       />
 
