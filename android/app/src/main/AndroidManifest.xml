@@ -28,6 +28,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="@string/custom_url_scheme" android:host="auth-callback" />
+                <data android:scheme="@string/custom_url_scheme" android:host="widget" />
             </intent-filter>
 
         </activity>
@@ -41,6 +42,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <receiver android:name=".FocusMissionWidgetProvider" android:exported="true" android:label="FocusMission · Reino">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_medieval_info" />
+        </receiver>
+        <receiver android:name=".FocusMissionMinimalWidgetProvider" android:exported="true" android:label="FocusMission · Minimal">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_minimal_info" />
+        </receiver>
+        <receiver android:name=".FocusMissionAuroraWidgetProvider" android:exported="true" android:label="FocusMission · Aurora">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_aurora_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

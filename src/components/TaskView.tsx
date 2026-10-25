@@ -70,6 +70,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
     if (showAddModal) titleInputRef.current?.focus();
   }, [showAddModal]);
 
+  useEffect(() => {
+    const openFromWidget = () => setShowAddModal(true);
+    window.addEventListener('focusmission:new-task', openFromWidget);
+    return () => window.removeEventListener('focusmission:new-task', openFromWidget);
+  }, []);
+
   const daysOfWeek = [
     { id: 1, label: 'Lun' },
     { id: 2, label: 'Mar' },

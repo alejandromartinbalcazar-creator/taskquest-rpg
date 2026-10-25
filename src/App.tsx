@@ -17,6 +17,7 @@ import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
 import { syncTaskReminderNotifications } from './services/taskReminders';
 import { getNextTaskDueDate } from './services/taskRecurrence';
+import { App as CapacitorApp } from '@capacitor/app';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -40,6 +41,20 @@ export function App() {
     } catch {
       // Algunos navegadores solo permiten bloquear orientación en modo instalado o pantalla completa.
     }
+  }, []);
+
+  // El widget abre la app directamente en Misiones; el botón + abre el formulario.
+  useEffect(() => {
+    const handleWidgetUrl = (url: string) => {
+      if (!url.startsWith('com.taskquest.rpg://widget')) return;
+      setCurrentTab('tasks');
+      if (new URL(url).searchParams.get('action') === 'add-task') {
+        window.setTimeout(() => window.dispatchEvent(new Event('focusmission:new-task')), 100);
+      }
+    };
+    void CapacitorApp.getLaunchUrl().then((launch) => launch?.url && handleWidgetUrl(launch.url));
+    const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => handleWidgetUrl(url));
+    return () => { void listener.then((handle) => handle.remove()); };
   }, []);
 
   const localSnapshot = useMemo<CloudSaveSnapshot>(() => ({

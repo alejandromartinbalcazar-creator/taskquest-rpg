@@ -1,5 +1,6 @@
 import { Player, Task, DungeonFloor, DelevelEvent, DelevelRecord } from '../types';
 import { DEFAULT_PLAYER, INITIAL_TASKS, INITIAL_DUNGEONS } from './gameData';
+import { syncTasksToAndroidWidget } from './androidWidget';
 
 const KEYS = {
   PLAYER: 'taskquest_player_v1',
@@ -54,6 +55,7 @@ export class StorageService {
   public static saveTasks(tasks: Task[]): void {
     try {
       localStorage.setItem(KEYS.TASKS, JSON.stringify(tasks));
+      void syncTasksToAndroidWidget(tasks);
     } catch (e) {
       console.error('Error saving tasks', e);
     }
