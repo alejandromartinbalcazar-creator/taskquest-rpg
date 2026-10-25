@@ -14106,7 +14106,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       )}
 
       {/* Cabecera Superior de Combate (HUD Horizontal 16-Bit) */}
-      <div className="absolute top-2 inset-x-3 z-40 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] inset-x-3 z-40 flex items-center justify-between pointer-events-none">
         {/* Barra de Vida del Mago */}
         <div className="flex items-center gap-2 retro-box-stone px-2.5 py-1 pointer-events-auto">
           <div className="font-pixel-title text-[8px] text-rose-400">HP</div>
@@ -14121,11 +14121,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           </span>
         </div>
 
-        {/* Indicador de Sala y Progreso */}
+        {/* Indicador compacto: el nombre aparece solamente al entrar en sala. */}
         <div className="retro-box-stone px-2.5 py-1 text-xs font-bold text-slate-200 flex items-center gap-2">
           <Compass className="w-3.5 h-3.5 text-cyan-400" />
           <span className="font-pixel-title text-[8px]">
-            {currentRoom.title} ({currentRoomIndex + 1}/{DUNGEON_ROOMS.length})
+            Sala {currentRoomIndex + 1}/{DUNGEON_ROOMS.length}
           </span>
         </div>
 

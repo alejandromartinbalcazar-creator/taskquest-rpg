@@ -1268,9 +1268,10 @@ export class AudioManager {
         // Cada vuelta cambia de frase y, ocasionalmente, de registro: evita el bucle audible.
         const phraseOffset = (section % 3) * 16;
         const noteFreq = exploreMelody[(step + phraseOffset) % exploreMelody.length];
-        if (noteFreq > 0) {
+        // En móvil dejamos espacios deliberados: menos nodos WebAudio simultáneos y menor lag.
+        if (noteFreq > 0 && (step % 2 === 0 || section % 3 === 0)) {
           const octave = section % 4 === 3 ? 0.5 : section % 4 === 2 ? 2 : 1;
-          this.playHeroicLead(tNow, noteFreq * octave, section % 2 === 0 ? 'triangle' : 'sine', 0.13, 0.07, false);
+          this.playHeroicLead(tNow, noteFreq * octave, section % 2 === 0 ? 'triangle' : 'sine', 0.1, 0.045, false);
         }
       }
 
