@@ -1208,6 +1208,7 @@ export class AudioManager {
     const bpm = isBoss ? 128 : 105;
     const stepIntervalMs = Math.round(((60 / bpm) / 4) * 1000); // Duración de semicorchea (16th note)
     let step = 0;
+    let section = 0;
 
     // Escala Mayor Pentatónica / Dórica Heroica para Exploración: C4, D4, E4, G4, A4, C5
     const exploreMelody = [
@@ -1246,10 +1247,11 @@ export class AudioManager {
         }
       } else {
         // Exploración 105 BPM: Pulso rítmico suave estilo marcha (bombo pasos 0 y 8, chasquido pasos 4 y 12)
-        if (step === 0 || step === 8) {
+        const localStep = step % 16;
+        if (localStep === 0 || localStep === (section % 2 === 0 ? 8 : 10)) {
           this.playSyntheticKick(tNow, 115, 42, 0.09, 0.13);
         }
-        if (step === 4 || step === 12) {
+        if (localStep === 4 || localStep === 12) {
           this.playSyntheticSnare(tNow, 1600, 0.04, 0.045);
         }
       }
@@ -1263,13 +1265,18 @@ export class AudioManager {
         }
       } else {
         // Melodía épica de exploración en onda triangular cálida
-        const noteFreq = exploreMelody[step % exploreMelody.length];
+        // Cada vuelta cambia de frase y, ocasionalmente, de registro: evita el bucle audible.
+        const phraseOffset = (section % 3) * 16;
+        const noteFreq = exploreMelody[(step + phraseOffset) % exploreMelody.length];
         if (noteFreq > 0) {
-          this.playHeroicLead(tNow, noteFreq, 'triangle', 0.16, 0.08, false);
+          const octave = section % 4 === 3 ? 0.5 : section % 4 === 2 ? 2 : 1;
+          this.playHeroicLead(tNow, noteFreq * octave, section % 2 === 0 ? 'triangle' : 'sine', 0.13, 0.07, false);
         }
       }
 
-      step = (step + 1) % (isBoss ? 16 : exploreMelody.length);
+      step += 1;
+      if (!isBoss && step % 32 === 0) section = (section + 1) % 12;
+      if (step >= (isBoss ? 16 : exploreMelody.length)) step = 0;
     }, stepIntervalMs);
 
     this.ambientState = {
