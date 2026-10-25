@@ -536,7 +536,7 @@ function createCampaignArenaDoors(run: ExpeditionRun, tilemap: Tilemap) {
     const y = Math.round(tilemap.height / 2);
     return [{
       id: `campaign-arena-gate-${arenaIndex}`,
-      x, y, radius: 24, width: 34, height: 270,
+      x, y, radius: 142, width: 34, height: 270,
       obstacleType: 'door_gate' as const,
       hp: 9999, maxHp: 9999, color: '#38bdf8', solid: true, blocksProjectiles: true, meltable: false,
       doorLocked: true, doorTargetRoomId: `campaign-arena-${arenaIndex}`, doorDirection: 'east' as const,

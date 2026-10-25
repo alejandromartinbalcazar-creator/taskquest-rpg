@@ -3,25 +3,6 @@
 export const TILE_WIDTH = 64;
 export const TILE_HEIGHT = 64;
 
-// Recursos ambientales con licencia comercial del paquete Pixel Crawler de Anokolisa.
-// Se cargan de forma diferida para no bloquear el primer frame de combate.
-const PIXEL_CRAWLER_ASSETS = {
-  floor: '/assets/pixel-crawler/floors.png',
-  water: '/assets/pixel-crawler/water.png',
-  tree: '/assets/pixel-crawler/tree-large.png',
-} as const;
-const pixelAssetCache: Partial<Record<keyof typeof PIXEL_CRAWLER_ASSETS, HTMLImageElement>> = {};
-
-function getPixelAsset(name: keyof typeof PIXEL_CRAWLER_ASSETS): HTMLImageElement | undefined {
-  if (typeof Image === 'undefined') return undefined;
-  const existing = pixelAssetCache[name];
-  if (existing) return existing.complete ? existing : undefined;
-  const image = new Image();
-  image.src = PIXEL_CRAWLER_ASSETS[name];
-  pixelAssetCache[name] = image;
-  return undefined;
-}
-
 export enum TileType {
   EMPTY = ' ',
   WALL = '#',
@@ -604,16 +585,8 @@ export class Tilemap {
     // --- Sendero Natural "La Ruta del Umbral" en Pixel Art 16-Bit ---
     // Losas de piedra y tierra con borde de mortero de 1 píxel oscuro
     const baseHash = (col * 37 + row * 19) % 100;
-    const floorAtlas = getPixelAsset('floor');
-    if (floorAtlas) {
-      // Baldosas de piedra de 16px ampliadas 4x sin interpolación.
-      const sourceX = 320 + ((col + row) % 4) * 16;
-      const sourceY = ((col * 3 + row) % 4) * 16;
-      ctx.drawImage(floorAtlas, sourceX, sourceY, 16, 16, x, y, TILE_WIDTH, TILE_HEIGHT);
-    } else {
-      ctx.fillStyle = baseHash % 2 === 0 ? '#27272a' : '#3f3f46';
-      ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
-    }
+    ctx.fillStyle = baseHash % 2 === 0 ? '#27272a' : '#3f3f46';
+    ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
 
     // Borde de mortero de 1 píxel oscuro (#18181B / #0F172A)
     ctx.strokeStyle = '#18181b';
@@ -764,12 +737,6 @@ export class Tilemap {
     const isPerimeter = row <= 2 || row >= this.rows - 3 || col === 0 || col === this.cols - 1;
 
     if (isPerimeter || seed < 65) {
-      const treeAtlas = getPixelAsset('tree');
-      if (treeAtlas && isPerimeter) {
-        // Árbol del paquete: recorte de 96x256px, sólo en el perímetro del sendero.
-        ctx.drawImage(treeAtlas, 0, 0, 96, 256, x - 34, y - 164, 128, 192);
-        return;
-      }
       // Tronco visible de madera oscura en bloques de 2 píxeles
       ctx.fillStyle = '#0f172a'; // Contorno tronco
       const trunkW = 10;
@@ -826,11 +793,6 @@ export class Tilemap {
   }
 
   private drawChasmTile(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-    const waterAtlas = getPixelAsset('water');
-    if (waterAtlas) {
-      ctx.drawImage(waterAtlas, 0, 160, 16, 16, x, y, TILE_WIDTH, TILE_HEIGHT);
-      return;
-    }
     // Fondo abisal profundo
     ctx.fillStyle = '#05070e';
     ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);

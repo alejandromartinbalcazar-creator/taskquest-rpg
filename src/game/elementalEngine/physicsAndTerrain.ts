@@ -35,41 +35,6 @@ export function resolveCircleObstacleCollision(
   // Si es una puerta desbloqueada, permite el paso
   if (obs.obstacleType === 'door_gate' && !obs.doorLocked) return;
 
-  // Los portones de la campaña son rectangulares y atraviesan el camino.
-  // No usan un radio gigante: evita la hitbox circular y la sombra desproporcionada.
-  if (obs.doorTargetRoomId?.startsWith('campaign-arena-')) {
-    const halfW = obs.width / 2;
-    const halfH = obs.height / 2;
-    const nearestX = Math.max(obs.x - halfW, Math.min(entity.x, obs.x + halfW));
-    const nearestY = Math.max(obs.y - halfH, Math.min(entity.y, obs.y + halfH));
-    let dx = entity.x - nearestX;
-    let dy = entity.y - nearestY;
-    let distance = Math.hypot(dx, dy);
-    if (distance >= entity.radius) return;
-
-    if (distance < 0.001) {
-      // El centro cae dentro del rectángulo: expulsar por el borde más cercano.
-      const horizontal = halfW - Math.abs(entity.x - obs.x);
-      const vertical = halfH - Math.abs(entity.y - obs.y);
-      if (horizontal < vertical) {
-        dx = entity.x >= obs.x ? 1 : -1;
-        dy = 0;
-        distance = 1;
-        entity.x = obs.x + (entity.x >= obs.x ? halfW + entity.radius : -halfW - entity.radius);
-      } else {
-        dx = 0;
-        dy = entity.y >= obs.y ? 1 : -1;
-        distance = 1;
-        entity.y = obs.y + (entity.y >= obs.y ? halfH + entity.radius : -halfH - entity.radius);
-      }
-      return;
-    }
-    const overlap = entity.radius - distance;
-    entity.x += (dx / distance) * overlap;
-    entity.y += (dy / distance) * overlap;
-    return;
-  }
-
   const dx = entity.x - obs.x;
   const dy = entity.y - obs.y;
   const dist = Math.hypot(dx, dy);
