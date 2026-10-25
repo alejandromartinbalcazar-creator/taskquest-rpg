@@ -9,7 +9,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 const sandbox = createContext({ exports: {} });
 runInContext(compiled, sandbox);
 const { setupTutorialRoom } = sandbox.exports;
-const terrain = { obstacles: [], setupRoomTerrain(kind) { this.kind = kind; this.obstacles = [{ id: 'door' }, { id: 'chest' }]; } };
+const terrain = { obstacles: [], setupRoomTerrain(kind) { this.kind = kind; this.obstacles = [{ id: 'door', obstacleType: 'door_gate' }, { id: 'chest', obstacleType: 'relic_chest' }]; } };
 const enemies = {
   enemies: [{ id: 'campaign-boss' }], currentBoss: {},
   createPyreGolem(id, x, y) { return { id, x, y, bestiaryType: 'pyre_golem' }; },
@@ -18,14 +18,21 @@ const enemies = {
 setupTutorialRoom(0, terrain, enemies);
 assert.equal(enemies.enemies.length, 0, 'El patio debe estar vacío');
 assert.equal(enemies.currentBoss, null);
-assert.equal(terrain.obstacles.length, 0, 'No debe haber puertas que permitan saltarse el entrenamiento');
+assert.equal(terrain.obstacles.length, 1);
+assert.equal(terrain.obstacles[0].doorDirection, 'east');
+assert.equal(terrain.obstacles[0].doorLocked, true, 'El entrenamiento empieza con la salida bloqueada');
 setupTutorialRoom(1, terrain, enemies);
 assert.equal(enemies.enemies.length, 2);
 assert.equal(enemies.enemies[0].weakness, 'ice');
 assert.equal(enemies.enemies[1].weakness, 'fire');
 assert.equal(enemies.currentBoss, null);
+assert.equal(terrain.obstacles[0].doorDirection, 'east');
+assert.equal(terrain.obstacles[0].doorLocked, true, 'La cámara se desbloquea tras derrotar a ambos enemigos');
 setupTutorialRoom(2, terrain, enemies);
 assert.equal(enemies.enemies.length, 0);
 assert.equal(terrain.kind, 'relic_sanctuary');
 assert.equal(enemies.currentBoss, null);
+assert.equal(terrain.obstacles.filter((item) => item.obstacleType === 'door_gate').length, 1);
+assert.equal(terrain.obstacles.find((item) => item.obstacleType === 'door_gate').doorDirection, 'east');
+assert.equal(terrain.obstacles.find((item) => item.obstacleType === 'relic_chest').id, 'chest');
 console.log('Tutorial: patio vacío, dos guardianes elementales, almacén sin enemigos. Correcto.');

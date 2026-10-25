@@ -604,6 +604,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [isMuted, setIsMuted] = useState(() => audioManager.isMuted());
   const [isDefeated, setIsDefeated] = useState(false);
   const [isVictorious, setIsVictorious] = useState(false);
+  const victoryCommittedRef = useRef(false);
   const [finalRunTimeSec, setFinalRunTimeSec] = useState(0);
   const [totalKillsCount, setTotalKillsCount] = useState(0);
   const [isPortraitWarning, setIsPortraitWarning] = useState(false);
@@ -898,12 +899,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.tilemap = null;
       g.forestLevel = null;
       setupTutorialRoom(0, g.terrainManager, g.enemyManager);
-      g.wizard.x = g.prevWizardX = 550;
-      g.wizard.y = g.prevWizardY = 600;
-      g.camera.x = 550;
-      g.camera.y = 600;
-      g.cameraSystem.reset(550, 600);
-      tutorialStartRef.current = { x: 550, y: 600 };
+      g.wizard.x = g.prevWizardX = 180;
+      g.wizard.y = g.prevWizardY = 380;
+      g.camera.x = 180;
+      g.camera.y = 380;
+      g.cameraSystem.reset(180, 380);
+      tutorialStartRef.current = { x: 180, y: 380 };
       setTutorialStep(1);
       setRoomBanner(TUTORIAL_ROOMS[0].title);
       const bannerTimer = window.setTimeout(() => setRoomBanner(null), 3000);
@@ -1169,6 +1170,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const changeToRoom = useCallback(
     (nextIndex: number) => {
       if (nextIndex >= roomSet.length) {
+        if (victoryCommittedRef.current) return;
+        victoryCommittedRef.current = true;
+        stopChanneledAttack();
+        audioManager.stopAmbient();
         // Mazmorra completada al salir del último jefe
         setIsVictorious(true);
         elementalSound.playVictory();
@@ -1232,11 +1237,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (isTutorial) {
         g.tilemap = null;
         g.forestLevel = null;
-        g.wizard.x = g.prevWizardX = 550;
-        g.wizard.y = g.prevWizardY = 600;
-        g.camera.x = 550;
-        g.camera.y = 600;
-        g.cameraSystem.reset(550, 600);
+        g.wizard.x = g.prevWizardX = 180;
+        g.wizard.y = g.prevWizardY = 380;
+        g.camera.x = 180;
+        g.camera.y = 380;
+        g.cameraSystem.reset(180, 380);
         setupTutorialRoom(nextIndex, g.terrainManager, g.enemyManager);
         setTutorialStep(nextIndex === 1 ? 4 : 5);
       } else if (nextIndex === 0) {
@@ -1303,6 +1308,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const handleSelectRelic = (relic: RelicReward) => {
     setEquippedRelics((prev) => [...prev, relic]);
     setRelicModalOpen(false);
+    if (isTutorial && gameStateRef.current.roomIndex === 2) {
+      gameStateRef.current.terrainManager.unlockRoomDoors(gameStateRef.current.floatingTexts);
+    }
 
     if (relic.bonusType === 'max_hp') {
       const newMax = maxHp + relic.value;
@@ -1382,8 +1390,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (tutorialStepRef.current === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
         else if (tutorialStepRef.current === 3 && rawRecipe.elements.length > 0) {
           setElementQueue([]);
-          changeToRoom(1);
-          return;
+          setTutorialStep(4);
+          g.roomCleared = true;
+          g.terrainManager.unlockRoomDoors(g.floatingTexts);
         }
       }
 
@@ -5563,14 +5572,20 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // LOOP PRINCIPAL DE COMBATE (60 FPS)
   useEffect(() => {
+    if (isDefeated || isVictorious || victoryCommittedRef.current) return;
     let animId: number;
     let lastFrameTimestamp = performance.now();
 
     const gameLoop = () => {
       try {
         const frameNow = performance.now();
-        const dt = Math.min(50, Math.max(1, frameNow - lastFrameTimestamp));
-        lastFrameTimestamp = frameNow;
+        if (victoryCommittedRef.current) return;
+        // El motor tiene contadores por frame: 120 Hz no debe duplicar su velocidad.
+        const frameInterval = 1000 / 60;
+        const elapsedFrame = frameNow - lastFrameTimestamp;
+        if (elapsedFrame < frameInterval) return;
+        const dt = Math.min(50, Math.max(1, elapsedFrame));
+        lastFrameTimestamp = frameNow - (elapsedFrame % frameInterval);
         const dtSeconds = dt / 1000;
 
         const g = gameStateRef.current;
@@ -6816,6 +6831,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           const distToDoor = Math.hypot(wizard.x - obs.x, wizard.y - obs.y);
           if (distToDoor < 45) {
             if (obs.id === 'forest-exit-portal') {
+              if (victoryCommittedRef.current) return;
+              victoryCommittedRef.current = true;
+              audioManager.stopAmbient();
               setIsVictorious(true);
               elementalSound.playVictory();
               onVictory(floor.floorNumber, floor.enemy.expReward * 2, floor.enemy.goldReward * 2);
@@ -7703,7 +7721,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           // Cinemática de absorción espiralada (400ms)
           if (suctionStateRef.current.isSuctioning) {
             const elapsed = performance.now() - suctionStateRef.current.startTime;
-            const progress = Math.min(1.0, elapsed / 400);
+            const progress = Math.min(1.0, elapsed / 900);
 
             // Reducción proporcional de escala 1.0 -> 0.0
             wizard.victoryScale = Math.max(0, 1.0 - progress);
@@ -7732,6 +7750,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
             // Al completarse los 400ms: detonar fanfarria triunfal y abrir modal de estadísticas
             if (progress >= 1.0) {
+              if (victoryCommittedRef.current) return;
+              victoryCommittedRef.current = true;
+              audioManager.stopAmbient();
               suctionStateRef.current.isSuctioning = false;
               wizard.victoryScale = 0;
               audioManager.playVictoryFanfare();
@@ -14029,10 +14050,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       }
 
       // Si no quedan enemigos en una sala de combate, desbloquea el portón
-      if (enemies.length === 0 && !g.roomCleared && currentRoom.roomType !== 'entrance') {
+      if (enemies.length === 0 && !g.roomCleared && currentRoom.roomType !== 'entrance' && !(isTutorial && g.roomIndex === 2)) {
         g.roomCleared = true;
         g.terrainManager.unlockRoomDoors(g.floatingTexts);
-        if (isTutorial && g.roomIndex === 1) changeToRoom(2);
       }
 
       // 6. Textos Flotantes
@@ -14133,7 +14153,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     } catch (err) {
       console.error('TaskQuest gameLoop error caught:', err);
     } finally {
-      if (!isDefeated && !isVictorious) {
+      if (!isDefeated && !isVictorious && !victoryCommittedRef.current) {
         animId = requestAnimationFrame(gameLoop);
       }
     }
@@ -14153,7 +14173,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           <div className="w-full max-w-md border-2 border-amber-300 bg-[#10142d]/95 p-2 shadow-[4px_4px_0_#000]">
             <p className="font-pixel-title text-[9px] text-amber-300">{currentRoom.title}</p>
             <p className="mt-1 font-pixel-text text-lg leading-tight text-slate-100">
-              {[
+              {currentRoomIndex === 0 && tutorialStep === 4
+                ? '¡Bien! Se abrió la puerta de la derecha. Camina hasta ella para entrar a la sala 2.'
+                : currentRoomIndex === 1
+                ? (gameStateRef.current.roomCleared ? 'Sala despejada. Camina hacia la puerta de la derecha.' : 'Usa hielo contra el guardián de fuego y fuego contra el de hielo.')
+                : currentRoomIndex === 2
+                ? 'Acércate al cofre y elige tu reliquia. La salida está a la derecha.'
+                : [
                 '',
                 'Usa el joystick izquierdo o toca el suelo para mover al mago.',
                 'Sin esferas seleccionadas, pulsa atacar a la derecha para lanzar el proyectil verde.',
@@ -14596,15 +14622,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none">
           <div className="retro-box-gold p-4 max-w-sm w-full text-center space-y-3">
             <div className="relative inline-block">
-              <Award className="w-10 h-10 text-amber-400 mx-auto animate-bounce filter drop-shadow-[2px_2px_0px_#000]" />
+              <Award className="w-10 h-10 text-amber-400 mx-auto filter drop-shadow-[2px_2px_0px_#000]" />
             </div>
 
             <div>
               <h3 className="font-pixel-title text-sm font-black text-amber-300 tracking-wide uppercase drop-shadow-[2px_2px_0px_#000]">
-                ¡NIVEL 1 COMPLETADO!
+                {isTutorial ? '¡TUTORIAL COMPLETADO!' : '¡NIVEL 1 COMPLETADO!'}
               </h3>
               <p className="font-pixel-text text-sm text-stone-200 mt-1">
-                ¡Has derrotado al colosal Custodio del Umbral!
+                {isTutorial ? 'Ya sabes moverte y combinar elementos. Tu aventura está por comenzar.' : '¡Has derrotado al colosal Custodio del Umbral!'}
               </p>
             </div>
 
