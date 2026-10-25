@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Player, DungeonFloor } from '../types';
 import { LandscapeCombatView } from '../game/elementalEngine/LandscapeCombatView';
 import { Castle, Sword, Key, AlertTriangle, Lock, GraduationCap } from 'lucide-react';
@@ -9,6 +9,7 @@ interface DungeonViewProps {
   onBattleVictory: (floorNumber: number, expReward: number, goldReward: number) => void;
   onTakeBattleDamage: (damage: number) => void;
   onConsumeKey: () => void;
+  onTutorialFinished: () => void;
 }
 
 export const DungeonView: React.FC<DungeonViewProps> = ({
@@ -17,6 +18,7 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   onBattleVictory,
   onTakeBattleDamage,
   onConsumeKey,
+  onTutorialFinished,
 }) => {
   const [activeFloor, setActiveFloor] = useState<DungeonFloor | null>(null);
 
@@ -35,12 +37,18 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   };
 
   const handleExitDungeon = () => {
+    if (activeFloor?.floorNumber === 0) onTutorialFinished();
     setActiveFloor(null);
   };
   const tutorialFloor: DungeonFloor = {
     ...(dungeons[0] || { floorNumber: 0, name: 'Tutorial', description: '', recommendedLevel: 1, enemy: { id: 'tutorial', name: 'Espectro de práctica', title: 'Aprende a luchar', avatar: '🎯', hp: 80, maxHp: 80, attack: 2, defense: 0, weakness: 'fire', expReward: 0, goldReward: 0 }, isBoss: false, cleared: false }),
     floorNumber: 0, name: 'Tutorial: Sendero del Mago', description: 'Aprende a moverte, atacar y combinar elementos.',
   };
+  useEffect(() => {
+    if (!player.tutorialCompleted) setActiveFloor(tutorialFloor);
+  // Solo reacciona al estado de tutorial; tutorialFloor es una definición local estable en contenido.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.tutorialCompleted]);
   const levels = Array.from({ length: 20 }, (_, index) => index + 1);
 
   // Si está jugando el piso activo en tiempo real:
@@ -52,6 +60,7 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         onExit={handleExitDungeon}
         onVictory={onBattleVictory}
         onPlayerTakeDamage={onTakeBattleDamage}
+        isTutorial={activeFloor.floorNumber === 0}
       />
     );
   }

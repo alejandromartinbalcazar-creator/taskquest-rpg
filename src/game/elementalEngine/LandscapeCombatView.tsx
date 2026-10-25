@@ -115,6 +115,7 @@ interface LandscapeCombatViewProps {
   onExit: () => void;
   onVictory: (floorNumber: number, expReward: number, goldReward: number) => void;
   onPlayerTakeDamage: (damage: number) => void;
+  isTutorial?: boolean;
 }
 
 // Estructura de Salas Conectadas para la Gran Mazmorra
@@ -575,6 +576,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   onExit,
   onVictory,
   onPlayerTakeDamage,
+  isTutorial = false,
 }) => {
   // En Android la mazmorra usa toda la pantalla; un deslizamiento desde el borde muestra los controles del sistema temporalmente.
   useEffect(() => {
@@ -14137,6 +14139,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
         {/* Botones de Salir y Silenciar */}
         <div className="flex items-center gap-1.5 pointer-events-auto">
+          {isTutorial && (
+            <button onClick={onExit} className="retro-btn-stone px-2 py-1.5 text-[8px] text-slate-100">OMITIR</button>
+          )}
           <button
             onClick={() => {
               const nextMuted = audioManager.toggleMute();

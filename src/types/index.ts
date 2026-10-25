@@ -134,6 +134,7 @@ export interface Player {
   graceShieldCharges?: number;
   highPriorityTasksCompleted?: number;
   lastCompletedDate?: string;
+  tutorialCompleted?: boolean;
 }
 
 export interface DelevelRecord {

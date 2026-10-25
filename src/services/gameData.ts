@@ -332,6 +332,7 @@ export const DEFAULT_PLAYER: Player = {
   totalDelevelsSuffered: 0,
   delevelHistory: [],
   unlockedMilestones: [],
+  tutorialCompleted: false,
   graceShieldCharges: 0,
   highPriorityTasksCompleted: 0,
 };

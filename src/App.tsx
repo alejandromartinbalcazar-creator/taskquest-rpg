@@ -24,7 +24,7 @@ export function App() {
   const [player, setPlayer] = useState<Player>(() => StorageService.getPlayer());
   const [tasks, setTasks] = useState<Task[]>(() => StorageService.getTasks());
   const [dungeons, setDungeons] = useState<DungeonFloor[]>(() => StorageService.getDungeons());
-  const [currentTab, setCurrentTab] = useState<TabType>('tasks');
+  const [currentTab, setCurrentTab] = useState<TabType>(() => player.tutorialCompleted ? 'tasks' : 'dungeon');
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isDamagedAnimation, setIsDamagedAnimation] = useState(false);
   const [delevelModalEvent, setDelevelModalEvent] = useState<DelevelEvent | null>(null);
@@ -367,6 +367,11 @@ export function App() {
     setDungeons(StorageService.getDungeons());
   };
 
+  const handleTutorialFinished = () => {
+    setPlayer((prev) => ({ ...prev, tutorialCompleted: true }));
+    setCurrentTab('tasks');
+  };
+
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
   // Las sesiones de concentración fortalecen únicamente la afinidad elegida.
@@ -466,6 +471,7 @@ export function App() {
             onBattleVictory={handleBattleVictory}
             onTakeBattleDamage={handleTakeBattleDamage}
             onConsumeKey={handleConsumeKey}
+            onTutorialFinished={handleTutorialFinished}
           />
         )}
 
