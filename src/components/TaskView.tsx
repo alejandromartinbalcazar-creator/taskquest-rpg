@@ -211,13 +211,13 @@ export const TaskView: React.FC<TaskViewProps> = ({
   });
 
   return (
-    <div className="max-w-xl mx-auto px-3 py-3 pb-24 space-y-4">
+    <div className="w-full max-w-xl mx-auto px-3 py-3 pb-24 landscape:max-w-none landscape:mx-0 landscape:h-full landscape:min-h-0 landscape:px-2 landscape:py-2 landscape:pb-2 landscape:flex landscape:gap-2 landscape:overflow-hidden">
       {/* ============================================================== */}
       {/* 1. TARJETA DEL HÉROE EN EL HOME CON BARRAS DE VIDA Y EXP (16-BIT) */}
       {/* ============================================================== */}
-      <div className="retro-box-stone p-3 flex items-center gap-3">
+      <div className="retro-box-stone p-3 flex items-center gap-3 landscape:w-[32%] landscape:max-w-[250px] landscape:shrink-0 landscape:flex-col landscape:items-start landscape:justify-start landscape:gap-1.5 landscape:overflow-y-auto landscape:p-2">
         {/* Sprite de Mago en Marco de Piedra */}
-        <div className="shrink-0 relative">
+        <div className="home-hero-avatar shrink-0 relative">
           <WizardAvatar
             size={90}
             scale={1.7}
@@ -227,7 +227,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         </div>
 
         {/* Datos y Barras de Vida / EXP */}
-        <div className="flex-1 space-y-2">
+        <div className="w-full min-w-0 flex-1 space-y-2 landscape:space-y-1">
           <div className="flex items-center justify-between">
             <div>
               <span className="font-pixel-title text-xs text-white drop-shadow-[1px_1px_0px_#000]">{player.name}</span>
@@ -305,6 +305,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         </div>
       </div>
 
+      <div className="flex min-w-0 flex-1 flex-col gap-3 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-contain landscape:pr-2 landscape:gap-2">
       {/* BANNER DE PELIGRO INMINENTE POR PROCRASTINACIÓN (<4 HORAS) */}
       {urgentTasks.length > 0 && (
         <div className="retro-box-danger p-3 flex items-center gap-3 animate-pulse">
@@ -325,19 +326,19 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 2. CABECERA DE MISIONES Y BOTÓN NUEVA MISIÓN */}
       {/* ============================================================== */}
-      <div className="flex flex-col gap-3 px-1">
+      <div className="flex flex-col gap-3 px-1 landscape:flex-row landscape:items-center landscape:justify-between landscape:gap-2">
         <div>
           <h2 className="font-pixel-title text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
             ⚔️ Misiones & Tareas
           </h2>
-          <p className="font-pixel-text text-sm text-stone-300">
+          <p className="home-mission-subtitle font-pixel-text text-sm text-stone-300">
             Ordenadas por la más próxima a vencer. ¡No dejes que se pongan rojas!
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="retro-btn-gold w-full min-h-16 px-4 py-3 flex items-center justify-center gap-3 text-base shadow-lg hover:brightness-110 active:translate-y-0.5"
+          className="retro-btn-gold w-full min-h-16 px-4 py-3 flex items-center justify-center gap-3 text-base shadow-lg hover:brightness-110 active:translate-y-0.5 landscape:w-auto landscape:min-h-10 landscape:shrink-0 landscape:px-3 landscape:py-1.5"
         >
           <Plus className="w-6 h-6" />
           <span className="font-pixel-title text-sm sm:text-base">Crear tarea o misión</span>
@@ -353,7 +354,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 3. LISTA DE TAREAS (VENCIDAS EN ROJO, CON RECORDATORIO Y REPETICIÓN) */}
       {/* ============================================================== */}
-      <div className="space-y-3">
+      <div className="space-y-3 landscape:space-y-2">
         {sortedPendingTasks.length === 0 ? (
           <div className="retro-box-stone text-center py-8 p-4">
             <Award className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-80" />
@@ -383,7 +384,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
             return (
               <div
                 key={task.id}
-                className={`${cardClass} p-3 flex flex-col justify-between gap-2`}
+                className={`${cardClass} p-3 landscape:p-2 flex flex-col justify-between gap-2 landscape:gap-1.5`}
               >
                 {/* Banner interno de Deuda de Honor */}
                 {isHonorDebt && (
@@ -501,7 +502,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                     ) : (
                       <button
                         onClick={() => onCompleteTask(task.id)}
-                        className="retro-btn-emerald px-3 py-1.5 flex items-center gap-1.5 text-[9px]"
+                        className="retro-btn-emerald min-h-10 px-3 py-1.5 flex items-center gap-1.5 text-[9px]"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Completar</span>
@@ -537,6 +538,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* ============================================================== */}
       {/* 4. MODAL CREAR NUEVA MISIÓN (RECORDATORIOS, REPETICIÓN Y STATS) */}

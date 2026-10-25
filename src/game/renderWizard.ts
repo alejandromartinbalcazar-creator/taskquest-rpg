@@ -200,8 +200,10 @@ export function drawWizardSprite({
   ctx.fillRect(-6 * P, ty - 13 * P, 1 * P, 1 * P);
 
   // 6. BÁCULO RÚNICO CON GEMA ARDIENTE CUADRADA QUE PULSA EN 2 ESTADOS
-  const staffX = 5 * P + staffTilt * P;
-  const staffY = ty + 1 * P;
+  // Al castear, el báculo da un golpe corto hacia delante y vuelve a su postura.
+  const castStaffShift = castAnimProgress > 0 ? Math.round((1 - castAnimProgress) * 5) + 2 : 0;
+  const staffX = 5 * P + staffTilt * P + castStaffShift * P;
+  const staffY = ty + 1 * P - (castAnimProgress > 0 ? Math.round((1 - castAnimProgress) * 2) * P : 0);
 
   // A. Mango de madera oscura (bloques de 1 píxel de ancho con sombra)
   ctx.fillStyle = OUTLINE;

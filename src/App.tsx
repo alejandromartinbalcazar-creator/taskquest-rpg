@@ -33,6 +33,16 @@ export function App() {
   const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
 
+  // La app instalada solicita horizontal al abrirse; Android también lo fija en su Activity.
+  useEffect(() => {
+    try {
+      const orientation = window.screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> };
+      void orientation.lock?.('landscape').catch(() => {});
+    } catch {
+      // Algunos navegadores solo permiten bloquear orientación en modo instalado o pantalla completa.
+    }
+  }, []);
+
   const localSnapshot = useMemo<CloudSaveSnapshot>(() => ({
     schemaVersion: 1,
     player,
@@ -394,16 +404,24 @@ export function App() {
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
   return (
-    <div className="min-h-screen bg-[#090a10] text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
-      {/* Cabecera Superior del Héroe */}
-      <HeroHeader
-        player={player}
-        tasks={tasks}
-        onOpenApkModal={() => setIsApkModalOpen(true)}
-        onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
-        onOpenProgressModal={() => setIsProgressModalOpen(true)}
-        isDamagedAnimation={isDamagedAnimation}
-      />
+    <div className="h-screen h-dvh min-h-dvh w-full overflow-hidden bg-[#090a10] text-slate-100 font-sans selection:bg-purple-600 selection:text-white flex flex-col landscape:flex-row landscape:gap-2 landscape:p-2 landscape:pl-[env(safe-area-inset-left,8px)] landscape:pr-[env(safe-area-inset-right,8px)]">
+      <div className="contents landscape:flex landscape:w-[31%] landscape:max-w-[300px] landscape:shrink-0 landscape:min-h-0 landscape:flex-col landscape:justify-between landscape:border-r-2 landscape:border-[#27272a] landscape:pr-2">
+        {/* Recursos y navegación quedan en el panel izquierdo en horizontal. */}
+        <HeroHeader
+          player={player}
+          tasks={tasks}
+          onOpenApkModal={() => setIsApkModalOpen(true)}
+          onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+          onOpenProgressModal={() => setIsProgressModalOpen(true)}
+          isDamagedAnimation={isDamagedAnimation}
+        />
+        <Navbar
+          currentTab={currentTab}
+          onSelectTab={setCurrentTab}
+          pendingTasksCount={pendingTasksCount}
+          availableSp={player.skillPoints}
+        />
+      </div>
 
       {/* Alerta Ceremonial de Subida de Nivel */}
       {levelUpToast && (
@@ -459,7 +477,7 @@ export function App() {
       )}
 
       {/* Vistas Principales */}
-      <main>
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain landscape:min-w-0 landscape:overflow-x-hidden">
         {currentTab === 'tasks' && (
           <TaskView
             player={player}
@@ -510,14 +528,6 @@ export function App() {
           />
         )}
       </main>
-
-      {/* Barra de Navegación Inferior */}
-      <Navbar
-        currentTab={currentTab}
-        onSelectTab={setCurrentTab}
-        pendingTasksCount={pendingTasksCount}
-        availableSp={player.skillPoints}
-      />
 
       {/* Modal para Obtener APK y Modo PWA para Android */}
       <ApkExportModal

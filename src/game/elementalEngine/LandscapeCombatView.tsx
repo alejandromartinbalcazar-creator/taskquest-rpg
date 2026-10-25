@@ -82,6 +82,9 @@ import {
   SuperconductingNeedle,
   TectonicGlacierWallEntity,
   TectonicGlacierWallBlock,
+  PrimordialMagmaBastionEntity,
+  EternalPermafrostFortressEntity,
+  MagneticTelluricSpireEntity,
 } from './types';
 import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
 import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
@@ -698,6 +701,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       recoilTimer: 0,
       castFlashColor: undefined as string | undefined,
       castFlashTimer: 0,
+      staffCastTimer: 0,
       activeElement: 'fire' as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma',
       staffOrbColor: '#94a3b8',
       isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
@@ -798,6 +802,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     moltenBlizzards: [] as MoltenBlizzardEntity[],
     superconductingNeedleStorms: [] as SuperconductingNeedleStormEntity[],
     tectonicGlacierWalls: [] as TectonicGlacierWallEntity[],
+    primordialMagmaBastions: [] as PrimordialMagmaBastionEntity[],
+    eternalPermafrostFortresses: [] as EternalPermafrostFortressEntity[],
+    magneticTelluricSpires: [] as MagneticTelluricSpireEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -955,6 +962,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         return;
       }
 
+      const permafrostDome = g.eternalPermafrostFortresses.find((dome) => !dome.finished && !dome.burst);
+      if (permafrostDome) {
+        permafrostDome.absorbedHits = (permafrostDome.absorbedHits || 0) + 1;
+        g.particlePool.spawn({ x: wizard.x + (Math.random() - 0.5) * 36, y: wizard.y - 8, vx: (Math.random() - 0.5) * 2, vy: -1, radius: 3, color: '#7dd3fc', life: 16 });
+        return;
+      }
+
       // 2. Aplicar daño una sola vez por impacto
       g.currentHp = Math.max(0, g.currentHp - damage);
       setCurrentHp(g.currentHp);
@@ -1036,6 +1050,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const g = gameStateRef.current;
       const wizard = g.wizard;
       if (wizard.isDashing) return;
+      wizard.staffCastTimer = 190;
 
       const isFire = type === 'fire';
       const range = isFire ? 230 : 215;
@@ -1156,6 +1171,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.moltenBlizzards = [];
       g.superconductingNeedleStorms = [];
       g.tectonicGlacierWalls = [];
+      g.primordialMagmaBastions = [];
+      g.eternalPermafrostFortresses = [];
+      g.magneticTelluricSpires = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -1353,6 +1371,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       };
       wizard.castFlashColor = flashMap[primaryElem] || 'rgba(255, 255, 255, 0.4)';
       wizard.castFlashTimer = 60;
+      wizard.staffCastTimer = 190;
       wizard.activeElement = (recipe.elements[0] || 'fire') as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
 
       // Feedback Háptico
@@ -4932,6 +4951,48 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 40,
         });
       }
+      // Set 4: Tierra x3 + elemento secundario (una entidad activa por hechizo).
+      else if (recipe.id === 'primordial_magma_bastion') {
+        g.primordialMagmaBastions = g.primordialMagmaBastions.filter((entity) => !entity.finished);
+        const existing = g.primordialMagmaBastions[0];
+        if (existing) {
+          existing.elapsedMs = 0;
+          existing.orbitAngle = 0;
+          existing.lastTickMs = 0;
+        } else {
+          g.primordialMagmaBastions.push({
+            id: `magma-bastion-${now}`, radius: 80, durationMs: 3500, elapsedMs: 0,
+            damagePerTick: Math.max(8, Math.round(recipe.damage * 0.42)), lastTickMs: 0, orbitAngle: 0,
+            monoliths: [{ angleOffset: 0, height: 28, width: 18 }, { angleOffset: (Math.PI * 2) / 3, height: 24, width: 16 }, { angleOffset: (Math.PI * 4) / 3, height: 26, width: 17 }], finished: false,
+          });
+        }
+      }
+      else if (recipe.id === 'eternal_permafrost_fortress') {
+        const existing = g.eternalPermafrostFortresses.find((entity) => !entity.finished && !entity.burst);
+        if (existing) {
+          existing.burst = true;
+          existing.burstProgress = 0;
+        } else {
+          g.eternalPermafrostFortresses = g.eternalPermafrostFortresses.filter((entity) => !entity.finished);
+          g.eternalPermafrostFortresses.push({
+            id: `permafrost-fortress-${now}`, radius: 100, durationMs: 3000, elapsedMs: 0,
+            damage: Math.round(recipe.damage * 1.2), burst: false, burstProgress: 0,
+            shards: Array.from({ length: 16 }, (_, i) => ({ angle: (i / 16) * Math.PI * 2, dist: 20, speed: 210, isRock: i % 2 === 0 })),
+            hitEnemyIds: new Set<string>(), absorbedHits: 0, finished: false,
+          });
+        }
+      }
+      else if (recipe.id === 'magnetic_telluric_spire') {
+        const candidates = g.enemyManager.enemies.filter((enemy) => enemy.hp > 0 && Math.hypot(enemy.x - wizard.x, enemy.y - wizard.y) < 520);
+        let cluster: GameEnemy[] = [];
+        for (const candidate of candidates) {
+          const group = candidates.filter((enemy) => Math.hypot(enemy.x - candidate.x, enemy.y - candidate.y) <= 150);
+          if (group.length > cluster.length) cluster = group;
+        }
+        const targetX = cluster.length ? cluster.reduce((sum, enemy) => sum + enemy.x, 0) / cluster.length : wizard.x + Math.cos(wizard.facingAngle) * 220;
+        const targetY = cluster.length ? cluster.reduce((sum, enemy) => sum + enemy.y, 0) / cluster.length : wizard.y + Math.sin(wizard.facingAngle) * 220 * 0.58;
+        g.magneticTelluricSpires = [{ id: `telluric-spire-${now}`, targetX, targetY, radius: 340, durationMs: 4000, elapsedMs: 0, damagePerTick: Math.max(12, Math.round(recipe.damage * 0.65)), lastArcTickMs: 0, obeliskHeight: 100, finished: false }];
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -4986,7 +5047,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             radius: 8,
             color: recipe.color,
             secondaryColor: recipe.secondaryColor,
-            damage: recipe.damage + statBonus,
+            damage: recipe.id === 'basic_spark'
+              ? Math.max(1, Math.round((recipe.damage + statBonus * 0.35) * 0.55))
+              : recipe.damage + statBonus,
             knockback: recipe.knockback,
             life: 45,
             maxLife: 45,
@@ -5545,6 +5608,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.moltenBlizzards = [];
             g.superconductingNeedleStorms = [];
             g.tectonicGlacierWalls = [];
+            g.primordialMagmaBastions = [];
+            g.eternalPermafrostFortresses = [];
+            g.magneticTelluricSpires = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -5691,6 +5757,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           wizard.castFlashColor = undefined;
         }
       }
+      if (wizard.staffCastTimer > 0) wizard.staffCastTimer = Math.max(0, wizard.staffCastTimer - dt);
 
       // Desvanecer estela fantasmal del dash
       for (let t = wizard.dashTrail.length - 1; t >= 0; t--) {
@@ -13766,6 +13833,88 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 5.010 Bastión de Magma: monolitos orbitan al mago, queman a corta distancia y destruyen proyectiles.
+      for (let i = g.primordialMagmaBastions.length - 1; i >= 0; i--) {
+        const bastion = g.primordialMagmaBastions[i];
+        bastion.elapsedMs += dt;
+        bastion.orbitAngle += dtSeconds * 3.6;
+        for (const monolith of bastion.monoliths) {
+          const angle = bastion.orbitAngle + monolith.angleOffset;
+          const mx = wizard.x + Math.cos(angle) * bastion.radius;
+          const my = wizard.y + Math.sin(angle) * bastion.radius * 0.58;
+          for (let pIdx = g.projectiles.length - 1; pIdx >= 0; pIdx--) {
+            const projectile = g.projectiles[pIdx];
+            if (projectile.isHostile && Math.hypot(projectile.x - mx, projectile.y - my) < monolith.width + (projectile.radius || 0)) g.projectilePool.deactivate(projectile as PooledProjectile);
+          }
+          if (bastion.elapsedMs - bastion.lastTickMs >= 300) {
+            for (const enemy of enemies) {
+              if (enemy.hp > 0 && Math.hypot(enemy.x - mx, (enemy.y - my) / 0.58) < 34 + enemy.radius) {
+                applyDamageToEnemy(enemy, bastion.damagePerTick, 'fire', g.floatingTexts, mx, my);
+                enemy.hitFlash = 8;
+              }
+            }
+          }
+        }
+        if (bastion.elapsedMs - bastion.lastTickMs >= 300) bastion.lastTickMs = bastion.elapsedMs;
+        if (bastion.elapsedMs >= bastion.durationMs) g.primordialMagmaBastions.splice(i, 1);
+      }
+
+      // 5.011 Fortaleza de Permafrost: absorbe daño y luego estalla congelando en 360 grados.
+      for (let i = g.eternalPermafrostFortresses.length - 1; i >= 0; i--) {
+        const fortress = g.eternalPermafrostFortresses[i];
+        fortress.elapsedMs += dt;
+        if (!fortress.burst && fortress.elapsedMs >= fortress.durationMs) fortress.burst = true;
+        if (fortress.burst) {
+          fortress.burstProgress = Math.min(1, fortress.burstProgress + dt / 420);
+          const burstRadius = 30 + fortress.burstProgress * 230;
+          for (const shard of fortress.shards) shard.dist = Math.min(125, shard.dist + (shard.speed * dtSeconds));
+          for (const enemy of enemies) {
+            if (enemy.hp <= 0) continue;
+            const dist = Math.hypot(enemy.x - wizard.x, (enemy.y - wizard.y) / 0.58);
+            if (dist <= burstRadius + enemy.radius) {
+              if (!fortress.hitEnemyIds.has(enemy.id)) {
+                fortress.hitEnemyIds.add(enemy.id);
+                applyDamageToEnemy(enemy, fortress.damage, 'ice', g.floatingTexts, wizard.x, wizard.y);
+                enemy.hitFlash = 16;
+                enemy.stunnedTimer = Math.max(enemy.stunnedTimer || 0, 120);
+                g.enemyManager.applyStatus(enemy, 'frozen', 120);
+                const angle = Math.atan2(enemy.y - wizard.y, enemy.x - wizard.x);
+                enemy.x += Math.cos(angle) * 42;
+                enemy.y += Math.sin(angle) * 42 * 0.58;
+              }
+            }
+          }
+          if (fortress.burstProgress >= 1) g.eternalPermafrostFortresses.splice(i, 1);
+        }
+      }
+
+      // 5.012 Espira Telúrica Imantada: atrae enemigos y descarga un arco cada 400 ms.
+      for (let i = g.magneticTelluricSpires.length - 1; i >= 0; i--) {
+        const spire = g.magneticTelluricSpires[i];
+        spire.elapsedMs += dt;
+        for (const enemy of enemies) {
+          if (enemy.hp <= 0) continue;
+          const dx = spire.targetX - enemy.x;
+          const dy = (spire.targetY - enemy.y) / 0.58;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 22 && dist < spire.radius) {
+            const pull = Math.min(dist - 18, (90 + (1 - dist / spire.radius) * 150) * dtSeconds);
+            enemy.x += (dx / dist) * pull;
+            enemy.y += (dy / dist) * pull * 0.58;
+          }
+        }
+        if (spire.elapsedMs - spire.lastArcTickMs >= 400) {
+          spire.lastArcTickMs = spire.elapsedMs;
+          const targets = enemies.filter((enemy) => enemy.hp > 0 && Math.hypot(enemy.x - spire.targetX, (enemy.y - spire.targetY) / 0.58) < 95).slice(0, 8);
+          for (const enemy of targets) {
+            applyDamageToEnemy(enemy, spire.damagePerTick, 'lightning', g.floatingTexts, enemy.x, enemy.y);
+            enemy.hitFlash = 10;
+            g.particlePool.spawn({ x: enemy.x, y: enemy.y - 8, vx: (Math.random() - 0.5) * 2, vy: -1, radius: 3, color: '#a855f7', life: 18 });
+          }
+        }
+        if (spire.elapsedMs >= spire.durationMs) g.magneticTelluricSpires.splice(i, 1);
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -13901,7 +14050,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.tectonicLightningHammers,
             g.moltenBlizzards,
             g.superconductingNeedleStorms,
-            g.tectonicGlacierWalls
+            g.tectonicGlacierWalls,
+            g.primordialMagmaBastions,
+            g.eternalPermafrostFortresses,
+            g.magneticTelluricSpires
           );
         }
       }

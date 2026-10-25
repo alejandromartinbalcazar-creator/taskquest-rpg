@@ -77,6 +77,9 @@ import {
   MoltenBlizzardEntity,
   SuperconductingNeedleStormEntity,
   TectonicGlacierWallEntity,
+  PrimordialMagmaBastionEntity,
+  EternalPermafrostFortressEntity,
+  MagneticTelluricSpireEntity,
 } from './types';
 import { PooledParticle } from '../combat/ParticlePool';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
@@ -124,6 +127,7 @@ export class IsometricRenderer {
       isRespawning?: boolean;
       respawnFadeTimer?: number;
       victoryScale?: number;
+      staffCastTimer?: number;
     },
     enemies: GameEnemy[],
     projectiles: Projectile[],
@@ -179,7 +183,10 @@ export class IsometricRenderer {
     tectonicLightningHammers: TectonicLightningHammerEntity[] = [],
     moltenBlizzards: MoltenBlizzardEntity[] = [],
     superconductingNeedleStorms: SuperconductingNeedleStormEntity[] = [],
-    tectonicGlacierWalls: TectonicGlacierWallEntity[] = []
+    tectonicGlacierWalls: TectonicGlacierWallEntity[] = [],
+    primordialMagmaBastions: PrimordialMagmaBastionEntity[] = [],
+    eternalPermafrostFortresses: EternalPermafrostFortressEntity[] = [],
+    magneticTelluricSpires: MagneticTelluricSpireEntity[] = []
   ) {
     ctx.save();
 
@@ -782,6 +789,17 @@ export class IsometricRenderer {
           draw: () => this.drawTectonicGlacierWallMoving(ctx, tgw),
         });
       }
+    });
+
+    // Mago (Jugador)
+    primordialMagmaBastions.forEach((entity) => {
+      renderList.push({ y: wizard.y + 1, draw: () => this.drawPrimordialMagmaBastion(ctx, wizard.x, wizard.y, entity) });
+    });
+    eternalPermafrostFortresses.forEach((entity) => {
+      renderList.push({ y: wizard.y - 2, draw: () => this.drawEternalPermafrostFortress(ctx, wizard.x, wizard.y, entity) });
+    });
+    magneticTelluricSpires.forEach((entity) => {
+      renderList.push({ y: entity.targetY, draw: () => this.drawMagneticTelluricSpire(ctx, entity) });
     });
 
     // Mago (Jugador)
@@ -1617,6 +1635,7 @@ export class IsometricRenderer {
       recoilY?: number;
       castFlashColor?: string;
       activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
+      staffCastTimer?: number;
     }
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
@@ -2671,6 +2690,7 @@ export class IsometricRenderer {
       recoilY: wizard.recoilY,
       castFlashColor: wizard.castFlashColor,
       activeElement: wizard.activeElement,
+      castAnimProgress: wizard.staffCastTimer ? Math.min(1, wizard.staffCastTimer / 190) : 0,
     });
 
     ctx.globalAlpha = 1.0;
@@ -3072,6 +3092,18 @@ export class IsometricRenderer {
         ctx.fillRect(0, 0, 14, 14);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(-4, -4, 8, 8);
+      }
+      // Chispa Arcana: proyectil verde de baja potencia con estela breve y pixelada.
+      else if (p.spellType === 'basic_spark') {
+        ctx.fillStyle = OUTLINE;
+        ctx.fillRect(-8, -8, 16, 16);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(-7, -5, 12, 10);
+        ctx.fillRect(-11, -3, 4, 6);
+        ctx.fillStyle = '#86efac';
+        ctx.fillRect(-3, -3, 8, 6);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(1, -1, 3, 2);
       }
       // I. PROYECTIL ENEMIGO (HOSTIL): Bloque de sombra umbría con núcleo carmesí
       else if (p.isHostile) {
@@ -13034,5 +13066,118 @@ export class IsometricRenderer {
     } catch (err) {
       console.error('TaskQuest renderer: error in drawElementalCataclysmAimIndicator:', err);
     }
+  }
+
+  private static drawPrimordialMagmaBastion(ctx: CanvasRenderingContext2D, x: number, y: number, entity: PrimordialMagmaBastionEntity) {
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.ellipse(x, y, entity.radius, entity.radius * 0.58, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    entity.monoliths.forEach((monolith) => {
+      const a = entity.orbitAngle + monolith.angleOffset;
+      const mx = Math.floor(x + Math.cos(a) * entity.radius);
+      const my = Math.floor(y + Math.sin(a) * entity.radius * 0.58);
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(mx - 8, my - monolith.height, monolith.width, monolith.height);
+      ctx.fillStyle = '#3f3f46';
+      ctx.fillRect(mx - 5, my - monolith.height + 3, 7, monolith.height - 8);
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(mx - 10, my - 5, 4, 4);
+      ctx.fillRect(mx + 9, my - 13, 4, 4);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(mx - 2, my - monolith.height - 4, 4, 4);
+      ctx.fillRect(mx + 4, my - 7, 3, 3);
+    });
+    ctx.restore();
+  }
+
+  private static drawEternalPermafrostFortress(ctx: CanvasRenderingContext2D, x: number, y: number, entity: EternalPermafrostFortressEntity) {
+    ctx.save();
+    const progress = entity.burst ? entity.burstProgress : Math.min(1, entity.elapsedMs / entity.durationMs);
+    if (!entity.burst) {
+      const r = entity.radius;
+      ctx.globalAlpha = 0.5 + ((entity.absorbedHits || 0) % 3) * 0.1;
+      for (let row = 0; row < 10; row++) {
+        const dy = -62 + row * 7;
+        const halfWidth = Math.floor(Math.sqrt(Math.max(0, 1 - (dy * dy) / (62 * 62))) * r);
+        ctx.fillStyle = row % 3 === 0 ? '#7dd3fc' : '#334155';
+        ctx.fillRect(Math.floor(x - halfWidth), Math.floor(y + dy), halfWidth * 2, 7);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(Math.floor(x - halfWidth), Math.floor(y + dy), 4, 3);
+        ctx.fillRect(Math.floor(x + halfWidth - 4), Math.floor(y + dy), 4, 3);
+      }
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillRect(Math.floor(x - 3), Math.floor(y - 70), 6, 8);
+    } else {
+      ctx.globalAlpha = Math.max(0, 1 - progress * 0.65);
+      for (const shard of entity.shards) {
+        const sx = Math.floor(x + Math.cos(shard.angle) * shard.dist);
+        const sy = Math.floor(y + Math.sin(shard.angle) * shard.dist * 0.58);
+        ctx.fillStyle = shard.isRock ? '#334155' : '#7dd3fc';
+        ctx.fillRect(sx - 4, sy - 4, 8, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx - 1, sy - 6, 3, 3);
+      }
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 30 + progress * 220, (30 + progress * 220) * 0.58, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private static drawMagneticTelluricSpire(ctx: CanvasRenderingContext2D, entity: MagneticTelluricSpireEntity) {
+    ctx.save();
+    const x = Math.floor(entity.targetX);
+    const y = Math.floor(entity.targetY);
+    const elapsed = entity.elapsedMs;
+    // Líneas magnéticas angulares de un píxel apuntan hacia la base del obelisco.
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + (Math.floor(elapsed / 180) % 2) * 0.08;
+      const sx = x + Math.cos(a) * entity.radius;
+      const sy = y + Math.sin(a) * entity.radius * 0.58;
+      const mx = (sx + x) / 2 + (i % 2 ? 8 : -8);
+      const my = (sy + y) / 2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    // Obelisco de basalto en bloques escalonados, sin difuminado.
+    ctx.fillStyle = '#27272a';
+    ctx.fillRect(x - 26, y - entity.obeliskHeight, 52, entity.obeliskHeight);
+    ctx.fillRect(x - 34, y - entity.obeliskHeight + 18, 68, 18);
+    ctx.fillStyle = '#3f3f46';
+    ctx.fillRect(x - 14, y - entity.obeliskHeight + 8, 28, entity.obeliskHeight - 18);
+    ctx.fillStyle = '#fbbf24';
+    for (let row = 0; row < 4; row++) {
+      const ry = y - entity.obeliskHeight + 22 + row * 18;
+      ctx.fillRect(x - 2, ry, 4, 8);
+      ctx.fillRect(x - 6, ry + 3, 12, 2);
+    }
+    ctx.fillStyle = '#a855f7';
+    ctx.fillRect(x - 3, y - entity.obeliskHeight - 8, 6, 6);
+    ctx.fillRect(x - 38, y - 8, 8, 3);
+    ctx.fillRect(x + 30, y - 8, 8, 3);
+    for (let arc = 0; arc < 3; arc++) {
+      const side = arc % 2 === 0 ? -1 : 1;
+      const phase = Math.floor(elapsed / 90 + arc * 3) % 10;
+      const ax = x + side * (10 + phase * 2);
+      const ay = y - entity.obeliskHeight + 12 + ((phase * 11) % Math.max(16, entity.obeliskHeight - 20));
+      ctx.fillRect(ax, ay, 3, 3);
+      ctx.fillRect(ax - side * 5, ay - 5, 5, 3);
+      ctx.fillRect(ax - side * 9, ay + 3, 4, 3);
+      ctx.fillRect(ax - side * 13, ay - 3, 4, 3);
+    }
+    ctx.restore();
   }
 }

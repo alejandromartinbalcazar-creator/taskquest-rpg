@@ -55,8 +55,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0f17] border-t-4 border-[#18181b] outline-1 outline-[#334155] shadow-[0_-4px_0_0_#000000] pb-safe">
-      <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0f17] border-t-4 border-[#18181b] outline-1 outline-[#334155] shadow-[0_-4px_0_0_#000000] pb-safe landscape:static landscape:z-auto landscape:w-full landscape:shrink-0 landscape:border-t-2 landscape:pb-1 landscape:shadow-none">
+      <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1 landscape:max-w-none landscape:flex-wrap landscape:gap-1 landscape:py-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;

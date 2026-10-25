@@ -26,6 +26,23 @@
   }
 }
 
+/* Ajustes del panel de misiones en móviles horizontales de poca altura. */
+.home-hero-avatar canvas {
+  width: 90px;
+  height: 90px;
+}
+
+@media (orientation: landscape) and (max-height: 400px) {
+  .home-hero-avatar canvas {
+    width: 48px;
+    height: 48px;
+  }
+
+  .home-mission-subtitle {
+    display: none;
+  }
+}
+
 /* 16-Bit Pixel Art Rendering Engine */
 .pixelated, canvas, img.pixelated, svg.pixelated {
   image-rendering: -moz-crisp-edges;

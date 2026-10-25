@@ -73,8 +73,8 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0d0f17] border-b-4 border-[#18181b] outline-1 outline-[#334155] px-3 py-2 shadow-[0_4px_0_0_#000000]">
-      <div className="max-w-xl mx-auto flex flex-col gap-1.5">
+    <header className="sticky top-0 z-30 bg-[#0d0f17] border-b-4 border-[#18181b] outline-1 outline-[#334155] px-3 py-2 shadow-[0_4px_0_0_#000000] landscape:static landscape:z-auto landscape:min-h-0 landscape:flex-1 landscape:overflow-y-auto landscape:border-b-0 landscape:px-2 landscape:py-2 landscape:shadow-none">
+      <div className="max-w-xl mx-auto flex flex-col gap-1.5 landscape:max-w-none landscape:gap-2">
         {/* Fila Principal: Título, Recursos y Controles */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

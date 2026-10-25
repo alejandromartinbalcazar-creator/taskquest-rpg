@@ -902,6 +902,7 @@ export interface EternalPermafrostFortressEntity {
   burstProgress: number; // 0..1
   shards: EternalPermafrostShard[];
   hitEnemyIds: Set<string>;
+  absorbedHits?: number;
   finished: boolean;
 }
 
