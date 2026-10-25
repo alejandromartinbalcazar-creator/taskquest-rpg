@@ -204,6 +204,7 @@ export type ObstacleType =
   | 'ice_wall'
   | 'crate'
   | 'barrel'
+  | 'vessel'
   | 'camp_tent'
   | 'energized_crystal'
   | 'permafrost_spike' // Estaca de Hielo+Tierra rompible con fuego/tierra
@@ -235,6 +236,8 @@ export interface PhysicalObstacle {
   doorDirection?: 'north' | 'south' | 'east' | 'west';
   isOpened?: boolean;
   chestReward?: RelicReward;
+  vesselReward?: 'charged' | 'health';
+  vesselRewardClaimed?: boolean;
 }
 
 export interface ElectricArc {

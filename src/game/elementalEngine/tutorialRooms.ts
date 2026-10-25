@@ -1,5 +1,6 @@
 import { EnemyManager } from './enemyAI';
 import { TerrainManager } from './physicsAndTerrain';
+import { createTutorialVessels } from './vessels';
 
 /** El tutorial nunca usa el tilemap, checkpoints, patrullas ni jefes de la campaña. */
 export function setupTutorialRoom(index: number, terrain: TerrainManager, enemies: EnemyManager): void {
@@ -27,5 +28,6 @@ export function setupTutorialRoom(index: number, terrain: TerrainManager, enemie
     // Conserva el cofre del santuario y sustituye su salida norte por una oriental.
     terrain.obstacles = terrain.obstacles.filter((obstacle) => obstacle.obstacleType !== 'door_gate');
     terrain.obstacles.push(exit);
+    terrain.obstacles.push(...createTutorialVessels());
   }
 }

@@ -1378,7 +1378,33 @@ export class IsometricRenderer {
     ctx.fill();
 
     // 1. PUERTA DE LA SALA (DOOR GATE)
-    if (obs.obstacleType === 'door_gate') {
+    if (obs.obstacleType === 'vessel') {
+      // Cerámica en bloques con cuello, borde y asas. Doradas: rayo; curativas: corazón.
+      const x = Math.round(obs.x), y = Math.round(obs.y);
+      ctx.fillStyle = '#151525';
+      ctx.fillRect(x - 12, y - 38, 24, 10);
+      ctx.fillRect(x - 20, y - 27, 40, 27);
+      ctx.fillRect(x - 14, y, 28, 6);
+      ctx.fillStyle = obs.color;
+      ctx.fillRect(x - 8, y - 34, 16, 12);
+      ctx.fillRect(x - 16, y - 24, 32, 25);
+      ctx.fillRect(x - 10, y + 1, 20, 3);
+      ctx.fillRect(x - 23, y - 24, 5, 16);
+      ctx.fillRect(x + 18, y - 24, 5, 16);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(x - 12, y - 33, 24, 4);
+      ctx.fillRect(x - 12, y - 21, 4, 16);
+      ctx.fillStyle = '#172033';
+      if (obs.vesselReward === 'charged') {
+        ctx.fillRect(x + 1, y - 22, 5, 8);
+        ctx.fillRect(x - 3, y - 15, 8, 4);
+        ctx.fillRect(x - 3, y - 12, 4, 7);
+      } else {
+        ctx.fillRect(x - 4, y - 20, 5, 5); ctx.fillRect(x + 3, y - 20, 5, 5);
+        ctx.fillRect(x - 4, y - 15, 12, 4); ctx.fillRect(x, y - 11, 4, 4);
+      }
+    }
+    else if (obs.obstacleType === 'door_gate') {
       const isLocked = obs.doorLocked;
       ctx.fillStyle = isLocked ? '#7f1d1d' : '#14532d';
       ctx.fillRect(obs.x - obs.width / 2, obs.y - 12, obs.width, 24);

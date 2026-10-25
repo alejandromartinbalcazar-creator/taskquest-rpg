@@ -104,6 +104,7 @@ import {
 } from './physicsAndTerrain';
 import { EnemyManager } from './enemyAI';
 import { setupTutorialRoom } from './tutorialRooms';
+import { collectVesselRewards, VESSEL_BOOST_MS, VESSEL_HEAL } from './vessels';
 import { createThresholdCustodian } from './BossCustodian';
 import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
@@ -605,6 +606,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [isDefeated, setIsDefeated] = useState(false);
   const [isVictorious, setIsVictorious] = useState(false);
   const victoryCommittedRef = useRef(false);
+  const chargedBoostUntilRef = useRef(0);
+  const [chargedBoostSeconds, setChargedBoostSeconds] = useState(0);
+  const [vesselsRemaining, setVesselsRemaining] = useState(4);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setChargedBoostSeconds(Math.max(0, Math.ceil((chargedBoostUntilRef.current - Date.now()) / 1000)));
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, []);
   const [finalRunTimeSec, setFinalRunTimeSec] = useState(0);
   const [totalKillsCount, setTotalKillsCount] = useState(0);
   const [isPortraitWarning, setIsPortraitWarning] = useState(false);
@@ -1186,6 +1196,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.roomIndex = nextIndex;
       g.roomCleared = false;
       g.projectilePool.clear();
+      chargedBoostUntilRef.current = 0;
+      setChargedBoostSeconds(0);
       g.particlePool.clear();
       g.infernalCrowns = [];
       g.voltaicChains = [];
@@ -1243,6 +1255,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.y = 380;
         g.cameraSystem.reset(180, 380);
         setupTutorialRoom(nextIndex, g.terrainManager, g.enemyManager);
+        if (nextIndex === 2) setVesselsRemaining(g.terrainManager.obstacles.filter((obs) => obs.obstacleType === 'vessel').length);
         setTutorialStep(nextIndex === 1 ? 4 : 5);
       } else if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -1308,9 +1321,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const handleSelectRelic = (relic: RelicReward) => {
     setEquippedRelics((prev) => [...prev, relic]);
     setRelicModalOpen(false);
-    if (isTutorial && gameStateRef.current.roomIndex === 2) {
-      gameStateRef.current.terrainManager.unlockRoomDoors(gameStateRef.current.floatingTexts);
-    }
 
     if (relic.bonusType === 'max_hp') {
       const newMax = maxHp + relic.value;
@@ -1385,6 +1395,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
       const now = Date.now();
       const g = gameStateRef.current;
+      if (chargedBoostUntilRef.current > now) { isCharged = true; chargeRatio = 1; }
       const rawRecipe = activeRecipe;
       if (isTutorial) {
         if (tutorialStepRef.current === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
@@ -1660,6 +1671,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      if (!attackAimRef.current.isAiming && !mousePosRef.current.active && !g.enemyManager.enemies.some((enemy) => enemy.hp > 0)) {
+        const vessel = g.terrainManager.obstacles
+          .filter((obs) => obs.obstacleType === 'vessel' && obs.hp > 0 && Math.hypot(obs.x - wizard.x, obs.y - wizard.y) < 460)
+          .sort((a, b) => Math.hypot(a.x - wizard.x, a.y - wizard.y) - Math.hypot(b.x - wizard.x, b.y - wizard.y))[0];
+        if (vessel) { targetX = vessel.x; targetY = vessel.y; aimAngle = Math.atan2(targetY - wizard.y, targetX - wizard.x); }
+      }
       wizard.facingAngle = aimAngle;
       wizard.staffOrbColor = recipe.color;
 
@@ -5150,6 +5167,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
   const startCharge = useCallback(() => {
     if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
+    if (chargedBoostUntilRef.current > Date.now()) {
+      handleAttack(true, 1);
+      return;
+    }
     const hasActiveOverloadCore = gameStateRef.current.overloadCores.some((c) => !c.finished && c.phase !== 'detonating');
     if (hasActiveOverloadCore) {
       handleAttack();
@@ -6773,11 +6794,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                         vy: -1.1,
                         life: 30,
                       });
-                    } else if (obs.obstacleType === 'crate' || obs.obstacleType === 'permafrost_spike') {
+                    } else if (obs.obstacleType === 'crate' || obs.obstacleType === 'permafrost_spike' || obs.obstacleType === 'vessel') {
                       obs.hp -= 20;
                     }
                   } else if (stream.type === 'ice') {
-                    if (obs.obstacleType === 'crate') {
+                    if (obs.obstacleType === 'crate' || obs.obstacleType === 'vessel') {
                       obs.hp -= 12;
                     }
                   }
@@ -14049,6 +14070,35 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // Recompensas de vasijas: también recoge las que hayan destruido hechizos de área en este frame.
+      const vesselRewards = g.terrainManager.vesselRewards.splice(0);
+      vesselRewards.push(...collectVesselRewards(g.terrainManager.obstacles));
+      for (const reward of vesselRewards) {
+        if (reward.kind === 'charged') {
+          chargedBoostUntilRef.current = Date.now() + VESSEL_BOOST_MS;
+          setChargedBoostSeconds(10);
+        } else {
+          g.currentHp = Math.min(g.maxHp, g.currentHp + VESSEL_HEAL);
+          setCurrentHp(g.currentHp);
+        }
+        g.floatingTexts.push({ id: `vessel-reward-${reward.id}`, x: reward.x, y: reward.y - 40,
+          text: reward.kind === 'charged' ? '¡CARGA INSTANTÁNEA! 10s' : `+${VESSEL_HEAL} VIDA`,
+          color: reward.color, fontSize: 14, opacity: 1, vy: -0.6, life: 90 });
+        for (let i = 0; i < 10; i++) {
+          const angle = i * Math.PI / 5;
+          g.particles.push({ x: reward.x, y: reward.y - 14, vx: Math.cos(angle) * 2.5, vy: Math.sin(angle) * 2 - 1,
+            radius: 3, color: reward.color, life: 30, maxLife: 30, alpha: 1 });
+        }
+      }
+      if (vesselRewards.length > 0 && isTutorial && g.roomIndex === 2) {
+        const remaining = g.terrainManager.obstacles.filter((obs) => obs.obstacleType === 'vessel' && obs.hp > 0).length;
+        setVesselsRemaining(remaining);
+        if (remaining === 0 && !g.roomCleared) {
+          g.roomCleared = true;
+          g.terrainManager.unlockRoomDoors(g.floatingTexts);
+        }
+      }
+
       // Si no quedan enemigos en una sala de combate, desbloquea el portón
       if (enemies.length === 0 && !g.roomCleared && currentRoom.roomType !== 'entrance' && !(isTutorial && g.roomIndex === 2)) {
         g.roomCleared = true;
@@ -14178,7 +14228,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 : currentRoomIndex === 1
                 ? (gameStateRef.current.roomCleared ? 'Sala despejada. Camina hacia la puerta de la derecha.' : 'Usa hielo contra el guardián de fuego y fuego contra el de hielo.')
                 : currentRoomIndex === 2
-                ? 'Acércate al cofre y elige tu reliquia. La salida está a la derecha.'
+                ? (vesselsRemaining > 0 ? `Rompe las ${vesselsRemaining} vasijas de la derecha: oro = carga instantánea 10s; verde/rojo = +20 vida.` : '¡Todas rotas! La salida de la derecha está abierta. Puedes probar tu impulso o recoger la reliquia.')
                 : [
                 '',
                 'Usa el joystick izquierdo o toca el suelo para mover al mago.',
@@ -14192,6 +14242,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         </div>
       )}
       {/* Banner de entrada a la sala */}
+      {chargedBoostSeconds > 0 && !isVictorious && (
+        <div role="status" className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[60] pointer-events-none border-2 border-amber-300 bg-amber-950/95 px-3 py-2 text-amber-200 font-pixel-text text-lg">
+          ⚡ Carga instantánea · {chargedBoostSeconds}s
+        </div>
+      )}
       {roomBanner && (
         <div className="absolute top-12 z-50 bg-gradient-to-r from-amber-600/90 via-purple-600/90 to-amber-600/90 text-white px-6 py-2 rounded-2xl shadow-2xl border border-amber-300/40 backdrop-blur-md animate-pulse text-center">
           <div className="text-sm font-black tracking-wider uppercase">{roomBanner}</div>
