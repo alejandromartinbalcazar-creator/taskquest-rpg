@@ -496,12 +496,18 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
     const pool = encounterPools.length ? encounterPools[index % encounterPools.length] : [spawn.type];
     const selected = pool[index % pool.length];
     const enemyType = selected === 'elite_stalker' ? 'stalker' : selected;
+    let enemy: GameEnemy | null = null;
     if (enemyType === 'golem') {
-      enemies.push(enemyManager.createPyreGolem(spawn.id, spawn.x, spawn.y));
+      enemy = enemyManager.createPyreGolem(spawn.id, spawn.x, spawn.y);
     } else if (enemyType === 'stalker') {
-      enemies.push(enemyManager.createStormStalker(spawn.id, spawn.x, spawn.y));
+      enemy = enemyManager.createStormStalker(spawn.id, spawn.x, spawn.y);
     } else if (enemyType === 'lurker') {
-      enemies.push(enemyManager.createFrostLurker(spawn.id, spawn.x, spawn.y));
+      enemy = enemyManager.createFrostLurker(spawn.id, spawn.x, spawn.y);
+    }
+    if (enemy) {
+      // Segmento 0 = campamento; cada sala generada ocupa 40 baldosas de ancho.
+      enemy.arenaIndex = Math.max(0, Math.floor(spawn.x / (40 * 64)) - 1);
+      enemies.push(enemy);
     }
   });
 
@@ -519,6 +525,23 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
     enemies.forEach((enemy) => { enemy.isRevealed = false; });
   }
   return enemies;
+}
+
+function createCampaignArenaDoors(run: ExpeditionRun, tilemap: Tilemap) {
+  const middleRooms = run.rooms.filter((room) => room.kind !== 'entrance' && room.kind !== 'boss');
+  return middleRooms.flatMap((room, arenaIndex) => {
+    if (!room.enemyPool?.length) return [];
+    // El portón se ubica al final del tramo, antes de la siguiente sala horizontal.
+    const x = (arenaIndex + 2) * 40 * 64 - 42;
+    const y = Math.round(tilemap.height / 2);
+    return [{
+      id: `campaign-arena-gate-${arenaIndex}`,
+      x, y, radius: 142, width: 34, height: 270,
+      obstacleType: 'door_gate' as const,
+      hp: 9999, maxHp: 9999, color: '#38bdf8', solid: true, blocksProjectiles: true, meltable: false,
+      doorLocked: true, doorTargetRoomId: `campaign-arena-${arenaIndex}`, doorDirection: 'east' as const,
+    }];
+  });
 }
 
 function getLevel1Layout(run?: ExpeditionRun): string[] {
@@ -1013,7 +1036,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.camera.x = spawnX;
     g.camera.y = spawnY;
     g.cameraSystem.reset(spawnX, spawnY);
-    g.terrainManager.obstacles = [];
+    g.terrainManager.obstacles = campaignRoute
+      ? createCampaignArenaDoors(campaignRoute.run, tilemap)
+      : [];
     g.exploredTiles.clear();
 
     // Generar patrullas del Bestiario y jefe a lo largo de las celdas del Tilemap
@@ -1347,7 +1372,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.x = rx;
         g.camera.y = ry;
         g.cameraSystem.reset(rx, ry);
-        g.terrainManager.obstacles = [];
+        g.terrainManager.obstacles = campaignRoute
+          ? createCampaignArenaDoors(campaignRoute.run, tilemap)
+          : [];
         g.exploredTiles.clear();
         g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
@@ -6917,6 +6944,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
         // INTERACCIÓN CON PUERTA / PORTAL DESBLOQUEADO: Transición o Victoria
         if (obs.obstacleType === 'door_gate' && !obs.doorLocked) {
+          // Los portones de la campaña se cruzan caminando: no cambian de sala ni teletransportan.
+          if (obs.doorTargetRoomId?.startsWith('campaign-arena-')) return;
           const distToDoor = Math.hypot(wizard.x - obs.x, wizard.y - obs.y);
           if (distToDoor < 45) {
             if (obs.id === 'forest-exit-portal') {
@@ -14140,6 +14169,27 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           audioManager.playMonsterDeath();
           g.enemyManager.totalKills++;
           enemies.splice(i, 1);
+        }
+      }
+
+      // Cada encuentro generado tiene su propio portón: solo abre cuando su guardia fue eliminada.
+      if (campaignRoute && g.tilemap) {
+        for (const gate of g.terrainManager.obstacles) {
+          if (gate.obstacleType !== 'door_gate' || !gate.doorLocked || !gate.doorTargetRoomId?.startsWith('campaign-arena-')) continue;
+          const arenaIndex = Number(gate.doorTargetRoomId.replace('campaign-arena-', ''));
+          const guardAlive = enemies.some((enemy) => enemy.hp > 0 && enemy.arenaIndex === arenaIndex);
+          // El portón no se abre desde lejos: el jugador debe alcanzar el umbral del tramo.
+          if (!guardAlive && wizard.x >= gate.x - 260) {
+            gate.doorLocked = false;
+            gate.color = '#22c55e';
+            elementalSound.playDoorOpen();
+            g.floatingTexts.push({
+              id: `arena-open-${arenaIndex}-${frameNow}`,
+              x: gate.x, y: gate.y - 155,
+              text: '✦ GUARDIA VENCIDA · PORTÓN RÚNICO ABIERTO',
+              color: '#86efac', fontSize: 13, opacity: 1, vy: -1.1, life: 70,
+            });
+          }
         }
       }
 

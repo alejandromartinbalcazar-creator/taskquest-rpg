@@ -1444,6 +1444,30 @@ export class IsometricRenderer {
     }
     else if (obs.obstacleType === 'door_gate') {
       const isLocked = obs.doorLocked;
+      const isCampaignGate = obs.doorTargetRoomId?.startsWith('campaign-arena-');
+      if (isCampaignGate) {
+        // Portón rúnico alto, sin emoji: piedra, musgo y runas cian/verde en bloques pixelados.
+        const top = obs.y - obs.height / 2;
+        ctx.fillStyle = '#0b1220';
+        ctx.fillRect(obs.x - 24, top - 4, 48, obs.height + 8);
+        ctx.fillStyle = isLocked ? '#334155' : '#1f5138';
+        ctx.fillRect(obs.x - 19, top, 38, obs.height);
+        ctx.fillStyle = '#64748b';
+        for (let y = top + 8; y < top + obs.height - 5; y += 20) {
+          ctx.fillRect(obs.x - 17, y, 34, 3);
+          ctx.fillRect(obs.x - 2, y + 3, 4, 15);
+        }
+        ctx.fillStyle = isLocked ? '#22d3ee' : '#86efac';
+        for (let y = top + 18; y < top + obs.height - 14; y += 34) {
+          ctx.fillRect(obs.x - 8, y, 16, 3);
+          ctx.fillRect(obs.x - 2, y - 5, 4, 13);
+        }
+        if (isLocked) {
+          ctx.fillStyle = '#164e63';
+          ctx.fillRect(obs.x - 28, top + 12, 5, obs.height - 24);
+          ctx.fillRect(obs.x + 23, top + 12, 5, obs.height - 24);
+        }
+      } else {
       ctx.fillStyle = isLocked ? '#7f1d1d' : '#14532d';
       ctx.fillRect(obs.x - obs.width / 2, obs.y - 12, obs.width, 24);
 
@@ -1456,6 +1480,7 @@ export class IsometricRenderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(isLocked ? '🔒' : '🚪✨', obs.x, obs.y);
+      }
     }
     // 2. COFRE DE RELIQUIAS (RELIC CHEST)
     else if (obs.obstacleType === 'relic_chest') {
