@@ -4227,25 +4227,35 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         elementalSound.playLightningBolt();
         const baseDmg = Math.round((recipe.damage + statBonus * 0.7) * chargeMultiplier);
 
-        // Ubicar al enemigo más peligroso (jefe o más cercano) o disparar al frente
-        // Mantener un punto de impacto visible frente al mago aunque no haya enemigos.
-        let targetX = wizard.x + Math.cos(aimAngle) * 200;
-        let targetY = wizard.y + Math.sin(aimAngle) * 200 * 0.58;
-        const boss = g.enemyManager.enemies.find((e) => e.hp > 0 && e.archetype === 'boss');
-        if (boss) {
-          targetX = boss.x;
-          targetY = boss.y;
-        } else {
-          let nearestDist = Infinity;
-          for (const e of g.enemyManager.enemies) {
-            if (e.hp <= 0) continue;
-            const d = Math.hypot(e.x - wizard.x, (e.y - wizard.y) / 0.58);
-            if (d < nearestDist && d < 380) {
-              nearestDist = d;
-              targetX = e.x;
-              targetY = e.y;
-            }
-          }
+        // El objetivo debe caber en cámara para que el pilar y la onda se vean completos.
+        const canvas = canvasRef.current;
+        const halfViewWidth = (canvas?.width ?? 1000) / (2 * 1.32);
+        const halfViewHeight = (canvas?.height ?? 620) / (2 * 1.32);
+        const safeHalfWidth = Math.max(0, halfViewWidth - 120);
+        const safeHalfHeight = Math.max(0, halfViewHeight - 70);
+        const isImpactVisible = (x: number, y: number) =>
+          Math.abs(x - g.camera.x) <= safeHalfWidth && Math.abs(y - g.camera.y) <= safeHalfHeight;
+        const clampToCamera = (value: number, center: number, halfExtent: number) =>
+          Math.max(center - halfExtent, Math.min(value, center + halfExtent));
+
+        // Sin enemigo visible, centrar el golpe 200 px delante del mago y dentro de cámara.
+        let targetX = clampToCamera(wizard.x + Math.cos(aimAngle) * 200, g.camera.x, safeHalfWidth);
+        let targetY = clampToCamera(wizard.y + Math.sin(aimAngle) * 200 * 0.58, g.camera.y, safeHalfHeight);
+        const visibleEnemies = g.enemyManager.enemies.filter((enemy) => {
+          if (enemy.hp <= 0 || !isImpactVisible(enemy.x, enemy.y)) return false;
+          const distance = Math.hypot(enemy.x - wizard.x, (enemy.y - wizard.y) / 0.58);
+          return distance <= 380;
+        });
+        const boss = visibleEnemies.find((enemy) => enemy.archetype === 'boss');
+        const target = boss || visibleEnemies.reduce<typeof visibleEnemies[number] | null>((nearest, enemy) => {
+          if (!nearest) return enemy;
+          const distance = Math.hypot(enemy.x - wizard.x, (enemy.y - wizard.y) / 0.58);
+          const nearestDistance = Math.hypot(nearest.x - wizard.x, (nearest.y - wizard.y) / 0.58);
+          return distance < nearestDistance ? enemy : nearest;
+        }, null);
+        if (target) {
+          targetX = target.x;
+          targetY = target.y;
         }
 
         // Desintegrar proyectiles hostiles en 120px sin asignación en memoria
@@ -4272,7 +4282,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           targetY,
           strikeWidth: 60,
           impactRadius: 120,
-          durationMs: 550,
+          durationMs: 850,
           elapsedMs: 0,
           damage: baseDmg,
           struck: true,
