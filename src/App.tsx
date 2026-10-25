@@ -345,6 +345,18 @@ export function App() {
 
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
+  // Las sesiones de concentración fortalecen únicamente la afinidad elegida.
+  // El tiempo se muestra al jugador, pero cada sesión completada entrega un punto claro y predecible.
+  const handleCompleteFocusSession = (affinity: StatType, _minutes: number) => {
+    setPlayer((prev) => ({
+      ...prev,
+      stats: {
+        ...prev.stats,
+        [affinity]: prev.stats[affinity] + 1,
+      },
+    }));
+  };
+
   return (
     <div className="min-h-screen min-h-dvh w-full bg-[#080b20] text-slate-100 font-sans selection:bg-violet-600 selection:text-white">
       <HeroHeader
@@ -419,7 +431,7 @@ export function App() {
         )}
 
         {currentTab === 'focus' && (
-          <ConcentrationTreeView player={player} />
+          <ConcentrationTreeView player={player} onCompleteSession={handleCompleteFocusSession} />
         )}
 
         {currentTab === 'dungeon' && (
