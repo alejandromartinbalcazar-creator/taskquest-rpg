@@ -177,6 +177,12 @@ const DUNGEON_ROOMS: RoomConfig[] = [
   },
 ];
 
+const TUTORIAL_ROOMS: RoomConfig[] = [
+  { id: 'tutorial-movement', title: 'Tutorial 1: Patio de entrenamiento', subtitle: 'Muévete, usa el ataque básico y prueba un hechizo. No hay enemigos aquí.', roomType: 'entrance' },
+  { id: 'tutorial-affinity', title: 'Tutorial 2: Cámara de afinidades', subtitle: 'Dos enemigos: usa hielo contra fuego y fuego contra hielo.', roomType: 'combat_swarm' },
+  { id: 'tutorial-vessels', title: 'Tutorial 3: Almacén del explorador', subtitle: 'Rompe vasijas, recoge un corazón y busca el portal al Nivel 1.', roomType: 'relic_sanctuary' },
+];
+
 // Generador procedural de descargas eléctricas ramificadas e instantáneas
 function generateLightningBolt(
   startX: number,
@@ -605,8 +611,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
   const [tutorialStep, setTutorialStep] = useState(isTutorial ? 1 : 5);
   const tutorialStartRef = useRef<{ x: number; y: number } | null>(null);
-  const currentRoom = DUNGEON_ROOMS[currentRoomIndex];
-  const [roomBanner, setRoomBanner] = useState<string | null>(DUNGEON_ROOMS[0].title);
+  const roomSet = isTutorial ? TUTORIAL_ROOMS : DUNGEON_ROOMS;
+  const currentRoom = roomSet[currentRoomIndex];
+  const [roomBanner, setRoomBanner] = useState<string | null>(roomSet[0].title);
 
   // Modal de Reliquias
   const [relicModalOpen, setRelicModalOpen] = useState(false);
@@ -936,7 +943,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.maxHp = player.maxHp;
     setCurrentHp(initialHp);
     setMaxHp(player.maxHp);
-    setRoomBanner(DUNGEON_ROOMS[0].title);
+    setRoomBanner(roomSet[0].title);
     setTimeout(() => setRoomBanner(null), 3000);
 
     // Iniciar atmósfera y paisaje sonoro procedural
@@ -1141,7 +1148,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Transición a la siguiente sala
   const changeToRoom = useCallback(
     (nextIndex: number) => {
-      if (nextIndex >= DUNGEON_ROOMS.length) {
+      if (nextIndex >= roomSet.length) {
         // Mazmorra completada al salir del último jefe
         setIsVictorious(true);
         elementalSound.playVictory();
@@ -1245,12 +1252,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.x = 550;
         g.camera.y = 600;
         g.cameraSystem.reset(550, 600);
-        const nextRoom = DUNGEON_ROOMS[nextIndex];
+        const nextRoom = roomSet[nextIndex];
         g.terrainManager.setupRoomTerrain(nextRoom.roomType);
         g.enemyManager.spawnRoomEnemies(nextRoom.roomType);
+        if (isTutorial && nextIndex === 1) g.enemyManager.enemies = g.enemyManager.enemies.slice(0, 2);
       }
 
-      const nextRoom = DUNGEON_ROOMS[nextIndex];
+      const nextRoom = roomSet[nextIndex];
       setCurrentRoomIndex(nextIndex);
       setRoomBanner(nextRoom.title);
       setTimeout(() => setRoomBanner(null), 3500);
@@ -1259,7 +1267,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const isBossRoom = nextRoom?.roomType ? nextRoom.roomType.startsWith('boss_') : false;
       audioManager.startAmbient(isBossRoom ? 'boss' : 'exploration');
     },
-    [floor.enemy.expReward, floor.enemy.goldReward, floor.floorNumber, onVictory]
+    [floor.enemy.expReward, floor.enemy.goldReward, floor.floorNumber, isTutorial, onVictory, roomSet]
   );
 
   // Equipar reliquia elegida en el Santuario
@@ -1343,7 +1351,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const rawRecipe = activeRecipe;
       if (isTutorial) {
         if (tutorialStep === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
-        else if (tutorialStep === 3 && rawRecipe.elements.length > 0) setTutorialStep(4);
+        else if (tutorialStep === 3 && rawRecipe.elements.length > 0) { setTutorialStep(4); changeToRoom(1); }
       }
 
       // Cooldown individual por receta/hechizo con reducción por nivel (solo Cataclismo de 4 elementos tiene cooldown)
@@ -14166,7 +14174,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         <div className="retro-box-stone px-2.5 py-1 text-xs font-bold text-slate-200 flex items-center gap-2">
           <Compass className="w-3.5 h-3.5 text-cyan-400" />
           <span className="font-pixel-title text-[8px]">
-            Sala {currentRoomIndex + 1}/{DUNGEON_ROOMS.length}
+            Sala {currentRoomIndex + 1}/{roomSet.length}
           </span>
         </div>
 
