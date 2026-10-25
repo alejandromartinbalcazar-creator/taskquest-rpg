@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Player, Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
 import { WizardAvatar } from './WizardAvatar';
+import { requestTaskReminderPermission } from '../services/taskReminders';
 import {
   CheckCircle2,
   Clock,
@@ -33,6 +34,11 @@ interface TaskViewProps {
   onRedeemHonorDebt?: (taskId: string) => void;
 }
 
+const toLocalDateTimeValue = (date: Date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+};
+
 export const TaskView: React.FC<TaskViewProps> = ({
   player,
   tasks,
@@ -44,24 +50,31 @@ export const TaskView: React.FC<TaskViewProps> = ({
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [taskToFail, setTaskToFail] = useState<Task | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Formulario de nueva misión
   const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
   const [newStatAffinity, setNewStatAffinity] = useState<StatType>('attack');
   const [newDifficulty, setNewDifficulty] = useState<TaskDifficulty>('media');
   const [newDueDate, setNewDueDate] = useState(() => {
     const d = new Date();
     d.setHours(d.getHours() + 4);
-    return d.toISOString().slice(0, 16);
+    return toLocalDateTimeValue(d);
   });
 
   // Recordatorios detallados
-  const [newReminderType, setNewReminderType] = useState<ReminderType>('at_due');
+  const [newReminderType, setNewReminderType] = useState<ReminderType>('none');
   const [newCustomReminderMinutes, setNewCustomReminderMinutes] = useState<number>(30);
 
   // Repetición detallada
   const [newRecurrence, setNewRecurrence] = useState<TaskRecurrence>('none');
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 3, 5]); // Lunes, Miércoles, Viernes por defecto
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [reminderPermissionNotice, setReminderPermissionNotice] = useState('');
+
+  useEffect(() => {
+    if (showAddModal) titleInputRef.current?.focus();
+  }, [showAddModal]);
 
   const daysOfWeek = [
     { id: 1, label: 'Lun' },
@@ -89,9 +102,19 @@ export const TaskView: React.FC<TaskViewProps> = ({
     return 'fire';
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if (Number.isNaN(new Date(newDueDate).getTime())) return;
+    if (newRecurrence === 'custom_days' && selectedDays.length === 0) return;
+
+    setReminderPermissionNotice('');
+    if (newReminderType !== 'none') {
+      const permission = await requestTaskReminderPermission().catch(() => 'denied' as const);
+      if (permission === 'denied') {
+        setReminderPermissionNotice('La misión se guardará, pero el teléfono no tiene permiso para mostrar recordatorios.');
+      }
+    }
 
     let expReward = 120;
     let goldReward = 50;
@@ -105,6 +128,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
     onAddTask({
       title: newTitle.trim(),
+      description: newDescription.trim() || undefined,
       statAffinity: newStatAffinity,
       difficulty: newDifficulty,
       expReward,
@@ -118,7 +142,10 @@ export const TaskView: React.FC<TaskViewProps> = ({
     });
 
     setNewTitle('');
+    setNewDescription('');
     setNewRecurrence('none');
+    setNewReminderType('none');
+    setSelectedDays([]);
     setShowAddModal(false);
   };
 
@@ -147,6 +174,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
     if (task.recurrence === 'weekly') return '🔄 Semanal';
     if (task.recurrence === 'monthly') return '🔄 Mensual';
     if (task.recurrence === 'yearly') return '🔄 Anual';
+    if (task.recurrence === 'weekdays') return '🔄 Cada día de la semana';
     if (task.recurrence === 'custom_days' && task.recurrenceDays && task.recurrenceDays.length > 0) {
       const names = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
       return '🔄 ' + task.recurrenceDays.map((d) => names[d]).join(', ');
@@ -157,6 +185,9 @@ export const TaskView: React.FC<TaskViewProps> = ({
   const formatReminderBadge = (task: Task) => {
     if (!task.reminderType || task.reminderType === 'none') return null;
     if (task.reminderType === 'at_due') return '🔔 Al vencer';
+    if (task.reminderType === '5_minutes_before') return '🔔 5 min antes';
+    if (task.reminderType === '30_minutes_before') return '🔔 30 min antes';
+    if (task.reminderType === '1_hour_before') return '🔔 1 h antes';
     if (task.reminderType === '1_day_before') return '🔔 1d antes';
     if (task.reminderType === '2_days_before') return '🔔 2d antes';
     if (task.reminderType === '3_days_before') return '🔔 3d antes';
@@ -294,7 +325,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 2. CABECERA DE MISIONES Y BOTÓN NUEVA MISIÓN */}
       {/* ============================================================== */}
-      <div className="flex items-center justify-between px-1">
+      <div className="flex flex-col gap-3 px-1">
         <div>
           <h2 className="font-pixel-title text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
             ⚔️ Misiones & Tareas
@@ -306,12 +337,18 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="retro-btn-gold px-3 py-2 flex items-center gap-1 text-[9px]"
+          className="retro-btn-gold w-full min-h-16 px-4 py-3 flex items-center justify-center gap-3 text-base shadow-lg hover:brightness-110 active:translate-y-0.5"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Nueva Misión</span>
+          <Plus className="w-6 h-6" />
+          <span className="font-pixel-title text-sm sm:text-base">Crear tarea o misión</span>
         </button>
       </div>
+
+      {reminderPermissionNotice && (
+        <p role="status" className="retro-box-gold p-2 font-pixel-text text-sm text-amber-200">
+          {reminderPermissionNotice}
+        </p>
+      )}
 
       {/* ============================================================== */}
       {/* 3. LISTA DE TAREAS (VENCIDAS EN ROJO, CON RECORDATORIO Y REPETICIÓN) */}
@@ -421,9 +458,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
                 {/* Título de la Tarea y Botones de Acción */}
                 <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <h3 className="font-pixel-title text-[10px] text-stone-100 leading-normal flex-1 drop-shadow-[1px_1px_0px_#000]">
-                    {task.title}
-                  </h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-pixel-title text-[10px] text-stone-100 leading-normal drop-shadow-[1px_1px_0px_#000]">
+                      {task.title}
+                    </h3>
+                    {task.description && <p className="font-pixel-text text-sm text-stone-300 mt-1 whitespace-pre-wrap">{task.description}</p>}
+                  </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                     {onDeleteTask && !isHonorDebt && (
@@ -503,7 +543,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="retro-box-stone p-4 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
+          <div className="retro-box-stone p-4 sm:p-5 max-w-md w-full relative max-h-[92dvh] overflow-y-auto">
             <button
               onClick={() => setShowAddModal(false)}
               className="absolute top-3 right-3 text-stone-400 hover:text-white"
@@ -515,8 +555,8 @@ export const TaskView: React.FC<TaskViewProps> = ({
               <Plus className="w-4 h-4 text-amber-400" />
               Nueva Misión
             </h3>
-            <p className="font-pixel-text text-sm text-stone-300 mb-3">
-              Configura tu tarea, recordatorios, repetición y las estadísticas que fortalecerá.
+            <p className="font-pixel-text text-base text-stone-300 mb-4 leading-relaxed">
+              Escribe tu misión y elige cuándo hacerla. Los detalles adicionales son opcionales.
             </p>
 
             <form onSubmit={handleCreateTask} className="space-y-3">
@@ -527,51 +567,68 @@ export const TaskView: React.FC<TaskViewProps> = ({
                 </label>
                 <input
                   type="text"
+                  ref={titleInputRef}
                   required
                   placeholder="Ej: Terminar proyecto, Entrenar fuerza, Leer 20 páginas..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-[#090a10] border-2 border-[#18181b] outline-1 outline-[#334155] p-2 text-white font-pixel-text text-lg placeholder-stone-600 focus:outline-amber-500"
+                  className="w-full min-h-12 bg-[#090a10] border-2 border-slate-600 p-3 text-white font-pixel-text text-lg placeholder-stone-500 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="mission-description" className="block font-pixel-title text-[9px] text-stone-200 mb-1.5">
+                  Descripción <span className="font-pixel-text text-sm text-stone-400">(opcional)</span>
+                </label>
+                <textarea
+                  id="mission-description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Añade detalles o pasos para completar la misión..."
+                  className="w-full resize-y bg-[#090a10] border-2 border-slate-600 p-3 text-white font-pixel-text text-base placeholder-stone-500 focus:border-amber-400 focus:outline-none"
                 />
               </div>
 
               {/* Fecha y Hora Límite */}
               <div>
-                <label className="block font-pixel-title text-[8px] text-stone-300 mb-1">
-                  ¿Cuándo se va a hacer? (Fecha y hora límite)
+                <label htmlFor="mission-due-date" className="block font-pixel-title text-[9px] text-stone-200 mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-amber-400" /> Fecha y hora
                 </label>
                 <input
+                  id="mission-due-date"
                   type="datetime-local"
                   required
                   value={newDueDate}
                   onChange={(e) => setNewDueDate(e.target.value)}
-                  className="w-full bg-[#090a10] border-2 border-[#18181b] outline-1 outline-[#334155] p-2 text-white font-pixel-text text-lg focus:outline-amber-500"
+                  className="w-full min-h-12 bg-[#090a10] border-2 border-slate-600 p-3 text-white font-pixel-text text-base focus:border-amber-400 focus:outline-none [color-scheme:dark]"
                 />
-                <p className="font-pixel-text text-xs text-red-400 mt-1 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                  Si vence sin completarse, tu personaje sufre deleveling y daño.
+                <p className="font-pixel-text text-sm text-stone-400 mt-1.5 flex items-start gap-1.5 leading-relaxed">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  Elige el día y la hora local. Si vence sin completarse, tu personaje sufrirá consecuencias.
                 </p>
               </div>
 
               {/* SECCIÓN RECORDATORIO (¿CUÁNDO AVISAR?) */}
               <div>
-                <label className="block font-pixel-title text-[8px] text-stone-300 mb-1 flex items-center gap-1.5">
-                  <Bell className="w-3 h-3 text-amber-400" />
-                  Recordatorio (Avisarme antes)
+                <label className="block font-pixel-title text-[9px] text-stone-200 mb-1.5 flex items-center gap-1.5">
+                  <Bell className="w-4 h-4 text-amber-400" />
+                  Recordatorio
                 </label>
                 <select
                   value={newReminderType}
                   onChange={(e) => setNewReminderType(e.target.value as ReminderType)}
-                  className="w-full bg-[#090a10] border-2 border-[#18181b] outline-1 outline-[#334155] p-2 text-white font-pixel-text text-base focus:outline-amber-500"
+                  className="w-full min-h-11 bg-[#090a10] border-2 border-slate-600 p-2.5 text-white font-pixel-text text-base focus:border-amber-400 focus:outline-none"
                 >
                   <option value="none">Sin recordatorio</option>
-                  <option value="at_due">En el momento (al vencer)</option>
+                  <option value="at_due">A la hora elegida</option>
+                  <option value="5_minutes_before">5 minutos antes</option>
+                  <option value="30_minutes_before">30 minutos antes</option>
+                  <option value="1_hour_before">1 hora antes</option>
                   <option value="1_day_before">1 día antes</option>
-                  <option value="2_days_before">2 días antes</option>
-                  <option value="3_days_before">3 días antes</option>
-                  <option value="1_week_before">1 semana antes</option>
-                  <option value="constant">Recordatorio constante (persistente)</option>
-                  <option value="custom">Personalizado (definir tiempo)</option>
+                  <option value="constant">Persistente hasta completar</option>
+                  <option value="custom">Personalizado</option>
                 </select>
 
                 {newReminderType === 'custom' && (
@@ -587,45 +644,50 @@ export const TaskView: React.FC<TaskViewProps> = ({
                     <span className="font-pixel-text text-sm text-stone-300">minutos antes de vencer</span>
                   </div>
                 )}
+                <p className="font-pixel-text text-sm text-stone-400 mt-1.5 leading-relaxed">
+                  En el teléfono, el aviso aparece aunque FocusMission esté cerrada. La hora puede variar según los ajustes de ahorro de batería.
+                </p>
               </div>
 
               {/* SECCIÓN REPETICIÓN (AVANZADO) */}
               <div>
-                <label className="block font-pixel-title text-[8px] text-stone-300 mb-1 flex items-center gap-1.5">
+                <label className="block font-pixel-title text-[9px] text-stone-200 mb-1.5 flex items-center gap-1.5">
                   <Repeat className="w-3 h-3 text-sky-400" />
-                  Repetir Misión
+                  Frecuencia
                 </label>
                 <select
                   value={newRecurrence}
                   onChange={(e) => setNewRecurrence(e.target.value as TaskRecurrence)}
-                  className="w-full bg-[#090a10] border-2 border-[#18181b] outline-1 outline-[#334155] p-2 text-white font-pixel-text text-base focus:outline-amber-500"
+                  className="w-full min-h-11 bg-[#090a10] border-2 border-slate-600 p-2.5 text-white font-pixel-text text-base focus:border-sky-400 focus:outline-none"
                 >
-                  <option value="none">Ninguno (Única vez)</option>
+                  <option value="none">Una sola vez</option>
                   <option value="daily">Diariamente</option>
                   <option value="weekly">Semanalmente</option>
                   <option value="monthly">Mensualmente</option>
                   <option value="yearly">Anualmente</option>
-                  <option value="custom_days">Días específicos de la semana</option>
+                  <option value="weekdays">Cada día de la semana (lunes a viernes)</option>
+                  <option value="custom_days">Personalizado</option>
                 </select>
 
                 {/* SELECTOR MÚLTIPLE DE DÍAS DE LA SEMANA */}
                 {newRecurrence === 'custom_days' && (
                   <div className="mt-2 p-2 bg-[#090a10] border border-[#18181b]">
-                    <span className="font-pixel-title text-[7px] text-stone-400 block mb-1">
-                      Selecciona días:
+                    <span className="font-pixel-title text-[9px] text-stone-300 block mb-2">
+                      ¿Qué días se repite?
                     </span>
-                    <div className="flex gap-1 justify-between">
+                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                       {daysOfWeek.map((day) => {
                         const isSelected = selectedDays.includes(day.id);
                         return (
                           <button
                             key={day.id}
                             type="button"
+                            aria-pressed={isSelected}
                             onClick={() => toggleDay(day.id)}
-                            className={`w-8 h-8 font-pixel-title text-[8px] flex items-center justify-center ${
+                            className={`min-h-10 font-pixel-title text-[9px] flex items-center justify-center border-2 ${
                               isSelected
-                                ? 'retro-btn-emerald'
-                                : 'retro-btn-stone'
+                                ? 'bg-emerald-900 border-emerald-400 text-white'
+                                : 'bg-slate-900 border-slate-600 text-stone-300'
                             }`}
                           >
                             {day.label}
@@ -633,6 +695,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                         );
                       })}
                     </div>
+                    {selectedDays.length === 0 && <p className="font-pixel-text text-sm text-amber-300 mt-2">Selecciona al menos un día.</p>}
                   </div>
                 )}
               </div>
@@ -645,11 +708,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <button
                     type="button"
+                    aria-pressed={newStatAffinity === 'attack'}
                     onClick={() => setNewStatAffinity('attack')}
                     className={`p-2 border text-left flex items-center gap-2 ${
                       newStatAffinity === 'attack'
-                        ? 'retro-box-danger text-rose-200'
-                        : 'retro-box-stone text-stone-400'
+                        ? 'bg-rose-950 border-rose-400 ring-2 ring-rose-400/70 text-rose-100'
+                        : 'retro-box-stone text-stone-300'
                     }`}
                   >
                     <Swords className="w-3.5 h-3.5 text-rose-400 shrink-0" />
@@ -661,11 +725,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
                   <button
                     type="button"
+                    aria-pressed={newStatAffinity === 'speed'}
                     onClick={() => setNewStatAffinity('speed')}
                     className={`p-2 border text-left flex items-center gap-2 ${
                       newStatAffinity === 'speed'
-                        ? 'retro-box-gold text-amber-200'
-                        : 'retro-box-stone text-stone-400'
+                        ? 'bg-amber-950 border-amber-400 ring-2 ring-amber-400/70 text-amber-100'
+                        : 'retro-box-stone text-stone-300'
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -677,11 +742,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
                   <button
                     type="button"
+                    aria-pressed={newStatAffinity === 'defense'}
                     onClick={() => setNewStatAffinity('defense')}
                     className={`p-2 border text-left flex items-center gap-2 ${
                       newStatAffinity === 'defense'
-                        ? 'retro-box-stone outline-emerald-500 text-emerald-200'
-                        : 'retro-box-stone text-stone-400'
+                        ? 'bg-emerald-950 border-emerald-400 ring-2 ring-emerald-400/70 text-emerald-100'
+                        : 'retro-box-stone text-stone-300'
                     }`}
                   >
                     <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -693,11 +759,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
                   <button
                     type="button"
+                    aria-pressed={newStatAffinity === 'knowledge'}
                     onClick={() => setNewStatAffinity('knowledge')}
                     className={`p-2 border text-left flex items-center gap-2 ${
                       newStatAffinity === 'knowledge'
-                        ? 'retro-box-stone outline-cyan-500 text-cyan-200'
-                        : 'retro-box-stone text-stone-400'
+                        ? 'bg-cyan-950 border-cyan-400 ring-2 ring-cyan-400/70 text-cyan-100'
+                        : 'retro-box-stone text-stone-300'
                     }`}
                   >
                     <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />

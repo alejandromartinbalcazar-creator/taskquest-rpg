@@ -16,6 +16,8 @@ import { HeroProgressModal } from './components/HeroProgressModal';
 import { checkAndUnlockMilestones } from './data/heroMilestones';
 import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
+import { syncTaskReminderNotifications } from './services/taskReminders';
+import { getNextTaskDueDate } from './services/taskRecurrence';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -71,6 +73,10 @@ export function App() {
 
   useEffect(() => {
     StorageService.saveTasks(tasks);
+  }, [tasks]);
+
+  useEffect(() => {
+    void syncTaskReminderNotifications(tasks);
   }, [tasks]);
 
   useEffect(() => {
@@ -233,34 +239,9 @@ export function App() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === taskId) {
-          if (t.recurrence === 'daily') {
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'weekly') {
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + 7);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'monthly') {
-            const nextDate = new Date();
-            nextDate.setMonth(nextDate.getMonth() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'yearly') {
-            const nextDate = new Date();
-            nextDate.setFullYear(nextDate.getFullYear() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'custom_days' && t.recurrenceDays && t.recurrenceDays.length > 0) {
-            // Buscar el próximo día seleccionado de la semana
-            const todayDay = new Date().getDay();
-            let daysToAdd = 1;
-            while (daysToAdd <= 7) {
-              const targetDay = (todayDay + daysToAdd) % 7;
-              if (t.recurrenceDays.includes(targetDay)) break;
-              daysToAdd++;
-            }
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + daysToAdd);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
+          const nextDueDate = getNextTaskDueDate(t);
+          if (nextDueDate) {
+            return { ...t, completed: false, dueDate: nextDueDate, penalizedCount: 0 };
           }
           return { ...t, completed: true, completedAt: new Date().toISOString() };
         }

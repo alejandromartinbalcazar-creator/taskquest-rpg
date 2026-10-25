@@ -7,6 +7,9 @@ export type TaskDifficulty = 'facil' | 'media' | 'dificil' | 'epica';
 export type ReminderType =
   | 'none'
   | 'at_due'
+  | '5_minutes_before'
+  | '30_minutes_before'
+  | '1_hour_before'
   | '1_day_before'
   | '2_days_before'
   | '3_days_before'
@@ -20,6 +23,7 @@ export type TaskRecurrence =
   | 'weekly'
   | 'monthly'
   | 'yearly'
+  | 'weekdays'
   | 'custom_days';
 
 export interface Task {
