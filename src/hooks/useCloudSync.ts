@@ -158,8 +158,15 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         if (cancelled) return;
 
         if (existing) {
-          setRemoteSave(existing);
-          setStatus('needs_choice');
+          // La nube es la fuente de verdad al iniciar sesión. Evita que una copia
+          // local antigua reemplace por accidente el progreso más reciente.
+          onApplyCloudSave(existing.saveData);
+          revisionRef.current = existing.revision;
+          savedPayloadRef.current = JSON.stringify(existing.saveData);
+          setRemoteSave(null);
+          setLastSyncedAt(existing.updatedAt);
+          setCloudReady(true);
+          setStatus('synced');
           return;
         }
 
@@ -177,8 +184,12 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         try {
           const rowCreatedElsewhere = await loadCloudSave(userId);
           if (rowCreatedElsewhere) {
-            setRemoteSave(rowCreatedElsewhere);
-            setStatus('needs_choice');
+            onApplyCloudSave(rowCreatedElsewhere.saveData);
+            revisionRef.current = rowCreatedElsewhere.revision;
+            savedPayloadRef.current = JSON.stringify(rowCreatedElsewhere.saveData);
+            setLastSyncedAt(rowCreatedElsewhere.updatedAt);
+            setCloudReady(true);
+            setStatus('synced');
             return;
           }
         } catch {
@@ -194,7 +205,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [onApplyCloudSave, userId]);
 
   const syncLatest = useCallback(async () => {
     if (!supabase || !userId || !cloudReady) return;

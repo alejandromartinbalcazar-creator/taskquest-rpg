@@ -8,7 +8,7 @@ const STATUS_LABEL: Record<CloudSyncStatus, string> = {
   not_configured: 'La sincronización en la nube aún no está configurada.',
   signed_out: 'Tu progreso se guarda en este dispositivo. Inicia sesión para sincronizarlo.',
   checking: 'Revisando tu partida en la nube…',
-  needs_choice: 'Encontramos una partida en la nube. Elige qué copia conservar.',
+  needs_choice: 'Resolviendo la partida más reciente…',
   syncing: 'Sincronizando tu progreso…',
   synced: 'Tu progreso está sincronizado.',
   offline: 'Sin conexión. Tus cambios siguen guardados en este dispositivo.',
