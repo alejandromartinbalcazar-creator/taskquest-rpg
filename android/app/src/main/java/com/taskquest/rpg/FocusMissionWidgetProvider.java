@@ -24,6 +24,7 @@ import java.util.Locale;
 /** Base compartida para los tres aspectos del widget. Muestra siempre las tres misiones más urgentes. */
 public class FocusMissionWidgetProvider extends AppWidgetProvider {
     protected int layoutId() { return R.layout.widget_focusmission_medieval; }
+    protected String theme() { return "medieval"; }
 
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) update(context, manager, id);
@@ -35,14 +36,20 @@ public class FocusMissionWidgetProvider extends AppWidgetProvider {
     protected void update(Context context, AppWidgetManager manager, int id) {
         RemoteViews views = new RemoteViews(context.getPackageName(), layoutId());
         ArrayList<WidgetTask> tasks = readTasks(context);
-        bindRow(views, R.id.widget_task_one, R.id.widget_task_one_due, tasks, 0);
-        bindRow(views, R.id.widget_task_two, R.id.widget_task_two_due, tasks, 1);
-        bindRow(views, R.id.widget_task_three, R.id.widget_task_three_due, tasks, 2);
+        views.setViewVisibility(R.id.widget_task_one, View.GONE); views.setViewVisibility(R.id.widget_task_one_due, View.GONE);
+        views.setViewVisibility(R.id.widget_task_two, View.GONE); views.setViewVisibility(R.id.widget_task_two_due, View.GONE);
+        views.setViewVisibility(R.id.widget_task_three, View.GONE); views.setViewVisibility(R.id.widget_task_three_due, View.GONE);
+        Intent adapter = new Intent(context, WidgetTaskRemoteViewsService.class);
+        adapter.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id); adapter.putExtra("theme", theme());
+        adapter.setData(Uri.parse(adapter.toUri(Intent.URI_INTENT_SCHEME)));
+        views.setRemoteAdapter(R.id.widget_list, adapter); views.setEmptyView(R.id.widget_list, R.id.widget_empty);
+        views.setPendingIntentTemplate(R.id.widget_list, linkIntent(context, "tasks", id));
         views.setTextViewText(R.id.widget_empty, tasks.isEmpty() ? "Sin misiones pendientes. Buen descanso." : "");
         views.setViewVisibility(R.id.widget_empty, tasks.isEmpty() ? View.VISIBLE : View.GONE);
         views.setOnClickPendingIntent(R.id.widget_add, linkIntent(context, "add-task", id));
         views.setOnClickPendingIntent(R.id.widget_root, linkIntent(context, "tasks", id));
         manager.updateAppWidget(id, views);
+        manager.notifyAppWidgetViewDataChanged(id, R.id.widget_list);
     }
 
     private PendingIntent linkIntent(Context context, String action, int id) {
