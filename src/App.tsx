@@ -369,7 +369,9 @@ export function App() {
 
   const handleTutorialFinished = () => {
     setPlayer((prev) => ({ ...prev, tutorialCompleted: true }));
-    setCurrentTab('tasks');
+    // La puerta final del tutorial continúa directamente hacia el Nivel 1.
+    // DungeonView conserva la mazmorra activa y muestra la primera expedición.
+    setCurrentTab('dungeon');
   };
 
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;

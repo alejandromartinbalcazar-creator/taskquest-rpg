@@ -38,6 +38,8 @@ export interface BiomeDefinition {
   musicMood: 'exploration' | 'boss';
   roomTemplates: RoomTemplate[];
   modifiers: RunModifier[];
+  /** Bestiario permitido. El generador nunca puede elegir una criatura fuera de esta lista. */
+  allowedEnemies: string[];
   bossId: string;
   recommendedElements: BaseElement[];
 }
@@ -47,4 +49,10 @@ export interface ExpeditionRun {
   biomeId: string;
   modifier: RunModifier;
   rooms: RoomTemplate[];
+}
+
+/** Ruta que puede mostrarse, guardarse y reconstruirse a partir de su semilla. */
+export interface CampaignRoute {
+  run: ExpeditionRun;
+  seedLabel: string;
 }

@@ -109,6 +109,7 @@ import { createThresholdCustodian } from './BossCustodian';
 import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
+import type { CampaignRoute, ExpeditionRun } from '../expedition/types';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
 
 interface LandscapeCombatViewProps {
@@ -118,6 +119,8 @@ interface LandscapeCombatViewProps {
   onVictory: (floorNumber: number, expReward: number, goldReward: number) => void;
   onPlayerTakeDamage: (damage: number) => void;
   isTutorial?: boolean;
+  /** Solo el Nivel 1 recibe una ruta generada y persistida por semilla. */
+  campaignRoute?: CampaignRoute;
 }
 
 // Estructura de Salas Conectadas para la Gran Mazmorra
@@ -484,20 +487,33 @@ function createLevel1ForestEnemies(enemyManager: EnemyManager): GameEnemy[] {
  * Inicializa las patrullas del Bestiario y el jefe del Nivel 1 a partir de las celdas
  * de spawn del Tilemap ('1' Pyre Golem, '2' Storm Stalker, '3' Frost Lurker, 'B' Custodio del Umbral).
  */
-function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap): GameEnemy[] {
+function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap, run?: ExpeditionRun): GameEnemy[] {
   const enemies: GameEnemy[] = [];
-  tilemap.enemySpawns.forEach((spawn) => {
-    if (spawn.type === 'golem') {
+  const encounterPools = run?.rooms.filter((room) => room.enemyPool?.length).map((room) => room.enemyPool!) ?? [];
+  tilemap.enemySpawns.forEach((spawn, index) => {
+    // Cada punto del sendero obtiene su especie de una plantilla de sala del bioma.
+    // Si aún no hay ruta (partidas antiguas), conserva el spawn que venía con el tilemap.
+    const pool = encounterPools.length ? encounterPools[index % encounterPools.length] : [spawn.type];
+    const selected = pool[index % pool.length];
+    const enemyType = selected === 'elite_stalker' ? 'stalker' : selected;
+    if (enemyType === 'golem') {
       enemies.push(enemyManager.createPyreGolem(spawn.id, spawn.x, spawn.y));
-    } else if (spawn.type === 'stalker') {
+    } else if (enemyType === 'stalker') {
       enemies.push(enemyManager.createStormStalker(spawn.id, spawn.x, spawn.y));
-    } else if (spawn.type === 'lurker') {
+    } else if (enemyType === 'lurker') {
       enemies.push(enemyManager.createFrostLurker(spawn.id, spawn.x, spawn.y));
     }
   });
 
   if (tilemap.bossSpawn) {
     enemies.push(createThresholdCustodian(tilemap.bossSpawn.x, tilemap.bossSpawn.y));
+  }
+
+  // Los modificadores se aplican sobre la composición generada, no sobre datos fijos del nivel.
+  if (run?.modifier.id === 'arcane_fog') {
+    enemies.forEach((enemy) => { if (enemy.archetype !== 'boss') enemy.moveSpeed *= 1.12; });
+  } else if (run?.modifier.id === 'living_roots') {
+    enemies.forEach((enemy) => { if (enemy.archetype !== 'boss') enemy.attackPower = Math.max(1, Math.round(enemy.attackPower * 0.92)); });
   }
   return enemies;
 }
@@ -585,6 +601,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   onVictory,
   onPlayerTakeDamage,
   isTutorial = false,
+  campaignRoute,
 }) => {
   // En Android la mazmorra usa toda la pantalla; un deslizamiento desde el borde muestra los controles del sistema temporalmente.
   useEffect(() => {
@@ -966,7 +983,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.terrainManager.obstacles = [];
 
     // Generar patrullas del Bestiario y jefe a lo largo de las celdas del Tilemap
-    g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap);
+    g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
     const initialHp = Math.max(1, player.currentHp > 0 ? player.currentHp : player.maxHp);
@@ -984,7 +1001,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       audioManager.stopAmbient();
       audioManager.stopCharge();
     };
-  }, [isTutorial]);
+  }, [isTutorial, campaignRoute]);
 
   // Manejo de derrota y reaparición en el último punto de control (400ms fade -> 100% HP -> 1.5s i-frames)
   const triggerPlayerDefeatAndRespawn = useCallback(() => {
@@ -1297,7 +1314,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.y = ry;
         g.cameraSystem.reset(rx, ry);
         g.terrainManager.obstacles = [];
-        g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap);
+        g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
       } else {
         g.tilemap = null;
@@ -1323,7 +1340,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const isBossRoom = nextRoom?.roomType ? nextRoom.roomType.startsWith('boss_') : false;
       audioManager.startAmbient(isBossRoom ? 'boss' : 'exploration');
     },
-    [floor.enemy.expReward, floor.enemy.goldReward, floor.floorNumber, isTutorial, onVictory, roomSet]
+    [campaignRoute, floor.enemy.expReward, floor.enemy.goldReward, floor.floorNumber, isTutorial, onVictory, roomSet]
   );
 
   // Equipar reliquia elegida en el Santuario
@@ -5739,7 +5756,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
             if (g.tilemap) {
-              g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, g.tilemap);
+              g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, g.tilemap, campaignRoute?.run);
             } else {
               g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
             }
@@ -14306,7 +14323,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         <div className="retro-box-stone px-2.5 py-1 text-xs font-bold text-slate-200 flex items-center gap-2">
           <Compass className="w-3.5 h-3.5 text-cyan-400" />
           <span className="font-pixel-title text-[8px]">
-            Sala {currentRoomIndex + 1}/{roomSet.length}
+            {campaignRoute
+              ? `${campaignRoute.run.modifier.name} · ruta ${campaignRoute.seedLabel}`
+              : `Sala ${currentRoomIndex + 1}/${roomSet.length}`}
           </span>
         </div>
 

@@ -6,7 +6,9 @@ export const BIOMES: BiomeDefinition[] = [
   {
     id: 'deepwood', name: 'Bosque Profundo', chapter: 1,
     palette: { sky: '#10263a', ground: '#263d35', accent: '#65d477' }, musicMood: 'exploration',
-    recommendedElements: ['fire', 'earth'], bossId: 'root_guardian',
+    recommendedElements: ['fire', 'earth'],
+    allowedEnemies: ['golem', 'stalker', 'lurker', 'elite_stalker'],
+    bossId: 'root_guardian',
     modifiers: [
       { id: 'moon_blessing', name: 'Bendición lunar', kind: 'blessing', description: 'Los corazones curan un poco más.', color: '#a78bfa', allowedRooms: ['rest', 'treasure'] },
       { id: 'living_roots', name: 'Raíces vivientes', kind: 'hazard', description: 'El suelo atrapa a los imprudentes.', color: '#84cc16', allowedRooms: ['combat', 'ambush'] },

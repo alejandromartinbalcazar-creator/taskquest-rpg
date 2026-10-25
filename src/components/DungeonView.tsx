@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Player, DungeonFloor } from '../types';
 import { LandscapeCombatView } from '../game/elementalEngine/LandscapeCombatView';
+import { createLevel1CampaignRoute, getRouteSummary } from '../game/expedition/campaignRoute';
 import { Castle, Sword, Key, AlertTriangle, Lock, GraduationCap } from 'lucide-react';
 
 interface DungeonViewProps {
@@ -21,6 +22,8 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   onTutorialFinished,
 }) => {
   const [activeFloor, setActiveFloor] = useState<DungeonFloor | null>(null);
+  // Se crea una única ruta persistente; la misma semilla permite reproducirla al volver a entrar.
+  const [level1Route] = useState(() => createLevel1CampaignRoute());
 
   const handleStartFloor = (floor: DungeonFloor) => {
     if (player.currentHp <= 0) {
@@ -37,7 +40,12 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   };
 
   const handleExitDungeon = () => {
-    if (activeFloor?.floorNumber === 0) onTutorialFinished();
+    if (activeFloor?.floorNumber === 0) {
+      onTutorialFinished();
+      // El portal del tutorial lleva de inmediato a la primera expedición real.
+      setActiveFloor(dungeons.find((floor) => floor.floorNumber === 1) ?? null);
+      return;
+    }
     setActiveFloor(null);
   };
   const tutorialFloor: DungeonFloor = {
@@ -61,6 +69,7 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         onVictory={onBattleVictory}
         onPlayerTakeDamage={onTakeBattleDamage}
         isTutorial={activeFloor.floorNumber === 0}
+        campaignRoute={activeFloor.floorNumber === 1 ? level1Route : undefined}
       />
     );
   }
@@ -141,6 +150,11 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
                     <h4 className="font-pixel-title text-[9px] text-stone-100">{title}</h4>
                   </div>
                   <p className="font-pixel-text text-sm text-stone-300 mt-0.5">{description}</p>
+                  {level === 1 && (
+                    <p className="font-pixel-text text-xs text-emerald-300 mt-1">
+                      {getRouteSummary(level1Route.run)} · Ruta {level1Route.seedLabel}
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -16,12 +16,19 @@ function weightedPick<T extends { weight: number }>(items: T[], random: () => nu
   return items[items.length - 1];
 }
 
-export function generateExpedition(biomeId: string, seed = Date.now()): ExpeditionRun {
+export function generateExpedition(biomeId: string, seed = Date.now(), roomsPerRun = 5): ExpeditionRun {
   const biome = getBiome(biomeId);
   if (!biome) throw new Error(`Bioma desconocido: ${biomeId}`);
   const random = seededRandom(seed);
   const rooms: RoomTemplate[] = [{ id: 'entrance', kind: 'entrance', title: biome.name, weight: 1, reward: { gold: [0, 0], essence: [0, 0], heartChance: 0, chestChance: 0 }, visualCue: 'Portal de entrada' }];
-  for (let i = 0; i < 5; i += 1) rooms.push(weightedPick(biome.roomTemplates, random));
+  for (let i = 0; i < roomsPerRun; i += 1) {
+    const room = weightedPick(biome.roomTemplates, random);
+    // Protege la campaña de configuraciones de contenido incompatibles al añadir biomas nuevos.
+    if (room.enemyPool?.some((enemyId) => !biome.allowedEnemies.includes(enemyId))) {
+      throw new Error(`La plantilla ${room.id} contiene un enemigo no permitido para ${biome.id}`);
+    }
+    rooms.push(room);
+  }
   rooms.push({ id: `${biome.id}_boss`, kind: 'boss', title: 'Guardián del capítulo', weight: 1, enemyPool: [biome.bossId], reward: { gold: [80, 120], essence: [12, 18], heartChance: 1, chestChance: 1 }, visualCue: 'Arena del jefe' });
   return { seed, biomeId, modifier: biome.modifiers[Math.floor(random() * biome.modifiers.length)], rooms };
 }
