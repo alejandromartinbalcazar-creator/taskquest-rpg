@@ -1159,6 +1159,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (target) {
           targetAngle = target.angle;
           wizard.channeledStream.lockedEnemyId = target.id;
+        } else {
+          // En el almacén del tutorial las vasijas también son objetivos: el chorro
+          // debe girar hacia ellas sin que el jugador tenga que arrastrar la mira.
+          const vessel = g.terrainManager.obstacles
+            .filter((obs) => obs.obstacleType === 'vessel' && obs.hp > 0)
+            .sort((a, b) => Math.hypot(a.x - wizard.x, a.y - wizard.y) - Math.hypot(b.x - wizard.x, b.y - wizard.y))[0];
+          if (vessel && Math.hypot(vessel.x - wizard.x, vessel.y - wizard.y) <= range + vessel.radius) {
+            targetAngle = Math.atan2(vessel.y - wizard.y, vessel.x - wizard.x);
+          }
         }
       }
 
@@ -1675,7 +1684,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const vessel = g.terrainManager.obstacles
           .filter((obs) => obs.obstacleType === 'vessel' && obs.hp > 0 && Math.hypot(obs.x - wizard.x, obs.y - wizard.y) < 460)
           .sort((a, b) => Math.hypot(a.x - wizard.x, a.y - wizard.y) - Math.hypot(b.x - wizard.x, b.y - wizard.y))[0];
-        if (vessel) { targetX = vessel.x; targetY = vessel.y; aimAngle = Math.atan2(targetY - wizard.y, targetX - wizard.x); }
+        if (vessel) {
+          // Usa las mismas coordenadas de objetivo que un enemigo. Esto cubre tanto
+          // proyectiles como hechizos de zona, rayos y habilidades cargadas.
+          closestDist = Math.hypot(vessel.x - wizard.x, vessel.y - wizard.y);
+          targetX = vessel.x;
+          targetY = vessel.y;
+          aimAngle = Math.atan2(targetY - wizard.y, targetX - wizard.x);
+        }
       }
       wizard.facingAngle = aimAngle;
       wizard.staffOrbColor = recipe.color;
