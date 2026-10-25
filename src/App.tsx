@@ -48,8 +48,13 @@ export function App() {
     const handleWidgetUrl = (url: string) => {
       if (!url.startsWith('com.taskquest.rpg://widget')) return;
       setCurrentTab('tasks');
-      if (new URL(url).searchParams.get('action') === 'add-task') {
+      const params = new URL(url).searchParams;
+      if (params.get('action') === 'add-task') {
         window.setTimeout(() => window.dispatchEvent(new Event('focusmission:new-task')), 100);
+      }
+      if (params.get('action') === 'edit-task' && params.get('taskId')) {
+        const taskId = params.get('taskId')!;
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent('focusmission:edit-task', { detail: { taskId } })), 100);
       }
     };
     void CapacitorApp.getLaunchUrl().then((launch) => launch?.url && handleWidgetUrl(launch.url));
@@ -291,6 +296,10 @@ export function App() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   };
 
+  const handleUpdateTask = (taskId: string, updates: Omit<Task, 'id' | 'completed'>) => {
+    setTasks((prev) => prev.map((task) => task.id === taskId ? { ...task, ...updates } : task));
+  };
+
 
   // Victoria en Mazmorra
   const handleBattleVictory = (floorNumber: number, expReward: number, goldReward: number) => {
@@ -440,6 +449,7 @@ export function App() {
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}
             onDeleteTask={handleDeleteTask}
+            onUpdateTask={handleUpdateTask}
             onFailTask={handleFailTask}
             onRedeemHonorDebt={handleRedeemHonorDebt}
           />

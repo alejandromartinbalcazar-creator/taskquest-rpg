@@ -25,6 +25,7 @@ interface TaskViewProps {
   onCompleteTask: (taskId: string) => void;
   onAddTask: (newTask: Omit<Task, 'id' | 'completed'>) => void;
   onDeleteTask?: (taskId: string) => void;
+  onUpdateTask?: (taskId: string, updates: Omit<Task, 'id' | 'completed'>) => void;
   onFailTask?: (taskId: string) => void;
   onRedeemHonorDebt?: (taskId: string) => void;
 }
@@ -39,11 +40,13 @@ export const TaskView: React.FC<TaskViewProps> = ({
   onCompleteTask,
   onAddTask,
   onDeleteTask,
+  onUpdateTask,
   onFailTask,
   onRedeemHonorDebt,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [taskToFail, setTaskToFail] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Formulario de nueva misión
@@ -69,6 +72,18 @@ export const TaskView: React.FC<TaskViewProps> = ({
   useEffect(() => {
     if (showAddModal) titleInputRef.current?.focus();
   }, [showAddModal]);
+
+  const openEditor = (task: Task) => {
+    setEditingTask(task); setNewTitle(task.title); setNewDescription(task.description || '');
+    setNewStatAffinity(task.statAffinity); setNewDifficulty(task.difficulty); setNewDueDate(toLocalDateTimeValue(new Date(task.dueDate)));
+    setNewReminderType(task.reminderType || 'none'); setNewCustomReminderMinutes(task.reminderCustomMinutes || 30);
+    setNewRecurrence(task.recurrence || 'none'); setSelectedDays(task.recurrenceDays || []); setShowAddModal(true);
+  };
+  useEffect(() => {
+    const fromWidget = (event: Event) => { const id = (event as CustomEvent<{ taskId: string }>).detail?.taskId; const task = tasks.find((item) => item.id === id); if (task) openEditor(task); };
+    window.addEventListener('focusmission:edit-task', fromWidget);
+    return () => window.removeEventListener('focusmission:edit-task', fromWidget);
+  }, [tasks]);
 
   useEffect(() => {
     const openFromWidget = () => setShowAddModal(true);
@@ -116,7 +131,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       goldReward = 100;
     }
 
-    onAddTask({
+    const taskPayload = {
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
       statAffinity: newStatAffinity,
@@ -129,7 +144,9 @@ export const TaskView: React.FC<TaskViewProps> = ({
       recurrence: newRecurrence,
       recurrenceDays: newRecurrence === 'custom_days' ? selectedDays : undefined,
       penalizedCount: 0,
-    });
+    };
+    if (editingTask && onUpdateTask) onUpdateTask(editingTask.id, taskPayload);
+    else onAddTask(taskPayload);
 
     setNewTitle('');
     setNewDescription('');
@@ -137,6 +154,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
     setNewReminderType('none');
     setSelectedDays([]);
     setShowAddModal(false);
+    setEditingTask(null);
   };
 
   // Ordenar tareas por vencimiento más próximo
@@ -274,7 +292,8 @@ export const TaskView: React.FC<TaskViewProps> = ({
             return (
               <div
                 key={task.id}
-                className={`${cardClass} p-3 flex flex-col justify-between gap-2 task-card-soft`}
+                onClick={() => openEditor(task)}
+                className={`${cardClass} p-4 flex flex-col justify-between gap-2 task-card-soft cursor-pointer`}
               >
                 {/* Banner interno de Deuda de Honor */}
                 {isHonorDebt && (
@@ -359,7 +378,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                     {onDeleteTask && !isHonorDebt && (
                       <button
-                        onClick={() => onDeleteTask(task.id)}
+                        onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); }}
                         className="retro-btn-stone p-1.5 text-stone-300 hover:text-red-400"
                         title="Eliminar Misión"
                       >
@@ -371,7 +390,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                     {onFailTask && !isHonorDebt && !task.isFailed && (
                       <button
                         type="button"
-                        onClick={() => setTaskToFail(task)}
+                        onClick={(e) => { e.stopPropagation(); setTaskToFail(task); }}
                         className="retro-btn-danger px-2 py-1 flex items-center gap-1 text-[8px]"
                         title="Declarar tarea fallida y asumir el deleveling"
                       >
@@ -383,7 +402,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                     {/* Botón de Saldar Deuda de Honor vs Completar Estándar */}
                     {onRedeemHonorDebt && isHonorDebt ? (
                       <button
-                        onClick={() => onRedeemHonorDebt(task.id)}
+                        onClick={(e) => { e.stopPropagation(); onRedeemHonorDebt(task.id); }}
                         className="retro-btn-gold px-3 py-1.5 flex items-center gap-1 text-[9px]"
                       >
                         <Scale className="w-3.5 h-3.5" />
@@ -391,7 +410,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                       </button>
                     ) : (
                       <button
-                        onClick={() => onCompleteTask(task.id)}
+                        onClick={(e) => { e.stopPropagation(); onCompleteTask(task.id); }}
                         className="retro-btn-emerald min-h-10 px-3 py-1.5 flex items-center gap-1.5 text-[9px]"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -435,7 +454,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
           <div className="retro-box-stone p-4 sm:p-5 max-w-md w-full relative max-h-[92dvh] overflow-y-auto">
             <button
-              onClick={() => setShowAddModal(false)}
+              onClick={() => { setShowAddModal(false); setEditingTask(null); }}
               className="absolute top-3 right-3 text-stone-400 hover:text-white"
             >
               <X className="w-5 h-5" />
@@ -443,10 +462,10 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
             <h3 className="font-pixel-title text-xs text-amber-400 mb-1 flex items-center gap-2">
               <Plus className="w-4 h-4 text-amber-400" />
-              Nueva Misión
+              {editingTask ? 'Editar misión' : 'Nueva Misión'}
             </h3>
             <p className="font-pixel-text text-base text-stone-300 mb-4 leading-relaxed">
-              Escribe tu misión y elige cuándo hacerla. Los detalles adicionales son opcionales.
+              {editingTask ? 'Actualiza los detalles de tu misión.' : 'Escribe tu misión y elige cuándo hacerla. Los detalles adicionales son opcionales.'}
             </p>
 
             <form onSubmit={handleCreateTask} className="space-y-3">
@@ -682,7 +701,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
                   type="submit"
                   className="flex-1 py-2 retro-btn-gold"
                 >
-                  Guardar Misión
+                  {editingTask ? 'Guardar cambios' : 'Guardar Misión'}
                 </button>
               </div>
             </form>
