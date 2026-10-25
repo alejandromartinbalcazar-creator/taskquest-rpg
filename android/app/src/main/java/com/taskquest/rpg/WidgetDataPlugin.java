@@ -6,8 +6,8 @@ import android.content.ComponentName;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.PluginMethod;
 
 /** Puente pequeño: el widget nativo no puede leer directamente localStorage del WebView. */
 @CapacitorPlugin(name = "WidgetData")
