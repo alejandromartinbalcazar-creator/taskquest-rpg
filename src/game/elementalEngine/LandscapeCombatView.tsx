@@ -603,6 +603,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Progresión de salas conectadas
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const currentRoom = DUNGEON_ROOMS[currentRoomIndex];
   const [roomBanner, setRoomBanner] = useState<string | null>(DUNGEON_ROOMS[0].title);
 
@@ -14089,6 +14090,25 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-[#040509] flex flex-col items-center justify-center select-none overflow-hidden touch-none font-sans">
+      {isTutorial && tutorialStep < 5 && (
+        <div className="absolute inset-x-0 bottom-0 z-[70] flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-auto">
+          <div className="w-full max-w-xl border-2 border-amber-300 bg-[#10142d]/95 p-4 shadow-[4px_4px_0_#000]">
+            <p className="font-pixel-title text-[9px] text-amber-300">{['BIENVENIDO, MAGO', 'MOVIMIENTO', 'ATAQUE BÁSICO', 'MAGIA ELEMENTAL', 'TU PRIMERA MISIÓN'][tutorialStep]}</p>
+            <p className="mt-2 font-pixel-text text-xl leading-tight text-slate-100">
+              {[
+                'Explora con calma. Puedes omitir esta guía cuando quieras.',
+                'Usa el joystick izquierdo o toca el suelo para mover al mago.',
+                'El proyectil verde es tu ataque básico: empuja a los enemigos sin gastar elementos.',
+                'Combina esferas para lanzar hechizos. El fuego hace más daño a criaturas de hielo.',
+                'Derrota enemigos y busca la salida. Las misiones reales te abrirán niveles nuevos.',
+              ][tutorialStep]}
+            </p>
+            <button onClick={() => setTutorialStep((step) => step + 1)} className="retro-btn-gold mt-3 w-full py-3 text-[9px]">
+              {tutorialStep === 4 ? '¡COMENZAR!' : 'ENTENDIDO'}
+            </button>
+          </div>
+        </div>
+      )}
       {/* Banner de entrada a la sala */}
       {roomBanner && (
         <div className="absolute top-12 z-50 bg-gradient-to-r from-amber-600/90 via-purple-600/90 to-amber-600/90 text-white px-6 py-2 rounded-2xl shadow-2xl border border-amber-300/40 backdrop-blur-md animate-pulse text-center">
