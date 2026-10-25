@@ -515,11 +515,38 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
   } else if (run?.modifier.id === 'living_roots') {
     enemies.forEach((enemy) => { if (enemy.archetype !== 'boss') enemy.attackPower = Math.max(1, Math.round(enemy.attackPower * 0.92)); });
   }
+  if (run) {
+    enemies.forEach((enemy) => { enemy.isRevealed = false; });
+  }
   return enemies;
 }
 
 function getLevel1Layout(run?: ExpeditionRun): string[] {
   return run ? assembleLevel1CampaignMap(run.rooms) : LEVEL_1_LAYOUT;
+}
+
+function revealTilesWithTorch(
+  tilemap: Tilemap,
+  wizard: { x: number; y: number },
+  exploredTiles: Set<string>,
+  enemies: GameEnemy[]
+): void {
+  const centerCol = Math.floor(wizard.x / 64);
+  const centerRow = Math.floor(wizard.y / 64);
+  const revealRadius = 4.35;
+  for (let row = centerRow - 5; row <= centerRow + 5; row++) {
+    for (let col = centerCol - 5; col <= centerCol + 5; col++) {
+      if (col < 0 || row < 0 || col >= tilemap.cols || row >= tilemap.rows) continue;
+      if (Math.hypot(col - centerCol, row - centerRow) <= revealRadius) exploredTiles.add(`${col}:${row}`);
+    }
+  }
+
+  // Despertar solamente enemigos que entren en el halo de luz, nunca por proximidad a través de la niebla.
+  for (const enemy of enemies) {
+    if (enemy.isRevealed === false && Math.hypot(enemy.x - wizard.x, enemy.y - wizard.y) <= 285) {
+      enemy.isRevealed = true;
+    }
+  }
 }
 
 export interface CombatTargetInfo {
@@ -888,6 +915,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     lastCheckpointId: 'checkpoint-0-camp',
     forestLevel: null as ForestLevelData | null,
     tilemap: null as Tilemap | null,
+    // Celdas vistas por la antorcha. Se conservan durante toda la expedición actual.
+    exploredTiles: new Set<string>(),
   });
 
   // Chequeo de orientación
@@ -985,6 +1014,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.camera.y = spawnY;
     g.cameraSystem.reset(spawnX, spawnY);
     g.terrainManager.obstacles = [];
+    g.exploredTiles.clear();
 
     // Generar patrullas del Bestiario y jefe a lo largo de las celdas del Tilemap
     g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
@@ -1318,6 +1348,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.camera.y = ry;
         g.cameraSystem.reset(rx, ry);
         g.terrainManager.obstacles = [];
+        g.exploredTiles.clear();
         g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
       } else {
@@ -7675,7 +7706,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
-      // 3. Actualizar IA de Enemigos
+      // 3. La antorcha revela de forma permanente el sendero antes de que la IA pueda reaccionar.
+      if (g.tilemap && campaignRoute) {
+        revealTilesWithTorch(g.tilemap, wizard, g.exploredTiles, enemies);
+      }
+
+      // 4. Actualizar IA de Enemigos
       g.enemyManager.update(
         wizard,
         g.projectiles,
@@ -14207,6 +14243,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.elementalCataclysms,
             g.forestLevel ?? undefined,
             g.tilemap ?? undefined,
+            campaignRoute ? g.exploredTiles : undefined,
             g.magmaTrenches,
             g.solarFusionBeams,
             g.glacialAvalanches,

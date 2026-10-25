@@ -160,6 +160,7 @@ export class IsometricRenderer {
     elementalCataclysms: ElementalCataclysmEntity[] = [],
     forestLevel?: ForestLevelData,
     tilemap?: Tilemap,
+    exploredTiles?: ReadonlySet<string>,
     magmaTrenches: MagmaTrenchEntity[] = [],
     solarFusionBeams: SolarFusionBeamEntity[] = [],
     glacialAvalanches: GlacialAvalancheEntity[] = [],
@@ -876,6 +877,12 @@ export class IsometricRenderer {
       this.drawAmbientLeaves(ctx, frustum, forestLevel.ambientLeaves);
     }
 
+    // Niebla de guerra sobre todo lo no explorado: bloques opacos de borde escalonado.
+    // Se dibuja al final de la escena para ocultar también enemigos y objetos a distancia.
+    if (tilemap && exploredTiles) {
+      this.drawFogOfWar(ctx, tilemap, frustum, exploredTiles);
+    }
+
     // El pilar se dibuja sobre la escena y las copas para que no quede oculto en el bosque.
     this.drawThundergodJudgmentBeam(ctx, thundergodJudgments);
 
@@ -896,6 +903,37 @@ export class IsometricRenderer {
     }
 
     ctx.restore(); // Fin de screen shake
+  }
+
+  private static drawFogOfWar(
+    ctx: CanvasRenderingContext2D,
+    tilemap: Tilemap,
+    frustum: FrustumBounds,
+    exploredTiles: ReadonlySet<string>
+  ): void {
+    const tileSize = 64;
+    const minCol = Math.max(0, Math.floor(frustum.left / tileSize) - 1);
+    const maxCol = Math.min(tilemap.cols - 1, Math.ceil(frustum.right / tileSize) + 1);
+    const minRow = Math.max(0, Math.floor(frustum.top / tileSize) - 1);
+    const maxRow = Math.min(tilemap.rows - 1, Math.ceil(frustum.bottom / tileSize) + 1);
+
+    ctx.save();
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        if (exploredTiles.has(`${col}:${row}`)) continue;
+        const x = col * tileSize;
+        const y = row * tileSize;
+        ctx.fillStyle = '#05070b';
+        ctx.fillRect(x, y, tileSize, tileSize);
+        // Escalones morados mínimos en el borde: retro 16 bits, sin degradados costosos.
+        const leftSeen = exploredTiles.has(`${col - 1}:${row}`);
+        const topSeen = exploredTiles.has(`${col}:${row - 1}`);
+        ctx.fillStyle = '#121827';
+        if (leftSeen) { ctx.fillRect(x, y + 8, 5, 48); ctx.fillRect(x + 5, y + 16, 3, 32); }
+        if (topSeen) { ctx.fillRect(x + 8, y, 48, 5); ctx.fillRect(x + 16, y + 5, 32, 3); }
+      }
+    }
+    ctx.restore();
   }
 
   /**

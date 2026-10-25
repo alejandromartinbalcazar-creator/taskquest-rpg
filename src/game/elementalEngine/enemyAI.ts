@@ -249,6 +249,15 @@ export class EnemyManager {
 
       if (e.hitFlash > 0) e.hitFlash--;
 
+      // La niebla no es solo visual: hasta que la luz del mago lo revele,
+      // el enemigo permanece inmóvil, no telegrafía ni puede atacar.
+      if (e.isRevealed === false) {
+        e.vx = 0;
+        e.vy = 0;
+        e.isTelegraphing = false;
+        continue;
+      }
+
       // 0. Dormant Culling en el sendero modular largo:
       // Monstruos a más de 18 celdas (~1150px) permanecen inactivos para no saturar la CPU a 60 FPS
       const distToPlayer = Math.hypot(wizard.x - e.x, wizard.y - e.y);

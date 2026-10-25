@@ -374,6 +374,10 @@ export interface GameEnemy {
   facingAngle?: number;
   phase?: number;
   hitFlash: number;
+  /** En rutas con niebla de guerra el enemigo no existe para la IA hasta ver la antorcha. */
+  isRevealed?: boolean;
+  /** Tramo de expedición al que pertenece; permite cerrar/desbloquear arenas por guardia. */
+  arenaIndex?: number;
   // Mecánicas especiales del Gólem de Escoria (Pyre Golem)
   cooledDownTimer?: number;    // Magma enfriado por Hielo (3s) -> grietas grises/ceniza, -50% vel, Tierra hace crítico contundente
   frenzyTimer?: number;        // Frenesí al recibir Fuego -> aumento temporal de velocidad
