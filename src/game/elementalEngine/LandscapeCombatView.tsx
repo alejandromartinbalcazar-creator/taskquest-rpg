@@ -603,7 +603,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Progresión de salas conectadas
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
-  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialStep, setTutorialStep] = useState(isTutorial ? 1 : 5);
+  const tutorialStartRef = useRef<{ x: number; y: number } | null>(null);
   const currentRoom = DUNGEON_ROOMS[currentRoomIndex];
   const [roomBanner, setRoomBanner] = useState<string | null>(DUNGEON_ROOMS[0].title);
 
@@ -660,6 +661,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const activeRecipe = identifyRecipe(elementQueue);
   const activeRecipeRef = useRef(activeRecipe);
   activeRecipeRef.current = activeRecipe;
+
+  useEffect(() => {
+    if (!isTutorial) return;
+    const timer = window.setInterval(() => {
+      const wizard = gameStateRef.current.wizard;
+      if (!tutorialStartRef.current) tutorialStartRef.current = { x: wizard.x, y: wizard.y };
+      const start = tutorialStartRef.current;
+      if (tutorialStep === 1 && Math.hypot(wizard.x - start.x, wizard.y - start.y) > 45) setTutorialStep(2);
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [isTutorial, tutorialStep]);
 
   // Optimización móvil: Cache del contexto 2D y Object Pools de memoria fija (Cero GC Stutter)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -1329,6 +1341,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const now = Date.now();
       const g = gameStateRef.current;
       const rawRecipe = activeRecipe;
+      if (isTutorial) {
+        if (tutorialStep === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
+        else if (tutorialStep === 3 && rawRecipe.elements.length > 0) setTutorialStep(4);
+      }
 
       // Cooldown individual por receta/hechizo con reducción por nivel (solo Cataclismo de 4 elementos tiene cooldown)
       const lastCast = g.recipeCooldowns[rawRecipe.id] || 0;
@@ -14103,9 +14119,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 'Derrota enemigos y busca la salida. Las misiones reales te abrirán niveles nuevos.',
               ][tutorialStep]}
             </p>
-            <button onClick={() => setTutorialStep((step) => step + 1)} className="retro-btn-gold mt-3 w-full py-3 text-[9px]">
-              {tutorialStep === 4 ? '¡COMENZAR!' : 'ENTENDIDO'}
-            </button>
           </div>
         </div>
       )}
