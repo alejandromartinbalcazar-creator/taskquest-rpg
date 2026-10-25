@@ -93,6 +93,7 @@ import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
+import { setDungeonFullscreen } from '../../services/androidFullscreen';
 import { haptics } from '../../services/haptics';
 import { CameraSystem } from './Camera';
 import {
@@ -575,6 +576,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   onVictory,
   onPlayerTakeDamage,
 }) => {
+  // En Android la mazmorra usa toda la pantalla; un deslizamiento desde el borde muestra los controles del sistema temporalmente.
+  useEffect(() => {
+    void setDungeonFullscreen(true);
+    return () => { void setDungeonFullscreen(false); };
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const onPlayerTakeDamageRef = useRef(onPlayerTakeDamage);
