@@ -26,17 +26,48 @@
   }
 }
 
-/* Ajustes del panel de misiones en móviles horizontales de poca altura. */
-.home-hero-avatar canvas {
-  width: 90px;
-  height: 90px;
+/* Home vertical: aventura pixel art nocturna, con una jerarquía limpia para las misiones. */
+.fantasy-home-header {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 75% 18%, rgba(219, 234, 254, 0.8) 0 18px, transparent 19px),
+    linear-gradient(145deg, #171353 0%, #25216a 42%, #101a4c 100%);
 }
 
-/* Home ligero: paneles suaves, bordes limpios y acentos pastel sin ruido visual. */
+.fantasy-home-header::after {
+  content: '♜  ♜';
+  position: absolute;
+  right: 4%;
+  bottom: -14px;
+  color: rgba(132, 121, 255, 0.35);
+  font-size: 94px;
+  letter-spacing: 8px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.fantasy-home-header > div {
+  position: relative;
+  z-index: 1;
+}
+
+.wizard-mark {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #c4b5fd;
+  background: #1e1b4b;
+  box-shadow: 3px 3px 0 #100b2e;
+  font-size: 25px;
+}
+
 .cute-panel {
-  background: #171b31;
-  border: 2px solid #545b82;
-  box-shadow: 3px 3px 0 #090a10;
+  background: #111735;
+  border: 2px solid #5856a8;
+  box-shadow: 3px 3px 0 #07091a;
 }
 
 .cute-primary-button {
@@ -51,20 +82,9 @@
 }
 
 .task-card-soft {
-  border-color: #303752;
-  outline-color: #5d668f;
-  box-shadow: 3px 3px 0 #090a10;
-}
-
-@media (orientation: landscape) and (max-height: 400px) {
-  .home-hero-avatar canvas {
-    width: 48px;
-    height: 48px;
-  }
-
-  .home-mission-subtitle {
-    display: none;
-  }
+  border-color: #393f83;
+  outline-color: #6569b8;
+  box-shadow: 3px 3px 0 #07091a;
 }
 
 /* 16-Bit Pixel Art Rendering Engine */

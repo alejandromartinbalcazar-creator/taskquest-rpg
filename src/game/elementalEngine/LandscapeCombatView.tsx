@@ -848,6 +848,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     return () => {
       window.removeEventListener('resize', checkOrientation);
+      try {
+        const orientation = screen.orientation as unknown as { lock?: (type: string) => Promise<void> };
+        void orientation?.lock?.('portrait').catch(() => {});
+      } catch {
+        // Ignorar si el navegador no expone el bloqueo de orientación.
+      }
     };
   }, []);
 

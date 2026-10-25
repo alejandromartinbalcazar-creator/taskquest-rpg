@@ -32,11 +32,11 @@ export function App() {
   const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
 
-  // La app instalada solicita horizontal al abrirse; Android también lo fija en su Activity.
+  // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
   useEffect(() => {
     try {
       const orientation = window.screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> };
-      void orientation.lock?.('landscape').catch(() => {});
+      void orientation.lock?.('portrait').catch(() => {});
     } catch {
       // Algunos navegadores solo permiten bloquear orientación en modo instalado o pantalla completa.
     }
@@ -346,23 +346,11 @@ export function App() {
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
   return (
-    <div className="h-screen h-dvh min-h-dvh w-full overflow-hidden bg-[#090a10] text-slate-100 font-sans selection:bg-purple-600 selection:text-white flex flex-col landscape:flex-row landscape:gap-2 landscape:p-2 landscape:pl-[env(safe-area-inset-left,8px)] landscape:pr-[env(safe-area-inset-right,8px)]">
-      <div className="contents landscape:flex landscape:w-[31%] landscape:max-w-[300px] landscape:shrink-0 landscape:min-h-0 landscape:flex-col landscape:justify-between landscape:border-r-2 landscape:border-[#27272a] landscape:pr-2">
-        {/* Recursos y navegación quedan en el panel izquierdo en horizontal. */}
-        <HeroHeader
-          player={player}
-          tasks={tasks}
-          onOpenApkModal={() => setIsApkModalOpen(true)}
-          onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
-          onOpenProgressModal={() => setIsProgressModalOpen(true)}
-          isDamagedAnimation={isDamagedAnimation}
-        />
-        <Navbar
-          currentTab={currentTab}
-          onSelectTab={setCurrentTab}
-          pendingTasksCount={pendingTasksCount}
-        />
-      </div>
+    <div className="min-h-screen min-h-dvh w-full bg-[#080b20] text-slate-100 font-sans selection:bg-violet-600 selection:text-white">
+      <HeroHeader
+        player={player}
+        onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+      />
 
       {/* Alerta Ceremonial de Subida de Nivel */}
       {levelUpToast && (
@@ -418,10 +406,9 @@ export function App() {
       )}
 
       {/* Vistas Principales */}
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain landscape:min-w-0 landscape:overflow-x-hidden">
+      <main className="pb-24">
         {currentTab === 'tasks' && (
           <TaskView
-            player={player}
             tasks={tasks}
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}
@@ -455,6 +442,12 @@ export function App() {
           />
         )}
       </main>
+
+      <Navbar
+        currentTab={currentTab}
+        onSelectTab={setCurrentTab}
+        pendingTasksCount={pendingTasksCount}
+      />
 
       {/* Modal para Obtener APK y Modo PWA para Android */}
       <ApkExportModal

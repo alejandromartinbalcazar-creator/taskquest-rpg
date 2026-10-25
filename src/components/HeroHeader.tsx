@@ -1,70 +1,28 @@
 import React from 'react';
-import { Player, Task } from '../types';
-import { Coins, Key, Volume2, VolumeX, AlertTriangle, Download, Skull, ShieldAlert, Trophy } from 'lucide-react';
+import { Coins, Volume2, VolumeX } from 'lucide-react';
+import { Player } from '../types';
 import { sound } from '../services/soundService';
 
 interface HeroHeaderProps {
   player: Player;
-  tasks: Task[];
-  onOpenApkModal: () => void;
   onOpenChangelogModal?: () => void;
-  onOpenProgressModal?: () => void;
-  isDamagedAnimation: boolean;
 }
 
-export const HeroHeader: React.FC<HeroHeaderProps> = ({
-  player,
-  tasks,
-  onOpenApkModal,
-  onOpenChangelogModal,
-  onOpenProgressModal,
-  isDamagedAnimation,
-}) => {
+export const HeroHeader: React.FC<HeroHeaderProps> = ({ player, onOpenChangelogModal }) => {
   const [soundOn, setSoundOn] = React.useState(sound.isEnabled());
-  const [now, setNow] = React.useState(() => Date.now());
-
-  // Contador de toques secretos para abrir Changelog
   const tapCountRef = React.useRef(0);
   const lastTapTimeRef = React.useRef(0);
+  const expPercent = Math.max(0, Math.min(100, (player.exp / Math.max(1, player.maxExp)) * 100));
 
   const handleLogoTap = () => {
-    const nowTap = Date.now();
-    if (nowTap - lastTapTimeRef.current < 600) {
-      tapCountRef.current += 1;
-    } else {
-      tapCountRef.current = 1;
-    }
-    lastTapTimeRef.current = nowTap;
-
+    const now = Date.now();
+    tapCountRef.current = now - lastTapTimeRef.current < 600 ? tapCountRef.current + 1 : 1;
+    lastTapTimeRef.current = now;
     if (tapCountRef.current >= 5) {
       tapCountRef.current = 0;
-      sound.playMicroStepDing();
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate([40, 30, 40]);
-      }
       onOpenChangelogModal?.();
     }
   };
-
-  React.useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 10000);
-    return () => clearInterval(timer);
-  }, []);
-  const overdueCount = tasks.filter(
-    (t) => !t.completed && !t.isFailed && new Date(t.dueDate).getTime() < now
-  ).length;
-
-  const urgentTasks = tasks.filter(
-    (t) =>
-      !t.completed &&
-      !t.isFailed &&
-      !t.isHonorDebt &&
-      new Date(t.dueDate).getTime() > now &&
-      new Date(t.dueDate).getTime() - now <= 4 * 3600 * 1000
-  );
-
-  const isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > now));
-  const isAgony = !!player.isAgony;
 
   const toggleSound = () => {
     const next = !soundOn;
@@ -73,96 +31,37 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b-2 border-violet-950 bg-[#111426] px-3 py-2 shadow-[0_3px_0_0_#080914] landscape:static landscape:z-auto landscape:min-h-0 landscape:flex-1 landscape:overflow-y-auto landscape:border-b-0 landscape:px-2 landscape:py-2 landscape:shadow-none">
-      <div className="max-w-xl mx-auto flex flex-col gap-1.5 landscape:max-w-none landscape:gap-2">
-        {/* Fila Principal: Título, Recursos y Controles */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleLogoTap}
-              className="font-pixel-title text-[10px] font-black text-violet-200 tracking-wider flex items-center gap-1.5 focus:outline-none select-none active:translate-x-[1px] active:translate-y-[1px] transition-transform"
-              title="FocusMission (5 toques para Dev Changelog)"
-            >
-              ✦ FOCUSMISSION
-            </button>
-            {isAgony && (
-              <span className="retro-badge bg-red-950 text-red-300 border-red-500 animate-pulse flex items-center gap-1">
-                <ShieldAlert className="w-2.5 h-2.5 text-red-400" />
-                Agonía
-              </span>
-            )}
-            {isCursed && (
-              <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500 flex items-center gap-1">
-                <Skull className="w-2.5 h-2.5 text-purple-400" />
-                -15% EXP
-              </span>
-            )}
-            {/* Botón de Progreso & Hitos */}
-            <button
-              type="button"
-              onClick={onOpenProgressModal}
-              className="border border-violet-400/60 bg-violet-950/40 flex items-center gap-1 px-2 py-1 text-[8px] font-bold text-violet-100"
-              title="Ver hitos y progreso"
-            >
-              <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
-              <span>Nv.{player.level}</span>
-              <span className="text-amber-300 font-pixel-title text-[7px]">✦{player.cleanStreakDays || 0}d</span>
-            </button>
-          </div>
+    <header className="fantasy-home-header px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 text-white">
+      <div className="mx-auto max-w-xl">
+        <div className="flex items-start justify-between gap-3">
+          <button type="button" onClick={handleLogoTap} className="flex min-w-0 items-center gap-2 text-left" title="FocusMission">
+            <span className="wizard-mark" aria-hidden="true">🧙</span>
+            <span className="min-w-0">
+              <span className="block font-pixel-title text-base leading-tight text-amber-300 drop-shadow-[2px_2px_0_#3b1b5d]">FOCUSMISSION</span>
+              <span className="mt-1 block font-pixel-text text-base leading-none text-violet-200">Pequeños pasos, grandes logros</span>
+            </span>
+          </button>
 
-          <div className="flex items-center gap-1.5">
-            {/* Recursos: Oro y Llaves */}
-            <div className="flex items-center gap-1.5 bg-[#171a26] px-2 py-1 border border-slate-600 text-xs font-pixel-title">
-              <Coins className="w-3 h-3 text-amber-300" />
-              <span className="font-bold text-amber-200 text-[9px]">{player.gold}</span>
-              <span className="text-stone-600">|</span>
-              <Key className="w-3 h-3 text-cyan-400" />
-              <span className="font-bold text-cyan-300 text-[9px]">{player.dungeonKeys}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-1 border-2 border-amber-500/70 bg-[#101633]/90 px-2 py-1.5 shadow-[2px_2px_0_#071025]">
+              <Coins className="h-4 w-4 text-amber-300" />
+              <span className="font-pixel-title text-[9px] text-amber-100">{player.gold}</span>
             </div>
-
-            {/* Sonido */}
-            <button
-              onClick={toggleSound}
-              className="retro-btn-stone p-1.5 text-stone-300 hover:text-white"
-              title="Sonidos"
-            >
-              {soundOn ? <Volume2 className="w-3 h-3 text-emerald-400" /> : <VolumeX className="w-3 h-3 text-stone-500" />}
-            </button>
-
-            {/* APK */}
-            <button
-              onClick={onOpenApkModal}
-              className="retro-btn-emerald flex items-center gap-1 px-2 py-1 text-[8px] font-bold"
-              title="Instalar en Android"
-            >
-              <Download className="w-2.5 h-2.5" />
-              <span>APK</span>
+            <button type="button" onClick={toggleSound} className="flex h-9 w-9 items-center justify-center border-2 border-violet-400/70 bg-[#101633]/90 text-violet-100 shadow-[2px_2px_0_#071025]" title="Sonido">
+              {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        {/* Alerta si hay tareas vencidas */}
-        {overdueCount > 0 && (
-          <div className={`retro-box-danger text-red-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse landscape:hidden ${isDamagedAnimation ? 'animate-damage' : ''}`}>
-            <div className="flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-              <span>¡{overdueCount} tarea(s) vencida(s)! Penalización de deleveling aplicada.</span>
+        <div className="mt-4 border-2 border-amber-400/90 bg-[#0b1230]/90 p-2 shadow-[3px_3px_0_#2a174b]">
+          <div className="flex items-center gap-3">
+            <span className="font-pixel-title text-xs text-amber-200">NV. {player.level}</span>
+            <div className="h-4 min-w-0 flex-1 border-2 border-[#17133b] bg-[#0a0d25] p-[2px]">
+              <div className="h-full bg-violet-400 shadow-[0_0_7px_#c4b5fd]" style={{ width: `${expPercent}%` }} />
             </div>
-            <span className="font-pixel-title text-[8px] font-bold text-red-400 uppercase">Peligro</span>
+            <span className="font-pixel-title text-[8px] text-violet-100">{player.exp} / {player.maxExp} EXP</span>
           </div>
-        )}
-
-        {/* Alerta de urgencia pre-expiración (<4 horas) */}
-        {overdueCount === 0 && urgentTasks.length > 0 && (
-          <div className="retro-box-gold text-amber-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse landscape:hidden">
-            <div className="flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>¡{urgentTasks.length} tarea(s) al borde de vencer (&lt;4h)! Evita perder nivel.</span>
-            </div>
-            <span className="font-pixel-title text-[8px] font-bold text-amber-400 uppercase">¡Urgente!</span>
-          </div>
-        )}
+        </div>
       </div>
     </header>
   );

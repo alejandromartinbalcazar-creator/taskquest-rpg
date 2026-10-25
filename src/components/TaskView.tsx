@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Player, Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
+import { Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
 import { requestTaskReminderPermission } from '../services/taskReminders';
 import {
   CheckCircle2,
@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 
 interface TaskViewProps {
-  player: Player;
   tasks: Task[];
   onCompleteTask: (taskId: string) => void;
   onAddTask: (newTask: Omit<Task, 'id' | 'completed'>) => void;
@@ -36,7 +35,6 @@ const toLocalDateTimeValue = (date: Date) => {
 };
 
 export const TaskView: React.FC<TaskViewProps> = ({
-  player,
   tasks,
   onCompleteTask,
   onAddTask,
@@ -191,7 +189,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   });
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-3 py-3 pb-24 landscape:max-w-none landscape:mx-0 landscape:h-full landscape:min-h-0 landscape:px-4 landscape:py-3 landscape:pb-3 landscape:overflow-y-auto landscape:overscroll-contain">
+    <div className="w-full max-w-xl mx-auto px-3 py-4 pb-24 space-y-3">
       {/* BANNER DE PELIGRO INMINENTE POR PROCRASTINACIÓN (<4 HORAS) */}
       {urgentTasks.length > 0 && (
         <div className="retro-box-danger p-3 flex items-center gap-3 animate-pulse">
@@ -212,22 +210,22 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 2. CABECERA DE MISIONES Y BOTÓN NUEVA MISIÓN */}
       {/* ============================================================== */}
-      <div className="cute-panel flex flex-col gap-3 p-3 landscape:flex-row landscape:items-center landscape:justify-between landscape:gap-2">
-        <div>
-          <h2 className="font-pixel-title text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-            ✦ Misiones pendientes
-          </h2>
-          <p className="home-mission-subtitle font-pixel-text text-sm text-stone-300">
-            {sortedPendingTasks.length === 0 ? 'Tu día está despejado. Añade algo pequeño para empezar.' : `${sortedPendingTasks.length} misión${sortedPendingTasks.length === 1 ? '' : 'es'} esperándote.`}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3 px-1">
+        <h2 className="font-pixel-title text-sm text-violet-100 flex items-center gap-2">
+          📜 Misiones
+        </h2>
+        <span className="border border-violet-400/70 bg-violet-950/60 px-2 py-1 font-pixel-title text-[8px] text-violet-200">
+          {sortedPendingTasks.length} pendiente{sortedPendingTasks.length === 1 ? '' : 's'}
+        </span>
+      </div>
 
+      <div className="cute-panel p-2">
         <button
           onClick={() => setShowAddModal(true)}
-          className="cute-primary-button w-full min-h-16 px-5 py-3 flex items-center justify-center gap-3 text-base shadow-lg active:translate-y-0.5 landscape:w-auto landscape:min-h-11 landscape:shrink-0 landscape:px-4 landscape:py-2"
+          className="cute-primary-button w-full min-h-12 px-4 py-2 flex items-center justify-center gap-2 text-base active:translate-y-0.5"
         >
-          <Plus className="w-6 h-6" />
-          <span className="font-pixel-title text-sm sm:text-base">Crear tarea o misión</span>
+          <Plus className="w-5 h-5" />
+          <span className="font-pixel-title text-xs">Crear misión</span>
         </button>
       </div>
 
@@ -240,7 +238,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 3. LISTA DE TAREAS (VENCIDAS EN ROJO, CON RECORDATORIO Y REPETICIÓN) */}
       {/* ============================================================== */}
-      <div className="space-y-3 landscape:space-y-2">
+      <div className="space-y-3">
         {sortedPendingTasks.length === 0 ? (
           <div className="retro-box-stone text-center py-8 p-4">
             <Award className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-80" />
@@ -270,7 +268,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
             return (
               <div
                 key={task.id}
-                className={`${cardClass} p-3 landscape:p-2 flex flex-col justify-between gap-2 landscape:gap-1.5 task-card-soft`}
+                className={`${cardClass} p-3 flex flex-col justify-between gap-2 task-card-soft`}
               >
                 {/* Banner interno de Deuda de Honor */}
                 {isHonorDebt && (

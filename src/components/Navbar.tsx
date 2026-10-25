@@ -46,8 +46,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0f17] border-t-4 border-[#18181b] outline-1 outline-[#334155] shadow-[0_-4px_0_0_#000000] pb-safe landscape:static landscape:z-auto landscape:w-full landscape:shrink-0 landscape:border-t-2 landscape:pb-1 landscape:shadow-none">
-      <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1 landscape:max-w-none landscape:flex-wrap landscape:gap-1 landscape:py-1">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t-2 border-violet-950 bg-[#0c1028] shadow-[0_-3px_0_#07081a] pb-safe">
+      <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
@@ -56,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
-              className={`relative flex flex-col items-center justify-center flex-1 min-h-12 py-1 px-1 transition-all landscape:flex-row landscape:justify-start landscape:gap-2 landscape:px-2 ${
+              className={`relative flex flex-col items-center justify-center flex-1 min-h-12 py-1 px-1 transition-all ${
                 isActive
                   ? 'text-amber-400 font-bold'
                   : 'text-stone-400 hover:text-stone-200'
@@ -76,7 +76,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 )}
               </div>
-              <span className="font-pixel-title text-[7px] mt-1 tracking-tighter uppercase landscape:mt-0 landscape:text-[6px]">{tab.label}</span>
+              <span className="font-pixel-title text-[7px] mt-1 tracking-tighter uppercase">{tab.label}</span>
               {isActive && (
                 <div className="w-2.5 h-1 bg-amber-400 mt-1 shadow-[1px_1px_0px_#000]" />
               )}
