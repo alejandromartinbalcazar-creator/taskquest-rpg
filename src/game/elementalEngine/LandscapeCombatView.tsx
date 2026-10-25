@@ -89,7 +89,7 @@ import {
 import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
 import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
-import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
+import { mapManager, Tilemap, LEVEL_1_LAYOUT, assembleLevel1CampaignMap } from '../map';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
@@ -516,6 +516,10 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
     enemies.forEach((enemy) => { if (enemy.archetype !== 'boss') enemy.attackPower = Math.max(1, Math.round(enemy.attackPower * 0.92)); });
   }
   return enemies;
+}
+
+function getLevel1Layout(run?: ExpeditionRun): string[] {
+  return run ? assembleLevel1CampaignMap(run.rooms) : LEVEL_1_LAYOUT;
 }
 
 export interface CombatTargetInfo {
@@ -948,7 +952,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
 
     // Inicializar el Nivel 1 con motor de Tilemap procedural estructurado
-    const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
+    const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
     g.tilemap = tilemap;
     g.forestLevel = null;
 
@@ -1284,7 +1288,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (nextIndex === 2) setVesselsRemaining(g.terrainManager.obstacles.filter((obs) => obs.obstacleType === 'vessel').length);
         setTutorialStep(nextIndex === 1 ? 4 : 5);
       } else if (nextIndex === 0) {
-        const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
+        const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
         g.tilemap = tilemap;
         g.forestLevel = null;
         let savedCpId: string | null = null;

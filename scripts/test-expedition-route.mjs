@@ -26,4 +26,12 @@ for (const room of first.rooms) {
     if (enemy !== biome.bossId) assert.ok(biome.allowedEnemies.includes(enemy), `Enemigo permitido: ${enemy}`);
   }
 }
-console.log('Expedición: semilla reproducible, salas, modificador y bestiario de bioma. Correcto.');
+const segments = loadTs('../src/game/map/TrailSegments.ts', {});
+const trail = loadTs('../src/game/map/TrailMapManager.ts', {
+  './TrailSegments': segments,
+});
+const visualMap = trail.assembleLevel1CampaignMap(first.rooms);
+assert.ok(visualMap.some((row) => row.includes('P')), 'La ruta visible debe tener el punto de inicio');
+assert.ok(visualMap.some((row) => row.includes('T') || row.includes('R') || row.includes('~')), 'Las plantillas deben dejar marcas visuales de tesoro, santuario o emboscada');
+assert.ok(visualMap.some((row) => row.includes('B')), 'Toda ruta termina en la arena del jefe');
+console.log('Expedición: semilla reproducible, salas visibles, modificador y bestiario de bioma. Correcto.');
