@@ -512,6 +512,170 @@ export const RECIPES: Record<SpellCastType, SpellRecipe> = {
     selfDamageRisk: 0,
   },
 
+  // NIVEL 4 — CUÁDRUPLES ASIMÉTRICAS: SET 1 (Fuego x3 + Secundario, Cooldown: 0)
+  kinetic_plasma_meteor: {
+    id: 'kinetic_plasma_meteor',
+    name: 'Meteoro de Plasma',
+    elements: ['fire', 'fire', 'fire', 'lightning'],
+    description: 'Meteoro supersónico de plasma (telegrafiado 150ms) que detona en 90px con alto daño ígneo/eléctrico, micro-empuje y desintegra proyectiles hostiles.',
+    icon: '⚡☄️',
+    color: '#a855f7',
+    secondaryColor: '#facc15',
+    damage: 180,
+    knockback: 7.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  frostburn_comet: {
+    id: 'frostburn_comet',
+    name: 'Cometa Abrasador',
+    elements: ['fire', 'fire', 'fire', 'ice'],
+    description: 'Cometa masivo en parábola con choque térmico en 80px: inflige congelamiento de 1.2s y quemadura continua simultánea por 3 segundos.',
+    icon: '❄️🔥',
+    color: '#ea580c',
+    secondaryColor: '#38bdf8',
+    damage: 165,
+    knockback: 5.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  caldera_cataclysm: {
+    id: 'caldera_cataclysm',
+    name: 'Caldera Volcánica',
+    elements: ['fire', 'fire', 'fire', 'earth'],
+    description: 'Abre un cráter de magma profundo de 100px activo durante 3.5s con succión continua y daño ígneo periódico por tick.',
+    icon: '🌋🔥',
+    color: '#f97316',
+    secondaryColor: '#18181b',
+    damage: 150,
+    knockback: 3.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
+  // NIVEL 4 — CUÁDRUPLES ASIMÉTRICAS: SET 2 (Rayo x3 + Secundario, Cooldown: 0)
+  solar_arc_tempest: {
+    id: 'solar_arc_tempest',
+    name: 'Tempestad Solar',
+    elements: ['lightning', 'lightning', 'lightning', 'fire'],
+    description: 'Desata una tempestad continua de rayos solares en un área frontal de 350x140px durante 800ms con daño múltiple y columnas de plasma que queman.',
+    icon: '☀️⚡',
+    color: '#fde047',
+    secondaryColor: '#ea580c',
+    damage: 175,
+    knockback: 4.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  cryo_lightning_storm: {
+    id: 'cryo_lightning_storm',
+    name: 'Rayo Criogénico Puro',
+    elements: ['lightning', 'lightning', 'lightning', 'ice'],
+    description: 'Descarga vertical crioelectrostática sobre los 4 enemigos más cercanos con parálisis y congelación de 1.8s, destruyendo proyectiles hostiles.',
+    icon: '❄️⚡',
+    color: '#38bdf8',
+    secondaryColor: '#0284c7',
+    damage: 170,
+    knockback: 5.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  tectonic_lightning_hammer: {
+    id: 'tectonic_lightning_hammer',
+    name: 'Martillo Tectónico',
+    elements: ['lightning', 'lightning', 'lightning', 'earth'],
+    description: 'Colosal rayo tectónico que fractura la tierra a 200px: onda de choque de 120px, aturdimiento de 1.5s, empuje radial y quiebre de defensas (+35% daño).',
+    icon: '🔨⚡',
+    color: '#fde047',
+    secondaryColor: '#78350f',
+    damage: 185,
+    knockback: 9.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
+  // NIVEL 4 — CUÁDRUPLES ASIMÉTRICAS: SET 3 (Hielo x3 + Secundario, Cooldown: 0)
+  molten_blizzard: {
+    id: 'molten_blizzard',
+    name: 'Ventisca Ígnea',
+    elements: ['ice', 'ice', 'ice', 'fire'],
+    description: 'Tormenta de hielo al rojo vivo en área circular de 110px a 200px con ralentización extrema (60%) y daño continuo por quemadura crítica simultánea.',
+    icon: '❄️🔥',
+    color: '#38bdf8',
+    secondaryColor: '#ea580c',
+    damage: 165,
+    knockback: 4.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  superconducting_needle_storm: {
+    id: 'superconducting_needle_storm',
+    name: 'Agujas Superconductoras',
+    elements: ['ice', 'ice', 'ice', 'lightning'],
+    description: 'Abanico frontal de 140° (280px) de púas criogénicas electrificadas: inmovilización total de 1.5s y arcos voltaicos continuos en cadena.',
+    icon: '⚡❄️',
+    color: '#bae6fd',
+    secondaryColor: '#a855f7',
+    damage: 170,
+    knockback: 5.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  tectonic_glacier_wall: {
+    id: 'tectonic_glacier_wall',
+    name: 'Glaciar Tectónico',
+    elements: ['ice', 'ice', 'ice', 'earth'],
+    description: 'Cordillera masiva de 160px de ancho que avanza 300px arrollando monstruos con daño contundente, empuje imparable y aturdimiento de 1.2s.',
+    icon: '🏔️❄️',
+    color: '#0284c7',
+    secondaryColor: '#1e293b',
+    damage: 180,
+    knockback: 10.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
+  // NIVEL 4 — CUÁDRUPLES ASIMÉTRICAS: SET 4 (Tierra x3 + Secundario, Cooldown: 0)
+  primordial_magma_bastion: {
+    id: 'primordial_magma_bastion',
+    name: 'Bastión de Magma',
+    elements: ['earth', 'earth', 'earth', 'fire'],
+    description: '3 monolitos de roca basáltica envueltos en fuego giran velozmente alrededor del mago (radio 80px, 3.5s), incinerando enemigos y destruyendo proyectiles.',
+    icon: '🛡️🌋',
+    color: '#ea580c',
+    secondaryColor: '#18181b',
+    damage: 175,
+    knockback: 6.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  eternal_permafrost_fortress: {
+    id: 'eternal_permafrost_fortress',
+    name: 'Fortaleza Glacial',
+    elements: ['earth', 'earth', 'earth', 'ice'],
+    description: 'Cúpula defensiva de 100px que absorbe impactos por 3s y estalla liberando una onda de púas de 360° con congelación absoluta de 2 segundos.',
+    icon: '🏰❄️',
+    color: '#7dd3fc',
+    secondaryColor: '#334155',
+    damage: 180,
+    knockback: 7.5,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+  magnetic_telluric_spire: {
+    id: 'magnetic_telluric_spire',
+    name: 'Espira Imantada',
+    elements: ['earth', 'earth', 'earth', 'lightning'],
+    description: 'Monolito colosal imantado a 220px activo por 4s que genera un potente tirón gravitatorio continuo hacia su base y descarga arcos sísmicos cada 400ms.',
+    icon: '🧲⚡',
+    color: '#fbbf24',
+    secondaryColor: '#a855f7',
+    damage: 170,
+    knockback: 2.0,
+    cooldownMs: 0,
+    selfDamageRisk: 0,
+  },
+
   // COMBINACIÓN SUPREMA DE 4 ELEMENTOS (Única con Cooldown)
   elemental_cataclysm: {
     id: 'elemental_cataclysm',
@@ -553,6 +717,26 @@ export function identifyRecipe(elements: ElementType[]): SpellRecipe {
   if (count('fire') >= 4) return RECIPES.primordial_supernova;
   if (count('ice') >= 4) return RECIPES.absolute_zero_age;
   if (count('earth') >= 4) return RECIPES.tectonic_cataclysm;
+
+  // 1.2 Nivel 4 - Cuádruples Asimétricas: Set 1 (Fuego x3 + Secundario, Cooldown: 0)
+  if (count('fire') === 3 && count('lightning') === 1) return RECIPES.kinetic_plasma_meteor;
+  if (count('fire') === 3 && count('ice') === 1) return RECIPES.frostburn_comet;
+  if (count('fire') === 3 && count('earth') === 1) return RECIPES.caldera_cataclysm;
+
+  // 1.3 Nivel 4 - Cuádruples Asimétricas: Set 2 (Rayo x3 + Secundario, Cooldown: 0)
+  if (count('lightning') === 3 && count('fire') === 1) return RECIPES.solar_arc_tempest;
+  if (count('lightning') === 3 && count('ice') === 1) return RECIPES.cryo_lightning_storm;
+  if (count('lightning') === 3 && count('earth') === 1) return RECIPES.tectonic_lightning_hammer;
+
+  // 1.4 Nivel 4 - Cuádruples Asimétricas: Set 3 (Hielo x3 + Secundario, Cooldown: 0)
+  if (count('ice') === 3 && count('fire') === 1) return RECIPES.molten_blizzard;
+  if (count('ice') === 3 && count('lightning') === 1) return RECIPES.superconducting_needle_storm;
+  if (count('ice') === 3 && count('earth') === 1) return RECIPES.tectonic_glacier_wall;
+
+  // 1.5 Nivel 4 - Cuádruples Asimétricas: Set 4 (Tierra x3 + Secundario, Cooldown: 0)
+  if (count('earth') === 3 && count('fire') === 1) return RECIPES.primordial_magma_bastion;
+  if (count('earth') === 3 && count('ice') === 1) return RECIPES.eternal_permafrost_fortress;
+  if (count('earth') === 3 && count('lightning') === 1) return RECIPES.magnetic_telluric_spire;
 
   // 1.5 Combinaciones Triples Puras (3 o más elementos idénticos)
   if (count('fire') >= 3) {

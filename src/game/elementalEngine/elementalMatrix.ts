@@ -259,8 +259,10 @@ export function calculateElementalDamage(
     }
   }
 
-  // Modificador por Armadura Fracturada (Deflagración Térmica: +30% de daño recibido)
-  if (enemy.fracturedArmorTimer && enemy.fracturedArmorTimer > 0) {
+  // Modificador por Armadura Fracturada / Quiebre de Defensas (+30% / +35% de daño recibido)
+  if (enemy.defenseBrokenTimer && enemy.defenseBrokenTimer > 0) {
+    multiplier *= 1.35;
+  } else if (enemy.fracturedArmorTimer && enemy.fracturedArmorTimer > 0) {
     multiplier *= 1.30;
   }
 
@@ -429,7 +431,10 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'magma_trench' ||
     spellType === 'thermal_deflagration' ||
     spellType === 'solar_fusion_beam' ||
-    spellType === 'primordial_supernova'
+    spellType === 'primordial_supernova' ||
+    spellType === 'kinetic_plasma_meteor' ||
+    spellType === 'frostburn_comet' ||
+    spellType === 'caldera_cataclysm'
   )
     return 'fire';
   if (
@@ -437,7 +442,10 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'lightning_rod_pylon' ||
     spellType === 'plasma_hyper_orb' ||
     spellType === 'cryo_arc_flash' ||
-    spellType === 'thundergod_judgment'
+    spellType === 'thundergod_judgment' ||
+    spellType === 'solar_arc_tempest' ||
+    spellType === 'cryo_lightning_storm' ||
+    spellType === 'tectonic_lightning_hammer'
   )
     return 'lightning';
   if (
@@ -445,7 +453,10 @@ export function getSpellElement(spellType: string, enemy?: GameEnemy): ElementTy
     spellType === 'glacial_avalanche' ||
     spellType === 'boiling_hail' ||
     spellType === 'superconductor_blizzard' ||
-    spellType === 'absolute_zero_age'
+    spellType === 'absolute_zero_age' ||
+    spellType === 'molten_blizzard' ||
+    spellType === 'superconducting_needle_storm' ||
+    spellType === 'tectonic_glacier_wall'
   )
     return 'ice';
   if (

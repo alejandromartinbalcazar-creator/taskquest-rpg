@@ -69,6 +69,19 @@ import {
   AbsoluteZeroSpike,
   TectonicCataclysmEntity,
   TectonicCataclysmMonolith,
+  KineticPlasmaMeteorEntity,
+  FrostburnCometEntity,
+  CalderaCataclysmEntity,
+  SolarArcTempestEntity,
+  SolarArcTempestPlasmaColumn,
+  CryoLightningStormEntity,
+  CryoLightningStrikePoint,
+  TectonicLightningHammerEntity,
+  MoltenBlizzardEntity,
+  SuperconductingNeedleStormEntity,
+  SuperconductingNeedle,
+  TectonicGlacierWallEntity,
+  TectonicGlacierWallBlock,
 } from './types';
 import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
 import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
@@ -776,6 +789,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     primordialSupernovas: [] as PrimordialSupernovaEntity[],
     absoluteZeroAges: [] as AbsoluteZeroAgeEntity[],
     tectonicCataclysms: [] as TectonicCataclysmEntity[],
+    kineticPlasmaMeteors: [] as KineticPlasmaMeteorEntity[],
+    frostburnComets: [] as FrostburnCometEntity[],
+    calderaCataclysms: [] as CalderaCataclysmEntity[],
+    solarArcTempests: [] as SolarArcTempestEntity[],
+    cryoLightningStorms: [] as CryoLightningStormEntity[],
+    tectonicLightningHammers: [] as TectonicLightningHammerEntity[],
+    moltenBlizzards: [] as MoltenBlizzardEntity[],
+    superconductingNeedleStorms: [] as SuperconductingNeedleStormEntity[],
+    tectonicGlacierWalls: [] as TectonicGlacierWallEntity[],
     lastVoltaicHumTime: 0,
     lastCryoHumTime: 0,
     lastFireBarrierBurnTime: 0,
@@ -1125,6 +1147,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.primordialSupernovas = [];
       g.absoluteZeroAges = [];
       g.tectonicCataclysms = [];
+      g.kineticPlasmaMeteors = [];
+      g.frostburnComets = [];
+      g.calderaCataclysms = [];
+      g.solarArcTempests = [];
+      g.cryoLightningStorms = [];
+      g.tectonicLightningHammers = [];
+      g.moltenBlizzards = [];
+      g.superconductingNeedleStorms = [];
+      g.tectonicGlacierWalls = [];
 
       if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
@@ -4400,6 +4431,496 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           life: 45,
         });
       }
+      // METEORO DE PLASMA CINÉTICO (FUEGO x3 + RAYO — TIER 4):
+      // Impacto supersónico telegrafiado (150ms) a 260px o sobre el grupo enemigo más denso, explosión de 90px y barrido de proyectiles
+      else if (recipe.id === 'kinetic_plasma_meteor') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.75) * chargeMultiplier);
+
+        // Elegir objetivo: grupo enemigo más denso o hacia el apuntado a 260px
+        let targetX = wizard.x + Math.cos(aimAngle) * 260;
+        let targetY = wizard.y + Math.sin(aimAngle) * 260 * 0.58;
+
+        let bestScore = -1;
+        for (const e of g.enemyManager.enemies) {
+          if (e.hp <= 0) continue;
+          const d = Math.hypot(e.x - wizard.x, (e.y - wizard.y) / 0.58);
+          if (d <= 360) {
+            let neighbors = 0;
+            for (const other of g.enemyManager.enemies) {
+              if (other.hp > 0 && Math.hypot(other.x - e.x, (other.y - e.y) / 0.58) <= 90) {
+                neighbors++;
+              }
+            }
+            const angDiff = Math.abs(Math.atan2((e.y - wizard.y) / 0.58, e.x - wizard.x) - aimAngle);
+            const score = neighbors * 100 - d * 0.15 - (angDiff < Math.PI / 2.5 ? 0 : 60);
+            if (score > bestScore) {
+              bestScore = score;
+              targetX = e.x;
+              targetY = e.y;
+            }
+          }
+        }
+
+        elementalSound.playLightningBolt();
+
+        g.kineticPlasmaMeteors.push({
+          id: `kpm-${now}-${Math.random()}`,
+          startX: targetX - 160,
+          startY: targetY - 240,
+          targetX,
+          targetY,
+          currentX: targetX - 160,
+          currentY: targetY - 240,
+          impactRadius: 90,
+          damage: baseDmg,
+          durationMs: 450,
+          elapsedMs: 0,
+          telegraphDurationMs: 150,
+          exploded: false,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `kpm-cast-${now}`,
+          x: targetX,
+          y: targetY - 50,
+          text: '⚡☄️ ¡METEORO DE PLASMA!',
+          color: '#facc15',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // COMETA DE FRÍO ABRASADOR (FUEGO x3 + HIELO — TIER 4):
+      // Proyectil parabólico masivo con choque térmico, congelación 1.2s y quemadura simultánea 3s en radio 80px
+      else if (recipe.id === 'frostburn_comet') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.75) * chargeMultiplier);
+
+        let targetX = wizard.x + Math.cos(aimAngle) * 240;
+        let targetY = wizard.y + Math.sin(aimAngle) * 240 * 0.58;
+
+        let nearestDist = 9999;
+        for (const e of g.enemyManager.enemies) {
+          if (e.hp <= 0) continue;
+          const d = Math.hypot(e.x - wizard.x, (e.y - wizard.y) / 0.58);
+          if (d <= 340) {
+            const angDiff = Math.abs(Math.atan2((e.y - wizard.y) / 0.58, e.x - wizard.x) - aimAngle);
+            if (angDiff < Math.PI / 2.5 && d < nearestDist) {
+              nearestDist = d;
+              targetX = e.x;
+              targetY = e.y;
+            }
+          }
+        }
+
+        elementalSound.playIceShard();
+
+        g.frostburnComets.push({
+          id: `fbc-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          targetX,
+          targetY,
+          currentX: wizard.x,
+          currentY: wizard.y,
+          currentZ: 0,
+          impactRadius: 80,
+          damage: baseDmg,
+          durationMs: 520,
+          elapsedMs: 0,
+          exploded: false,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `fbc-cast-${now}`,
+          x: targetX,
+          y: targetY - 50,
+          text: '❄️🔥 ¡COMETA ABRASADOR!',
+          color: '#38bdf8',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // CALDERA VOLCÁNICA PROFUNDA (FUEGO x3 + TIERRA — TIER 4):
+      // Cráter magmático a 180px activo durante 3.5s, succión leve y daño por tick continuo
+      else if (recipe.id === 'caldera_cataclysm') {
+        g.screenShake = Math.max(g.screenShake, 10);
+        elementalSound.playAoEExplosion();
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.8) * chargeMultiplier);
+
+        const centerX = wizard.x + Math.cos(aimAngle) * 180;
+        const centerY = wizard.y + Math.sin(aimAngle) * 180 * 0.58;
+
+        g.calderaCataclysms.push({
+          id: `cc-${now}-${Math.random()}`,
+          centerX,
+          centerY,
+          radius: 100,
+          durationMs: 3500,
+          elapsedMs: 0,
+          damagePerTick: Math.max(12, Math.round(baseDmg / 7)),
+          lastTickMs: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `cc-cast-${now}`,
+          x: centerX,
+          y: centerY - 50,
+          text: '🌋🔥 ¡CALDERA VOLCÁNICA!',
+          color: '#f97316',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // TEMPESTAD SOLAR (RAYO x3 + FUEGO — TIER 4):
+      // Rectángulo frontal de 350x140px con cascada continua de rayos, daño acelerado y columnas de plasma
+      else if (recipe.id === 'solar_arc_tempest') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.75) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 11);
+        elementalSound.playLightningBolt();
+
+        const plasmaColumns: SolarArcTempestPlasmaColumn[] = [];
+        for (let c = 1; c <= 4; c++) {
+          const cDist = c * 75;
+          const colX = wizard.x + Math.cos(aimAngle) * cDist + (Math.random() - 0.5) * 30;
+          const colY = wizard.y + Math.sin(aimAngle) * cDist * 0.58 + (Math.random() - 0.5) * 20;
+          plasmaColumns.push({
+            x: colX,
+            y: colY,
+            radius: 18 + Math.random() * 8,
+            height: 40 + Math.random() * 15,
+          });
+        }
+
+        g.solarArcTempests.push({
+          id: `sat-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          length: 350,
+          width: 140,
+          durationMs: 800,
+          elapsedMs: 0,
+          damagePerTick: Math.max(14, Math.round(baseDmg / 6)),
+          lastTickMs: 0,
+          plasmaColumns,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `sat-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 120,
+          y: wizard.y + Math.sin(aimAngle) * 120 * 0.58 - 40,
+          text: '☀️⚡ ¡TEMPESTAD SOLAR!',
+          color: '#fde047',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // RAYO CRIOGÉNICO PURO (RAYO x3 + HIELO — TIER 4):
+      // Descarga vertical instantánea en abanico sobre los 4 enemigos más cercanos con parálisis y congelación 1.8s
+      else if (recipe.id === 'cryo_lightning_storm') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.75) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 13);
+        elementalSound.playGlacialFreezeImpact();
+
+        // Buscar hasta los 4 enemigos más cercanos en el cono de apuntado
+        const candidates: { enemy: GameEnemy; dist: number }[] = [];
+        for (const e of g.enemyManager.enemies) {
+          if (e.hp <= 0) continue;
+          const d = Math.hypot(e.x - wizard.x, (e.y - wizard.y) / 0.58);
+          if (d <= 360) {
+            const angDiff = Math.abs(Math.atan2((e.y - wizard.y) / 0.58, e.x - wizard.x) - aimAngle);
+            if (angDiff < Math.PI / 2.2 || d < 120) {
+              candidates.push({ enemy: e, dist: d });
+            }
+          }
+        }
+        candidates.sort((a, b) => a.dist - b.dist);
+        const picked = candidates.slice(0, 4);
+
+        const strikes: CryoLightningStrikePoint[] = [];
+        if (picked.length > 0) {
+          picked.forEach(({ enemy: e }) => {
+            strikes.push({ targetX: e.x, targetY: e.y, spikeHeight: 32 + Math.random() * 8 });
+            applyDamageToEnemy(e, baseDmg, 'lightning', g.floatingTexts, e.x, e.y);
+            e.hitFlash = 16;
+            e.stunnedTimer = 108; // 1.8s de congelamiento/parálisis total
+            g.enemyManager.applyStatus(e, 'frozen', 108);
+            g.enemyManager.applyStatus(e, 'shocked', 108);
+          });
+        } else {
+          // Si no hay enemigos en rango, proyectar abanico en suelo
+          for (let i = 0; i < 4; i++) {
+            const fanAng = aimAngle - 0.45 + i * 0.3;
+            const tx = wizard.x + Math.cos(fanAng) * 180;
+            const ty = wizard.y + Math.sin(fanAng) * 180 * 0.58;
+            strikes.push({ targetX: tx, targetY: ty, spikeHeight: 28 });
+          }
+        }
+
+        // Destruir proyectiles hostiles en las zonas de impacto
+        g.projectilePool.filterHostile((p) => {
+          for (const s of strikes) {
+            if (Math.hypot(p.x - s.targetX, (p.y - s.targetY) / 0.58) <= 60) return false;
+          }
+          return true;
+        });
+
+        g.cryoLightningStorms.push({
+          id: `cls-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          radius: 100,
+          durationMs: 450,
+          elapsedMs: 0,
+          strikes,
+          struck: true,
+          finished: false,
+        });
+
+        const leadTarget = strikes[0] || { targetX: wizard.x + Math.cos(aimAngle) * 180, targetY: wizard.y + Math.sin(aimAngle) * 180 * 0.58 };
+        g.floatingTexts.push({
+          id: `cls-cast-${now}`,
+          x: leadTarget.targetX,
+          y: leadTarget.targetY - 50,
+          text: '❄️⚡ ¡RAYO CRIOGÉNICO PURO!',
+          color: '#38bdf8',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // MARTILLO DE THOR TECTÓNICO (RAYO x3 + TIERRA — TIER 4):
+      // Rayo colosal que fractura la tierra a 200px: 120px de choque, aturdimiento 1.5s, empuje y quiebre de defensa (+35%)
+      else if (recipe.id === 'tectonic_lightning_hammer') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.85) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 15);
+        elementalSound.playEarthToss();
+
+        const targetX = wizard.x + Math.cos(aimAngle) * 200;
+        const targetY = wizard.y + Math.sin(aimAngle) * 200 * 0.58;
+
+        // Daño masivo, aturdimiento 1.5s, empuje radial y quiebre de defensas
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const d = Math.hypot(enemy.x - targetX, (enemy.y - targetY) / 0.58);
+          if (d <= 120 + enemy.radius) {
+            applyDamageToEnemy(enemy, baseDmg, 'lightning', g.floatingTexts, targetX, targetY);
+            enemy.hitFlash = 16;
+            enemy.stunnedTimer = 90; // 1.5s de aturdimiento
+
+            const kAng = Math.atan2(enemy.y - targetY, enemy.x - targetX);
+            enemy.x += Math.cos(kAng) * 28;
+            enemy.y += Math.sin(kAng) * 16;
+
+            // Quiebre de defensas (+35% de daño recibido durante 4 segundos = 240 frames)
+            enemy.defenseBrokenTimer = 240;
+            g.floatingTexts.push({
+              id: `def-break-${now}-${enemy.id}`,
+              x: enemy.x,
+              y: enemy.y - 28,
+              text: '🛡️💔 ¡DEFENSA ROTA! (+35%)',
+              color: '#facc15',
+              fontSize: 12,
+              opacity: 1,
+              vy: -1.1,
+              life: 45,
+            });
+          }
+        });
+
+        g.tectonicLightningHammers.push({
+          id: `tlh-${now}-${Math.random()}`,
+          targetX,
+          targetY,
+          impactRadius: 120,
+          pillarWidth: 40,
+          durationMs: 600,
+          elapsedMs: 0,
+          damage: baseDmg,
+          fissures: [
+            { angle: 0.35, length: 115 },
+            { angle: 1.85, length: 110 },
+            { angle: 3.45, length: 120 },
+            { angle: 5.05, length: 105 },
+          ],
+          struck: true,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `tlh-cast-${now}`,
+          x: targetX,
+          y: targetY - 60,
+          text: '🔨⚡ ¡MARTILLO TECTÓNICO!',
+          color: '#fde047',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // VENTISCA ÍGNEA (HIELO x3 + FUEGO — TIER 4):
+      // Tormenta en área circular de 110px a 200px con lluvia rápida de hielo candente, 60% slow y quemadura crítica
+      else if (recipe.id === 'molten_blizzard') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.75) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 11);
+        elementalSound.playIceShard();
+
+        const targetX = wizard.x + Math.cos(aimAngle) * 200;
+        const targetY = wizard.y + Math.sin(aimAngle) * 200 * 0.58;
+
+        g.moltenBlizzards.push({
+          id: `mb-${now}-${Math.random()}`,
+          centerX: targetX,
+          centerY: targetY,
+          radius: 110,
+          durationMs: 1000,
+          elapsedMs: 0,
+          damagePerTick: Math.max(15, Math.round(baseDmg / 7)),
+          lastTickMs: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `mb-cast-${now}`,
+          x: targetX,
+          y: targetY - 50,
+          text: '❄️🔥 ¡VENTISCA ÍGNEA!',
+          color: '#38bdf8',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // AGUJAS SUPERCONDUCTORAS (HIELO x3 + RAYO — TIER 4):
+      // Abanico frontal de 140° (280px): inmovilización total de 1.5s y arcos voltaicos continuos en cadena
+      else if (recipe.id === 'superconducting_needle_storm') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.8) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 13);
+        elementalSound.playGlacialFreezeImpact();
+
+        const needleCount = 14;
+        const needles: SuperconductingNeedle[] = [];
+        for (let n = 0; n < needleCount; n++) {
+          const nDist = 70 + Math.random() * 200;
+          const nAng = aimAngle - 1.22 + Math.random() * 2.44;
+          needles.push({
+            x: wizard.x + Math.cos(nAng) * nDist,
+            y: wizard.y + Math.sin(nAng) * nDist * 0.58,
+            height: 0,
+            maxHeight: 28 + Math.random() * 14,
+            angle: nAng,
+          });
+        }
+
+        // Daño e inmovilización a todos los enemigos en el abanico
+        g.enemyManager.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const dx = enemy.x - wizard.x;
+          const dy = (enemy.y - wizard.y) / 0.58;
+          const d = Math.hypot(dx, dy);
+          if (d <= 280 + enemy.radius) {
+            const angToEnemy = Math.atan2(dy, dx);
+            let diff = Math.abs(angToEnemy - aimAngle);
+            while (diff > Math.PI) diff = Math.abs(diff - Math.PI * 2);
+            if (diff <= 1.25) {
+              applyDamageToEnemy(enemy, baseDmg, 'ice', g.floatingTexts, wizard.x, wizard.y);
+              enemy.hitFlash = 16;
+              enemy.stunnedTimer = 90; // 1.5s de inmovilización
+              g.enemyManager.applyStatus(enemy, 'frozen', 90);
+              g.enemyManager.applyStatus(enemy, 'shocked', 90);
+            }
+          }
+        });
+
+        g.superconductingNeedleStorms.push({
+          id: `sns-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          coneAngle: 2.44,
+          maxRange: 280,
+          durationMs: 1500,
+          elapsedMs: 0,
+          damage: baseDmg,
+          needles,
+          lastArcTickMs: 0,
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `sns-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 160,
+          y: wizard.y + Math.sin(aimAngle) * 160 * 0.58 - 45,
+          text: '⚡❄️ ¡AGUJAS SUPERCONDUCTORAS!',
+          color: '#bae6fd',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
+      // GLACIAR TECTÓNICO (HIELO x3 + TIERRA — TIER 4):
+      // Cordillera frontal de 160px que avanza 300px arrollando monstruos, empuje masivo y aturdimiento de 1.2s
+      else if (recipe.id === 'tectonic_glacier_wall') {
+        const baseDmg = Math.round((recipe.damage + statBonus * 0.85) * chargeMultiplier);
+        g.screenShake = Math.max(g.screenShake, 15);
+        elementalSound.playEarthToss();
+
+        const blockCount = 10;
+        const blocks: TectonicGlacierWallBlock[] = [];
+        for (let b = 0; b < blockCount; b++) {
+          const offsetDist = -72 + b * 16;
+          blocks.push({
+            offsetDist,
+            height: 38 + Math.random() * 16,
+            isRock: b % 2 === 0,
+          });
+        }
+
+        g.tectonicGlacierWalls.push({
+          id: `tgw-${now}-${Math.random()}`,
+          originX: wizard.x,
+          originY: wizard.y,
+          aimAngle,
+          width: 160,
+          maxTravelDist: 300,
+          currentDist: 25,
+          speed: 260,
+          durationMs: 1200,
+          elapsedMs: 0,
+          damage: baseDmg,
+          blocks,
+          hitEnemyIds: new Set<string>(),
+          finished: false,
+        });
+
+        g.floatingTexts.push({
+          id: `tgw-cast-${now}`,
+          x: wizard.x + Math.cos(aimAngle) * 120,
+          y: wizard.y + Math.sin(aimAngle) * 120 * 0.58 - 40,
+          text: '🏔️❄️ ¡GLACIAR TECTÓNICO!',
+          color: '#0284c7',
+          fontSize: 14,
+          opacity: 1,
+          vy: -1.4,
+          life: 40,
+        });
+      }
       // ATAQUES INDIVIDUALES:
       else {
         const isFire = recipe.id === 'fire_shot';
@@ -5004,6 +5525,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.primordialSupernovas = [];
             g.absoluteZeroAges = [];
             g.tectonicCataclysms = [];
+            g.kineticPlasmaMeteors = [];
+            g.frostburnComets = [];
+            g.calderaCataclysms = [];
+            g.solarArcTempests = [];
+            g.cryoLightningStorms = [];
+            g.tectonicLightningHammers = [];
+            g.moltenBlizzards = [];
+            g.superconductingNeedleStorms = [];
+            g.tectonicGlacierWalls = [];
             g.lightningBolts = [];
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
@@ -12795,6 +13325,436 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
       }
 
+      // 5.001 Actualizar Meteoro de Plasma Cinético (Fuego x3 + Rayo)
+      for (let mIdx = g.kineticPlasmaMeteors.length - 1; mIdx >= 0; mIdx--) {
+        const kpm = g.kineticPlasmaMeteors[mIdx];
+        kpm.elapsedMs += dt;
+
+        if (kpm.elapsedMs < kpm.telegraphDurationMs) {
+          // Fase de caída supersónica
+          const flightProg = Math.min(1, kpm.elapsedMs / kpm.telegraphDurationMs);
+          kpm.currentX = kpm.startX + (kpm.targetX - kpm.startX) * flightProg;
+          kpm.currentY = kpm.startY + (kpm.targetY - kpm.startY) * flightProg;
+        } else if (!kpm.exploded) {
+          // Detonación instantánea
+          kpm.exploded = true;
+          kpm.currentX = kpm.targetX;
+          kpm.currentY = kpm.targetY;
+          g.screenShake = Math.max(g.screenShake, 14);
+          elementalSound.playAoEExplosion();
+
+          // Barrido de proyectiles hostiles en radio de 90px
+          g.projectilePool.filterHostile((p) => {
+            const d = Math.hypot(p.x - kpm.targetX, (p.y - kpm.targetY) / 0.58);
+            return d > kpm.impactRadius;
+          });
+
+          // Daño, micro-empuje radial y choque voltaico
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const d = Math.hypot(enemy.x - kpm.targetX, (enemy.y - kpm.targetY) / 0.58);
+            if (d <= kpm.impactRadius + enemy.radius) {
+              applyDamageToEnemy(enemy, kpm.damage, 'fire', g.floatingTexts, kpm.targetX, kpm.targetY);
+              enemy.hitFlash = 14;
+              const pushAng = Math.atan2(enemy.y - kpm.targetY, enemy.x - kpm.targetX);
+              enemy.x += Math.cos(pushAng) * 22;
+              enemy.y += Math.sin(pushAng) * 12;
+              g.enemyManager.applyStatus(enemy, 'shocked', 90);
+            }
+          });
+
+          // Partículas en pool de memoria
+          for (let p = 0; p < 16; p++) {
+            const pAng = (p / 16) * Math.PI * 2;
+            const spd = 3.5 + Math.random() * 3.5;
+            g.particlePool.spawn({
+              x: kpm.targetX,
+              y: kpm.targetY,
+              vx: Math.cos(pAng) * spd,
+              vy: Math.sin(pAng) * spd * 0.58,
+              radius: 3,
+              color: p % 3 === 0 ? '#ffffff' : (p % 3 === 1 ? '#facc15' : '#a855f7'),
+              life: 20,
+            });
+          }
+        }
+
+        if (kpm.elapsedMs >= kpm.durationMs) {
+          kpm.finished = true;
+          g.kineticPlasmaMeteors.splice(mIdx, 1);
+        }
+      }
+
+      // 5.002 Actualizar Cometa de Frío Abrasador (Fuego x3 + Hielo)
+      for (let cIdx = g.frostburnComets.length - 1; cIdx >= 0; cIdx--) {
+        const fbc = g.frostburnComets[cIdx];
+        fbc.elapsedMs += dt;
+        const flightDuration = Math.max(100, fbc.durationMs - 160);
+
+        if (fbc.elapsedMs < flightDuration) {
+          const prog = Math.min(1, fbc.elapsedMs / flightDuration);
+          fbc.currentX = fbc.originX + (fbc.targetX - fbc.originX) * prog;
+          fbc.currentY = fbc.originY + (fbc.targetY - fbc.originY) * prog;
+          fbc.currentZ = Math.sin(prog * Math.PI) * 95;
+        } else if (!fbc.exploded) {
+          fbc.exploded = true;
+          fbc.currentX = fbc.targetX;
+          fbc.currentY = fbc.targetY;
+          fbc.currentZ = 0;
+          g.screenShake = Math.max(g.screenShake, 13);
+          elementalSound.playAoEExplosion();
+          elementalSound.playGlacialFreezeImpact();
+
+          // Daño, 1.2s de congelamiento (72 frames) y 3s de quemadura simultánea (180 frames)
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const d = Math.hypot(enemy.x - fbc.targetX, (enemy.y - fbc.targetY) / 0.58);
+            if (d <= fbc.impactRadius + enemy.radius) {
+              applyDamageToEnemy(enemy, fbc.damage, 'fire', g.floatingTexts, fbc.targetX, fbc.targetY);
+              enemy.hitFlash = 14;
+              enemy.stunnedTimer = 72; // 1.2s de congelación / aturdimiento
+              g.enemyManager.applyStatus(enemy, 'frozen', 72);
+              g.enemyManager.applyStatus(enemy, 'burning', 180); // 3s de quemadura continua
+            }
+          });
+
+          // Nube densa de vapor blanco y esquirlas en pool
+          for (let p = 0; p < 18; p++) {
+            const pAng = (p / 18) * Math.PI * 2;
+            const spd = 2.5 + Math.random() * 3.5;
+            g.particlePool.spawn({
+              x: fbc.targetX,
+              y: fbc.targetY,
+              vx: Math.cos(pAng) * spd,
+              vy: Math.sin(pAng) * spd * 0.58,
+              radius: 3.5,
+              color: p % 3 === 0 ? '#ffffff' : (p % 3 === 1 ? '#38bdf8' : '#ea580c'),
+              life: 24,
+            });
+          }
+        }
+
+        if (fbc.elapsedMs >= fbc.durationMs) {
+          fbc.finished = true;
+          g.frostburnComets.splice(cIdx, 1);
+        }
+      }
+
+      // 5.003 Actualizar Caldera Volcánica Profunda (Fuego x3 + Tierra)
+      for (let vIdx = g.calderaCataclysms.length - 1; vIdx >= 0; vIdx--) {
+        const cc = g.calderaCataclysms[vIdx];
+        cc.elapsedMs += dt;
+
+        // Tirón leve continuo hacia el centro del cráter para enemigos en el radio
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const dx = cc.centerX - enemy.x;
+          const dy = (cc.centerY - enemy.y) / 0.58;
+          const d = Math.hypot(dx, dy);
+          if (d <= cc.radius + enemy.radius && d > 8) {
+            const pullAng = Math.atan2(cc.centerY - enemy.y, cc.centerX - enemy.x);
+            const pullForce = 0.85;
+            enemy.x += Math.cos(pullAng) * pullForce;
+            enemy.y += Math.sin(pullAng) * pullForce * 0.58;
+          }
+        });
+
+        // Daño por tick ígneo cada 400ms
+        if (cc.elapsedMs - cc.lastTickMs >= 400) {
+          cc.lastTickMs = cc.elapsedMs;
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const d = Math.hypot(enemy.x - cc.centerX, (enemy.y - cc.centerY) / 0.58);
+            if (d <= cc.radius + enemy.radius) {
+              applyDamageToEnemy(enemy, cc.damagePerTick, 'fire', g.floatingTexts, cc.centerX, cc.centerY);
+              enemy.hitFlash = 6;
+              g.enemyManager.applyStatus(enemy, 'burning', 120);
+            }
+          });
+
+          // Burbujas y chispas magmáticas en pool
+          for (let b = 0; b < 3; b++) {
+            const bAng = Math.random() * Math.PI * 2;
+            const bDist = Math.random() * (cc.radius * 0.7);
+            g.particlePool.spawn({
+              x: cc.centerX + Math.cos(bAng) * bDist,
+              y: cc.centerY + Math.sin(bAng) * bDist * 0.58,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: -1 - Math.random() * 2,
+              radius: 2.5,
+              color: Math.random() > 0.5 ? '#f97316' : '#fde047',
+              life: 18,
+            });
+          }
+        }
+
+        if (cc.elapsedMs >= cc.durationMs) {
+          cc.finished = true;
+          g.calderaCataclysms.splice(vIdx, 1);
+        }
+      }
+
+      // 5.004 Actualizar Tempestad Solar (Rayo x3 + Fuego)
+      for (let sIdx = g.solarArcTempests.length - 1; sIdx >= 0; sIdx--) {
+        const sat = g.solarArcTempests[sIdx];
+        sat.elapsedMs += dt;
+
+        // Daño múltiple acelerado cada 120ms a enemigos en el área rectangular
+        if (sat.elapsedMs - sat.lastTickMs >= 120) {
+          sat.lastTickMs = sat.elapsedMs;
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const dx = enemy.x - sat.originX;
+            const dy = (enemy.y - sat.originY) / 0.58;
+            const localX = dx * Math.cos(sat.aimAngle) + dy * Math.sin(sat.aimAngle);
+            const localY = -dx * Math.sin(sat.aimAngle) + dy * Math.cos(sat.aimAngle);
+
+            if (localX >= -20 && localX <= sat.length && Math.abs(localY) <= (sat.width / 2) + enemy.radius) {
+              applyDamageToEnemy(enemy, sat.damagePerTick, 'lightning', g.floatingTexts, enemy.x, enemy.y);
+              enemy.hitFlash = 5;
+              g.enemyManager.applyStatus(enemy, 'burning', 120);
+            }
+          });
+
+          // Ascuas y chispas de plasma usando ParticlePool
+          for (let p = 0; p < 4; p++) {
+            const pDist = Math.random() * sat.length;
+            const pOffset = (Math.random() - 0.5) * sat.width;
+            const px = sat.originX + Math.cos(sat.aimAngle) * pDist - Math.sin(sat.aimAngle) * pOffset;
+            const py = sat.originY + (Math.sin(sat.aimAngle) * pDist + Math.cos(sat.aimAngle) * pOffset) * 0.58;
+            g.particlePool.spawn({
+              x: px,
+              y: py,
+              vx: (Math.random() - 0.5) * 2,
+              vy: -2 - Math.random() * 3,
+              radius: 3,
+              color: p % 2 === 0 ? '#fde047' : '#ea580c',
+              life: 16,
+            });
+          }
+        }
+
+        if (sat.elapsedMs >= sat.durationMs) {
+          sat.finished = true;
+          g.solarArcTempests.splice(sIdx, 1);
+        }
+      }
+
+      // 5.005 Actualizar Rayo Criogénico Puro (Rayo x3 + Hielo)
+      for (let cIdx = g.cryoLightningStorms.length - 1; cIdx >= 0; cIdx--) {
+        const cls = g.cryoLightningStorms[cIdx];
+        cls.elapsedMs += dt;
+
+        // Barrer proyectiles hostiles en vuelo en los puntos de impacto durante la duración
+        if (cls.elapsedMs < cls.durationMs * 0.8) {
+          g.projectilePool.filterHostile((p) => {
+            for (const s of cls.strikes) {
+              if (Math.hypot(p.x - s.targetX, (p.y - s.targetY) / 0.58) <= 60) return false;
+            }
+            return true;
+          });
+        }
+
+        // Chispas crioelectrostáticas
+        if (Math.random() < 0.3) {
+          const s = cls.strikes[Math.floor(Math.random() * cls.strikes.length)];
+          if (s) {
+            g.particlePool.spawn({
+              x: s.targetX + (Math.random() - 0.5) * 20,
+              y: s.targetY + (Math.random() - 0.5) * 12,
+              vx: (Math.random() - 0.5) * 2,
+              vy: -1 - Math.random() * 2,
+              radius: 2.5,
+              color: Math.random() > 0.5 ? '#38bdf8' : '#ffffff',
+              life: 14,
+            });
+          }
+        }
+
+        if (cls.elapsedMs >= cls.durationMs) {
+          cls.finished = true;
+          g.cryoLightningStorms.splice(cIdx, 1);
+        }
+      }
+
+      // 5.006 Actualizar Martillo de Thor Tectónico (Rayo x3 + Tierra)
+      for (let hIdx = g.tectonicLightningHammers.length - 1; hIdx >= 0; hIdx--) {
+        const tlh = g.tectonicLightningHammers[hIdx];
+        tlh.elapsedMs += dt;
+
+        // Esquirlas de roca y polvo tectónico durante el estallido
+        if (tlh.elapsedMs <= 180) {
+          for (let r = 0; r < 2; r++) {
+            const rAng = Math.random() * Math.PI * 2;
+            const rDist = Math.random() * (tlh.impactRadius * 0.8);
+            g.particlePool.spawn({
+              x: tlh.targetX + Math.cos(rAng) * rDist,
+              y: tlh.targetY + Math.sin(rAng) * rDist * 0.58,
+              vx: (Math.random() - 0.5) * 3,
+              vy: -2 - Math.random() * 3,
+              radius: 3,
+              color: r % 2 === 0 ? '#fde047' : '#52525b',
+              life: 18,
+            });
+          }
+        }
+
+        if (tlh.elapsedMs >= tlh.durationMs) {
+          tlh.finished = true;
+          g.tectonicLightningHammers.splice(hIdx, 1);
+        }
+      }
+
+      // 5.007 Actualizar Ventisca Ígnea (Hielo x3 + Fuego)
+      for (let mbIdx = g.moltenBlizzards.length - 1; mbIdx >= 0; mbIdx--) {
+        const mb = g.moltenBlizzards[mbIdx];
+        mb.elapsedMs += dt;
+
+        // Daño continuo por quemadura crítica y 60% slow cada 140ms
+        if (mb.elapsedMs - mb.lastTickMs >= 140) {
+          mb.lastTickMs = mb.elapsedMs;
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const d = Math.hypot(enemy.x - mb.centerX, (enemy.y - mb.centerY) / 0.58);
+            if (d <= mb.radius + enemy.radius) {
+              applyDamageToEnemy(enemy, mb.damagePerTick, 'ice', g.floatingTexts, mb.centerX, mb.centerY);
+              enemy.hitFlash = 6;
+              g.enemyManager.applyStatus(enemy, 'slowed', 60);
+              g.enemyManager.applyStatus(enemy, 'burning', 120);
+            }
+          });
+
+          // Gotas de magma naranja y fragmentos de hielo en ParticlePool
+          for (let p = 0; p < 4; p++) {
+            const pAng = Math.random() * Math.PI * 2;
+            const pDist = Math.random() * mb.radius;
+            g.particlePool.spawn({
+              x: mb.centerX + Math.cos(pAng) * pDist,
+              y: mb.centerY + Math.sin(pAng) * pDist * 0.58,
+              vx: (Math.random() - 0.5) * 2,
+              vy: 3 + Math.random() * 4,
+              radius: 3,
+              color: p % 2 === 0 ? '#38bdf8' : '#ea580c',
+              life: 14,
+            });
+          }
+        }
+
+        if (mb.elapsedMs >= mb.durationMs) {
+          mb.finished = true;
+          g.moltenBlizzards.splice(mbIdx, 1);
+        }
+      }
+
+      // 5.008 Actualizar Agujas Superconductoras (Hielo x3 + Rayo)
+      for (let sIdx = g.superconductingNeedleStorms.length - 1; sIdx >= 0; sIdx--) {
+        const sns = g.superconductingNeedleStorms[sIdx];
+        sns.elapsedMs += dt;
+
+        // Crecimiento de agujas en los primeros 200ms
+        const growProg = Math.min(1, sns.elapsedMs / 200);
+        sns.needles.forEach((n) => {
+          n.height = n.maxHeight * growProg;
+        });
+
+        // Arcos voltaicos en cadena cada 250ms
+        if (sns.elapsedMs - sns.lastArcTickMs >= 250) {
+          sns.lastArcTickMs = sns.elapsedMs;
+          enemies.forEach((enemy) => {
+            if (enemy.hp <= 0) return;
+            const dx = enemy.x - sns.originX;
+            const dy = (enemy.y - sns.originY) / 0.58;
+            const d = Math.hypot(dx, dy);
+            if (d <= sns.maxRange + enemy.radius) {
+              const angToEnemy = Math.atan2(dy, dx);
+              let diff = Math.abs(angToEnemy - sns.aimAngle);
+              while (diff > Math.PI) diff = Math.abs(diff - Math.PI * 2);
+              if (diff <= 1.25) {
+                applyDamageToEnemy(enemy, 16, 'lightning', g.floatingTexts, enemy.x, enemy.y);
+                enemy.hitFlash = 5;
+                g.enemyManager.applyStatus(enemy, 'shocked', 60);
+              }
+            }
+          });
+
+          // Chispas violetas
+          if (sns.needles.length > 0) {
+            const rndNeedle = sns.needles[Math.floor(Math.random() * sns.needles.length)];
+            g.particlePool.spawn({
+              x: rndNeedle.x,
+              y: rndNeedle.y - rndNeedle.height,
+              vx: (Math.random() - 0.5) * 2,
+              vy: -1 - Math.random() * 2,
+              radius: 2.5,
+              color: '#a855f7',
+              life: 14,
+            });
+          }
+        }
+
+        if (sns.elapsedMs >= sns.durationMs) {
+          sns.finished = true;
+          g.superconductingNeedleStorms.splice(sIdx, 1);
+        }
+      }
+
+      // 5.009 Actualizar Glaciar Tectónico (Hielo x3 + Tierra)
+      for (let wIdx = g.tectonicGlacierWalls.length - 1; wIdx >= 0; wIdx--) {
+        const tgw = g.tectonicGlacierWalls[wIdx];
+        tgw.elapsedMs += dt;
+
+        // Avance hacia adelante de la pared
+        const moveDist = (tgw.speed * dt) / 1000;
+        tgw.currentDist = Math.min(tgw.maxTravelDist, tgw.currentDist + moveDist);
+
+        const wallFrontX = tgw.originX + Math.cos(tgw.aimAngle) * tgw.currentDist;
+        const wallFrontY = tgw.originY + Math.sin(tgw.aimAngle) * tgw.currentDist * 0.58;
+
+        // Empujar y dañar monstruos
+        enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          const dx = enemy.x - tgw.originX;
+          const dy = (enemy.y - tgw.originY) / 0.58;
+          const projDist = dx * Math.cos(tgw.aimAngle) + dy * Math.sin(tgw.aimAngle);
+          const perpDist = -dx * Math.sin(tgw.aimAngle) + dy * Math.cos(tgw.aimAngle);
+
+          // Si el enemigo está en la línea del muro
+          if (Math.abs(projDist - tgw.currentDist) <= 28 + enemy.radius && Math.abs(perpDist) <= (tgw.width / 2) + enemy.radius) {
+            // Empujar hacia adelante a la velocidad del muro
+            enemy.x += Math.cos(tgw.aimAngle) * (moveDist + 4);
+            enemy.y += Math.sin(tgw.aimAngle) * (moveDist + 4) * 0.58;
+
+            if (!tgw.hitEnemyIds.has(enemy.id)) {
+              tgw.hitEnemyIds.add(enemy.id);
+              applyDamageToEnemy(enemy, tgw.damage, 'ice', g.floatingTexts, wallFrontX, wallFrontY);
+              enemy.hitFlash = 16;
+              enemy.stunnedTimer = 72; // 1.2s aturdimiento
+            }
+          }
+        });
+
+        // Polvo y trozos de hielo
+        if (Math.random() < 0.4) {
+          const perp = (Math.random() - 0.5) * tgw.width;
+          const px = wallFrontX - Math.sin(tgw.aimAngle) * perp;
+          const py = wallFrontY + Math.cos(tgw.aimAngle) * perp * 0.58;
+          g.particlePool.spawn({
+            x: px,
+            y: py,
+            vx: -Math.cos(tgw.aimAngle) * 2 + (Math.random() - 0.5) * 2,
+            vy: -1 - Math.random() * 2,
+            radius: 3,
+            color: Math.random() > 0.5 ? '#0284c7' : '#1e293b',
+            life: 16,
+          });
+        }
+
+        if (tgw.currentDist >= tgw.maxTravelDist || tgw.elapsedMs >= tgw.durationMs) {
+          tgw.finished = true;
+          g.tectonicGlacierWalls.splice(wIdx, 1);
+        }
+      }
+
       // 5. Eliminar enemigos derrotados y desbloquear puertas / portales
       for (let i = enemies.length - 1; i >= 0; i--) {
         const deadEnemy = enemies[i];
@@ -12921,7 +13881,16 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.thundergodJudgments,
             g.primordialSupernovas,
             g.absoluteZeroAges,
-            g.tectonicCataclysms
+            g.tectonicCataclysms,
+            g.kineticPlasmaMeteors,
+            g.frostburnComets,
+            g.calderaCataclysms,
+            g.solarArcTempests,
+            g.cryoLightningStorms,
+            g.tectonicLightningHammers,
+            g.moltenBlizzards,
+            g.superconductingNeedleStorms,
+            g.tectonicGlacierWalls
           );
         }
       }

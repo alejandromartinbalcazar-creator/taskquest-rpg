@@ -68,6 +68,15 @@ import {
   PrimordialSupernovaEntity,
   AbsoluteZeroAgeEntity,
   TectonicCataclysmEntity,
+  KineticPlasmaMeteorEntity,
+  FrostburnCometEntity,
+  CalderaCataclysmEntity,
+  SolarArcTempestEntity,
+  CryoLightningStormEntity,
+  TectonicLightningHammerEntity,
+  MoltenBlizzardEntity,
+  SuperconductingNeedleStormEntity,
+  TectonicGlacierWallEntity,
 } from './types';
 import { PooledParticle } from '../combat/ParticlePool';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
@@ -161,7 +170,16 @@ export class IsometricRenderer {
     thundergodJudgments: ThundergodJudgmentEntity[] = [],
     primordialSupernovas: PrimordialSupernovaEntity[] = [],
     absoluteZeroAges: AbsoluteZeroAgeEntity[] = [],
-    tectonicCataclysms: TectonicCataclysmEntity[] = []
+    tectonicCataclysms: TectonicCataclysmEntity[] = [],
+    kineticPlasmaMeteors: KineticPlasmaMeteorEntity[] = [],
+    frostburnComets: FrostburnCometEntity[] = [],
+    calderaCataclysms: CalderaCataclysmEntity[] = [],
+    solarArcTempests: SolarArcTempestEntity[] = [],
+    cryoLightningStorms: CryoLightningStormEntity[] = [],
+    tectonicLightningHammers: TectonicLightningHammerEntity[] = [],
+    moltenBlizzards: MoltenBlizzardEntity[] = [],
+    superconductingNeedleStorms: SuperconductingNeedleStormEntity[] = [],
+    tectonicGlacierWalls: TectonicGlacierWallEntity[] = []
   ) {
     ctx.save();
 
@@ -290,6 +308,27 @@ export class IsometricRenderer {
 
     // 3.896 Dibujar Fisuras Transversales y Escombros de Cataclismo Tectónico (Tierra x4)
     this.drawTectonicCataclysmGround(ctx, tectonicCataclysms);
+
+    // 3.897 Dibujar Cráter de Magma y Vetas Vivas de Caldera Volcánica Profunda (Fuego x3 + Tierra)
+    this.drawCalderaCataclysmGround(ctx, calderaCataclysms);
+
+    // 3.898 Dibujar Retícula de Telegrafiado y Estallido en Suelo de Meteoro de Plasma Cinético (Fuego x3 + Rayo)
+    this.drawKineticPlasmaMeteorGround(ctx, kineticPlasmaMeteors);
+
+    // 3.899 Dibujar Suelo Quemado y Columnas de Plasma de Tempestad Solar (Rayo x3 + Fuego)
+    this.drawSolarArcTempestGround(ctx, solarArcTempests);
+
+    // 3.900 Dibujar Impactos y Cristales en Suelo de Rayo Criogénico Puro (Rayo x3 + Hielo)
+    this.drawCryoLightningStormGround(ctx, cryoLightningStorms);
+
+    // 3.901 Dibujar Grietas Tectónicas y Cráter de Martillo de Thor (Rayo x3 + Tierra)
+    this.drawTectonicLightningHammerGround(ctx, tectonicLightningHammers);
+
+    // 3.902 Dibujar Zona de Suelo Fundido y Vapor de Ventisca Ígnea (Hielo x3 + Fuego)
+    this.drawMoltenBlizzardGround(ctx, moltenBlizzards);
+
+    // 3.903 Dibujar Agujas Clavadas en Suelo y Arcos de Agujas Superconductoras (Hielo x3 + Rayo)
+    this.drawSuperconductingNeedleStormGround(ctx, superconductingNeedleStorms);
 
     // 3.89 Dibujar Áreas de Advertencia y Telegrafiados del Custodio del Umbral (Fisura, Estalagmitas, Nova y Juicio)
     if (currentBoss && currentBoss.bossType === 'threshold_custodian') {
@@ -670,6 +709,77 @@ export class IsometricRenderer {
         renderList.push({
           y: tc.centerY,
           draw: () => this.drawTectonicCataclysmMonoliths(ctx, tc),
+        });
+      }
+    });
+
+    // Meteoro de Plasma Cinético (Fuego x3 + Rayo) en Depth Sorting
+    kineticPlasmaMeteors.forEach((m) => {
+      if (!m.finished) {
+        renderList.push({
+          y: m.currentY,
+          draw: () => this.drawKineticPlasmaMeteor(ctx, m),
+        });
+      }
+    });
+
+    // Cometa de Frío Abrasador (Fuego x3 + Hielo) en Depth Sorting
+    frostburnComets.forEach((c) => {
+      if (!c.finished) {
+        renderList.push({
+          y: c.currentY,
+          draw: () => this.drawFrostburnComet(ctx, c),
+        });
+      }
+    });
+
+    // Tempestad Solar (Rayo x3 + Fuego) en Depth Sorting
+    solarArcTempests.forEach((sat) => {
+      if (!sat.finished) {
+        renderList.push({
+          y: sat.originY,
+          draw: () => this.drawSolarArcTempestBeams(ctx, sat),
+        });
+      }
+    });
+
+    // Rayo Criogénico Puro (Rayo x3 + Hielo) en Depth Sorting
+    cryoLightningStorms.forEach((cls) => {
+      if (!cls.finished) {
+        renderList.push({
+          y: cls.originY,
+          draw: () => this.drawCryoLightningStormStrikes(ctx, cls),
+        });
+      }
+    });
+
+    // Martillo de Thor Tectónico (Rayo x3 + Tierra) en Depth Sorting
+    tectonicLightningHammers.forEach((tlh) => {
+      if (!tlh.finished) {
+        renderList.push({
+          y: tlh.targetY,
+          draw: () => this.drawTectonicLightningHammerPillar(ctx, tlh),
+        });
+      }
+    });
+
+    // Ventisca Ígnea (Hielo x3 + Fuego) en Depth Sorting
+    moltenBlizzards.forEach((mb) => {
+      if (!mb.finished) {
+        renderList.push({
+          y: mb.centerY,
+          draw: () => this.drawMoltenBlizzardWeather(ctx, mb),
+        });
+      }
+    });
+
+    // Glaciar Tectónico (Hielo x3 + Tierra) en Depth Sorting
+    tectonicGlacierWalls.forEach((tgw) => {
+      if (!tgw.finished) {
+        const wallY = tgw.originY + Math.sin(tgw.aimAngle) * tgw.currentDist * 0.58;
+        renderList.push({
+          y: wallY,
+          draw: () => this.drawTectonicGlacierWallMoving(ctx, tgw),
         });
       }
     });
@@ -6154,6 +6264,956 @@ export class IsometricRenderer {
         // Nube de polvo de escombros
         ctx.fillStyle = 'rgba(120, 53, 15, 0.4)';
         ctx.fillRect(mx - halfW - 8, my - 16, w + 16, 14);
+      }
+    });
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // METEORO DE PLASMA CINÉTICO (FUEGO x3 + RAYO: TELEGRAFIADO Y ANILLO EXPANSIVO)
+  // =========================================================================
+  private static drawKineticPlasmaMeteorGround(
+    ctx: CanvasRenderingContext2D,
+    meteors: KineticPlasmaMeteorEntity[]
+  ) {
+    if (!meteors || meteors.length === 0) return;
+
+    meteors.forEach((m) => {
+      if (m.finished) return;
+
+      const tx = Math.round(m.targetX);
+      const ty = Math.round(m.targetY);
+      const squish = 0.58;
+
+      if (!m.exploded) {
+        // 1. Retícula de telegrafiado supersónico (150ms)
+        const prog = Math.min(1, m.elapsedMs / m.telegraphDurationMs);
+        const radius = Math.round(m.impactRadius * (0.8 + 0.2 * Math.sin(prog * Math.PI * 4)));
+
+        ctx.save();
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(prog * Math.PI * 6);
+
+        // Anillo exterior dentado en amarillo eléctrico (#FACC15)
+        const nodes = 12;
+        for (let i = 0; i < nodes; i++) {
+          const ang = (i / nodes) * Math.PI * 2;
+          const px = Math.round(tx + Math.cos(ang) * radius);
+          const py = Math.round(ty + Math.sin(ang) * radius * squish);
+          ctx.fillStyle = i % 2 === 0 ? '#facc15' : '#a855f7';
+          ctx.fillRect(px - 3, py - 2, 6, 4);
+        }
+
+        // Cruz de retícula pixelada en el centro
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(tx - 8, ty - 1, 16, 2);
+        ctx.fillRect(tx - 1, ty - 8 * squish, 2, Math.round(16 * squish));
+
+        ctx.restore();
+      } else {
+        // 2. Estallido en anillo expansivo de píxeles combinados
+        const explosionDuration = m.durationMs - m.telegraphDurationMs;
+        const elapsedSinceExp = m.elapsedMs - m.telegraphDurationMs;
+        if (elapsedSinceExp < 0 || elapsedSinceExp > explosionDuration) return;
+
+        const prog = Math.min(1, elapsedSinceExp / explosionDuration);
+        const alpha = Math.max(0, 1 - prog);
+        const curR = Math.round(m.impactRadius * prog);
+
+        if (curR <= 2) return;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        // Anillo de choque de píxeles escalados
+        const segments = 20;
+        for (let i = 0; i < segments; i++) {
+          const ang = (i / segments) * Math.PI * 2;
+          const px = Math.round(tx + Math.cos(ang) * curR);
+          const py = Math.round(ty + Math.sin(ang) * curR * squish);
+
+          // Píxeles combinados: blanco, amarillo, violeta y naranja
+          const colorMod = i % 4;
+          ctx.fillStyle = colorMod === 0 ? '#ffffff' : (colorMod === 1 ? '#facc15' : (colorMod === 2 ? '#a855f7' : '#ea580c'));
+          ctx.fillRect(px - 4, py - 3, 8, 6);
+
+          // Chispas periféricas adicionales
+          if (prog < 0.65 && i % 2 === 0) {
+            const sparkDist = curR * 1.15;
+            const sx = Math.round(tx + Math.cos(ang + 0.1) * sparkDist);
+            const sy = Math.round(ty + Math.sin(ang + 0.1) * sparkDist * squish);
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(sx - 2, sy - 2, 4, 4);
+          }
+        }
+
+        // Cráter central quemado
+        if (prog < 0.8) {
+          ctx.fillStyle = 'rgba(24, 24, 27, 0.45)';
+          const craterR = Math.round(m.impactRadius * 0.45);
+          ctx.fillRect(tx - craterR, ty - Math.round(craterR * squish), craterR * 2, Math.round(craterR * squish * 2));
+        }
+
+        ctx.restore();
+      }
+    });
+  }
+
+  private static drawKineticPlasmaMeteor(
+    ctx: CanvasRenderingContext2D,
+    m: KineticPlasmaMeteorEntity
+  ) {
+    if (m.finished || m.exploded) return;
+
+    const mx = Math.round(m.currentX);
+    const my = Math.round(m.currentY);
+    const dx = m.targetX - m.startX;
+    const dy = m.targetY - m.startY;
+    const dist = Math.hypot(dx, dy) || 1;
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    ctx.save();
+
+    // 1. Estela escalonada en violeta eléctrico (#A855F7)
+    const trailSteps = 5;
+    for (let t = 1; t <= trailSteps; t++) {
+      const trailOffset = t * 14;
+      const tx = Math.round(mx - dirX * trailOffset);
+      const ty = Math.round(my - dirY * trailOffset);
+      const tSize = Math.max(3, 14 - t * 2);
+      const halfT = Math.round(tSize / 2);
+
+      ctx.fillStyle = t % 2 === 0 ? '#a855f7' : '#c084fc';
+      ctx.fillRect(tx - halfT, ty - halfT, tSize, tSize);
+
+      // Píxeles de chispas a los costados de la estela
+      const perpX = -dirY * (4 + t * 2);
+      const perpY = dirX * (4 + t * 2);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(Math.round(tx + perpX - 1), Math.round(ty + perpY - 1), 3, 3);
+      ctx.fillRect(Math.round(tx - perpX - 1), Math.round(ty - perpY - 1), 3, 3);
+    }
+
+    // 2. Bordes amarillos (#FACC15)
+    const outerSize = 22;
+    const halfOuter = 11;
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(mx - halfOuter, my - halfOuter, outerSize, outerSize);
+
+    // Detalle de plasma naranja en las aristas (#EA580C)
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(mx - halfOuter + 2, my - halfOuter + 2, outerSize - 4, outerSize - 4);
+
+    // 3. Núcleo cuadrado blanco (#FFFFFF)
+    const coreSize = 10;
+    const halfCore = 5;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(mx - halfCore, my - halfCore, coreSize, coreSize);
+
+    // Arcos voltaicos menores cruzando el bólido
+    ctx.fillStyle = '#a855f7';
+    ctx.fillRect(mx - halfOuter - 4, my - 2, 4, 4);
+    ctx.fillRect(mx + halfOuter, my - 2, 4, 4);
+    ctx.fillRect(mx - 2, my - halfOuter - 4, 4, 4);
+    ctx.fillRect(mx - 2, my + halfOuter, 4, 4);
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // COMETA DE FRÍO ABRASADOR (FUEGO x3 + HIELO: ESFERA PARTIDA Y VAPOR TÉRMICO)
+  // =========================================================================
+  private static drawFrostburnComet(
+    ctx: CanvasRenderingContext2D,
+    c: FrostburnCometEntity
+  ) {
+    if (c.finished) return;
+
+    const squish = 0.58;
+
+    if (!c.exploded) {
+      const cx = Math.round(c.currentX);
+      const cy = Math.round(c.currentY);
+      const cz = Math.round(c.currentZ);
+      const drawY = cy - cz;
+
+      ctx.save();
+
+      // 1. Sombra en el suelo (se achica con la elevación Z)
+      const shadowR = Math.max(6, Math.round(20 - cz * 0.1));
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      ctx.fillRect(cx - shadowR, cy - Math.round(shadowR * squish), shadowR * 2, Math.round(shadowR * squish * 2));
+
+      // 2. Estela doble en vuelo: llamas a la izquierda, hielo a la derecha
+      const trailOffset = 12;
+      // Fuego estela (#EA580C / #F97316)
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(cx - 10, drawY + trailOffset, 6, 6);
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(cx - 8, drawY + trailOffset + 6, 4, 4);
+
+      // Hielo estela (#38BDF8 / #BAE6FD)
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(cx + 4, drawY + trailOffset, 6, 6);
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(cx + 4, drawY + trailOffset + 6, 4, 4);
+
+      // 3. Esfera pixelada de 16px partida en dos mitades
+      const halfSize = 8;
+
+      // Mitad Izquierda: Rojo Fuego (#EA580C)
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(cx - halfSize, drawY - halfSize + 2, halfSize, halfSize * 2 - 4);
+      ctx.fillRect(cx - halfSize + 2, drawY - halfSize, halfSize - 2, 2);
+      ctx.fillRect(cx - halfSize + 2, drawY + halfSize - 2, halfSize - 2, 2);
+
+      // Sombra ígnea interior (#C2410C)
+      ctx.fillStyle = '#c2410c';
+      ctx.fillRect(cx - halfSize + 1, drawY - 2, 3, 4);
+
+      // Mitad Derecha: Azul Glaciar (#38BDF8)
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(cx, drawY - halfSize + 2, halfSize, halfSize * 2 - 4);
+      ctx.fillRect(cx, drawY - halfSize, halfSize - 2, 2);
+      ctx.fillRect(cx, drawY + halfSize - 2, halfSize - 2, 2);
+
+      // Sombra glaciar interior (#0284C7)
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(cx + halfSize - 4, drawY - 2, 3, 4);
+
+      // 4. Costura central blanca (#FFFFFF) con choque térmico
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 1, drawY - halfSize, 2, halfSize * 2);
+
+      // Coronamiento de esquirlas térmicas
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(cx - 3, drawY - halfSize - 2, 2, 2);
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(cx + 1, drawY - halfSize - 2, 2, 2);
+
+      ctx.restore();
+    } else {
+      // Detonación: Nube densa de vapor blanco y esquirlas cuadradas
+      const detonationDuration = 180;
+      const elapsedSinceExp = c.elapsedMs - (c.durationMs - detonationDuration);
+      const prog = Math.min(1, Math.max(0, elapsedSinceExp / detonationDuration));
+      const alpha = Math.max(0, 1 - prog);
+      const curR = Math.round(c.impactRadius * (0.3 + 0.7 * prog));
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const tx = Math.round(c.targetX);
+      const ty = Math.round(c.targetY);
+
+      // Bloques de vapor denso (#FFFFFF / #BAE6FD)
+      const cloudClusters = 12;
+      for (let i = 0; i < cloudClusters; i++) {
+        const ang = (i / cloudClusters) * Math.PI * 2;
+        const dist = curR * 0.75;
+        const bx = Math.round(tx + Math.cos(ang) * dist);
+        const by = Math.round(ty + Math.sin(ang) * dist * squish);
+        const bSize = Math.max(6, Math.round(14 * (1 - prog * 0.4)));
+
+        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#bae6fd';
+        ctx.fillRect(bx - Math.round(bSize / 2), by - Math.round((bSize * squish) / 2), bSize, Math.round(bSize * squish));
+      }
+
+      // Esquirlas cuadradas lanzadas radialmente (rojo fuego y azul glaciar)
+      const shardCount = 14;
+      for (let s = 0; s < shardCount; s++) {
+        const sAng = (s / shardCount) * Math.PI * 2 + 0.2;
+        const sDist = curR * (0.9 + (s % 3) * 0.15);
+        const sx = Math.round(tx + Math.cos(sAng) * sDist);
+        const sy = Math.round(ty + Math.sin(sAng) * sDist * squish);
+
+        ctx.fillStyle = s % 2 === 0 ? '#ea580c' : '#38bdf8';
+        ctx.fillRect(sx - 3, sy - 2, 6, 4);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx - 1, sy - 1, 2, 2);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // =========================================================================
+  // CALDERA VOLCÁNICA PROFUNDA (FUEGO x3 + TIERRA: ELIPSE, BASALTO Y LAVA VIVA)
+  // =========================================================================
+  private static drawCalderaCataclysmGround(
+    ctx: CanvasRenderingContext2D,
+    calderas: CalderaCataclysmEntity[]
+  ) {
+    if (!calderas || calderas.length === 0) return;
+
+    calderas.forEach((cc) => {
+      if (cc.finished) return;
+
+      const remainingRatio = Math.max(0, (cc.durationMs - cc.elapsedMs) / cc.durationMs);
+      const alpha = Math.min(1, remainingRatio * 1.5);
+      if (alpha <= 0.01) return;
+
+      const cx = Math.round(cc.centerX);
+      const cy = Math.round(cc.centerY);
+      const rad = cc.radius; // 100px
+      const squish = 0.58;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // 1. Fondo del cráter magmático hundido
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(cx - rad, cy - Math.round(rad * squish), rad * 2, Math.round(rad * squish * 2));
+
+      // 2. Lago de lava interior (#EA580C)
+      const innerRad = Math.round(rad * 0.82);
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(cx - innerRad, cy - Math.round(innerRad * squish), innerRad * 2, Math.round(innerRad * squish * 2));
+
+      // 3. Vetas de lava viva fundida (#F97316 y #FEF08A)
+      const veinBranches = 8;
+      for (let v = 0; v < veinBranches; v++) {
+        const vAng = (v / veinBranches) * Math.PI * 2 + (v % 2 === 0 ? 0.15 : -0.15);
+        const vLen = Math.round(innerRad * 0.95);
+        const vx1 = cx;
+        const vy1 = cy;
+        const vx2 = Math.round(cx + Math.cos(vAng) * vLen);
+        const vy2 = Math.round(cy + Math.sin(vAng) * vLen * squish);
+
+        ctx.fillStyle = '#f97316';
+        ctx.fillRect(Math.min(vx1, vx2) - 2, Math.min(vy1, vy2) - 1, Math.abs(vx2 - vx1) + 4, Math.abs(vy2 - vy1) + 2);
+
+        // Centro brillante de la veta
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(Math.min(vx1, vx2), Math.min(vy1, vy2), Math.max(2, Math.abs(vx2 - vx1)), Math.max(2, Math.abs(vy2 - vy1)));
+      }
+
+      // 4. Losas de basalto negro fracturadas en el perímetro (#18181B y #27272A)
+      const slabCount = 16;
+      for (let s = 0; s < slabCount; s++) {
+        const sAng = (s / slabCount) * Math.PI * 2;
+        const slabDist = rad * 0.9;
+        const sx = Math.round(cx + Math.cos(sAng) * slabDist);
+        const sy = Math.round(cy + Math.sin(sAng) * slabDist * squish);
+
+        const slabW = 16 + (s % 3) * 4;
+        const slabH = Math.round((10 + (s % 2) * 3) * squish);
+
+        ctx.fillStyle = s % 2 === 0 ? '#18181b' : '#27272a';
+        ctx.fillRect(sx - Math.round(slabW / 2), sy - Math.round(slabH / 2), slabW, slabH);
+
+        // Borde chamuscado (#7F1D1D)
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(sx - Math.round(slabW / 2) + 1, sy - Math.round(slabH / 2) + 1, slabW - 2, 2);
+      }
+
+      // 5. Burbujas cuadradas que estallan proceduralmente
+      const bubbleCount = 7;
+      for (let b = 0; b < bubbleCount; b++) {
+        // Ciclo de vida de cada burbuja: 600ms
+        const bubbleTime = (cc.elapsedMs + b * 190) % 600;
+        const bProg = bubbleTime / 600;
+
+        const bAng = ((b * 3.7) % 6.28);
+        const bDist = (rad * 0.25) + ((b * 19) % Math.round(rad * 0.45));
+        const bx = Math.round(cx + Math.cos(bAng) * bDist);
+        const by = Math.round(cy + Math.sin(bAng) * bDist * squish);
+
+        if (bProg < 0.75) {
+          // Burbuja cuadrada creciendo
+          const bSize = Math.max(2, Math.round(3 + bProg * 5));
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(bx - Math.round(bSize / 2), by - Math.round(bSize / 2), bSize, bSize);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bx - 1, by - 1, 2, 2);
+        } else {
+          // Estallido: 4 píxeles que se separan
+          const popProg = (bProg - 0.75) / 0.25;
+          const spread = Math.round(popProg * 7);
+          ctx.fillStyle = '#f97316';
+          ctx.fillRect(bx - spread - 1, by - spread - 1, 2, 2);
+          ctx.fillRect(bx + spread - 1, by - spread - 1, 2, 2);
+          ctx.fillRect(bx - spread - 1, by + spread - 1, 2, 2);
+          ctx.fillRect(bx + spread - 1, by + spread - 1, 2, 2);
+        }
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // TEMPESTAD SOLAR (RAYO x3 + FUEGO: CASCADA DE RAYOS Y PLASMA SOLAR)
+  // =========================================================================
+  private static drawSolarArcTempestGround(
+    ctx: CanvasRenderingContext2D,
+    tempests: SolarArcTempestEntity[]
+  ) {
+    if (!tempests || tempests.length === 0) return;
+
+    tempests.forEach((sat) => {
+      if (sat.finished) return;
+
+      const alpha = Math.max(0, 1 - sat.elapsedMs / sat.durationMs);
+      if (alpha <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.3);
+
+      const squish = 0.58;
+
+      // 1. Columnas de plasma solar residuales en el suelo
+      sat.plasmaColumns.forEach((col, idx) => {
+        const cx = Math.round(col.x);
+        const cy = Math.round(col.y);
+        const rad = Math.round(col.radius);
+
+        // Suelo chamuscado
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(cx - rad, cy - Math.round(rad * squish), rad * 2, Math.round(rad * squish * 2));
+
+        // Núcleo de plasma solar (#EA580C y #FDE047)
+        const innerRad = Math.round(rad * 0.65);
+        ctx.fillStyle = '#ea580c';
+        ctx.fillRect(cx - innerRad, cy - Math.round(innerRad * squish), innerRad * 2, Math.round(innerRad * squish * 2));
+
+        const pulse = Math.sin(sat.elapsedMs * 0.015 + idx);
+        if (pulse > 0) {
+          ctx.fillStyle = '#fde047';
+          ctx.fillRect(cx - 3, cy - 2, 6, 4);
+        }
+      });
+
+      ctx.restore();
+    });
+  }
+
+  private static drawSolarArcTempestBeams(
+    ctx: CanvasRenderingContext2D,
+    sat: SolarArcTempestEntity
+  ) {
+    if (sat.finished) return;
+
+    const alpha = Math.max(0, 1 - sat.elapsedMs / sat.durationMs);
+    if (alpha <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.4);
+
+    // Rayos verticales quebrados descendiendo en cada columna de plasma
+    sat.plasmaColumns.forEach((col, idx) => {
+      const cx = Math.round(col.x);
+      const groundY = Math.round(col.y);
+      const skyY = groundY - 180;
+      const steps = 10;
+      const stepH = (groundY - skyY) / steps;
+
+      // Rayo principal en zig-zag 16-bit
+      let curX = cx;
+      for (let s = 0; s < steps; s++) {
+        const segY = Math.round(skyY + s * stepH);
+        const jitter = Math.sin(sat.elapsedMs * 0.02 + idx * 2 + s * 1.5) * 8;
+        const nextX = Math.round(cx + jitter);
+
+        // Filamento exterior de fuego naranja (#EA580C)
+        ctx.fillStyle = '#ea580c';
+        ctx.fillRect(Math.min(curX, nextX) - 3, segY, Math.abs(nextX - curX) + 6, Math.round(stepH) + 1);
+
+        // Capa intermedia amarillo eléctrico (#FDE047)
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(Math.min(curX, nextX) - 1, segY, Math.abs(nextX - curX) + 3, Math.round(stepH) + 1);
+
+        // Núcleo blanco puro (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(Math.min(curX, nextX), segY, Math.max(2, Math.abs(nextX - curX)), Math.round(stepH) + 1);
+
+        curX = nextX;
+      }
+
+      // Columna de plasma solar ascendente (altura ~40px)
+      const colH = Math.round(col.height);
+      const colW = Math.round(col.radius * 0.8);
+      ctx.fillStyle = 'rgba(234, 88, 12, 0.6)';
+      ctx.fillRect(cx - Math.round(colW / 2), groundY - colH, colW, colH);
+
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(cx - Math.round(colW / 4), groundY - Math.round(colH * 0.7), Math.round(colW / 2), Math.round(colH * 0.7));
+
+      // Ascuas cuadradas flotantes
+      const emberTime = (sat.elapsedMs + idx * 100) * 0.05;
+      for (let e = 0; e < 3; e++) {
+        const ex = Math.round(cx + Math.sin(emberTime + e) * (colW * 0.8));
+        const ey = Math.round(groundY - ((emberTime * 8 + e * 14) % colH));
+        ctx.fillStyle = e % 2 === 0 ? '#fde047' : '#ea580c';
+        ctx.fillRect(ex - 1, ey - 1, 3, 3);
+      }
+    });
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // RAYO CRIOGÉNICO PURO (RAYO x3 + HIELO: ARCOS VOLTAICOS Y CRISTALES)
+  // =========================================================================
+  private static drawCryoLightningStormGround(
+    ctx: CanvasRenderingContext2D,
+    storms: CryoLightningStormEntity[]
+  ) {
+    if (!storms || storms.length === 0) return;
+
+    storms.forEach((cls) => {
+      if (cls.finished) return;
+
+      const alpha = Math.max(0, 1 - cls.elapsedMs / cls.durationMs);
+      if (alpha <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+      const squish = 0.58;
+
+      cls.strikes.forEach((s) => {
+        const sx = Math.round(s.targetX);
+        const sy = Math.round(s.targetY);
+
+        // Parche de escarcha circular en suelo (#0284C7)
+        const rad = 26;
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.45)';
+        ctx.fillRect(sx - rad, sy - Math.round(rad * squish), rad * 2, Math.round(rad * squish * 2));
+
+        // Púas y cristales de hielo cuadrados que brotan en el suelo
+        const spikeCount = 5;
+        for (let sp = 0; sp < spikeCount; sp++) {
+          const spAng = (sp / spikeCount) * Math.PI * 2;
+          const spDist = 12 + (sp % 2) * 6;
+          const spX = Math.round(sx + Math.cos(spAng) * spDist);
+          const spY = Math.round(sy + Math.sin(spAng) * spDist * squish);
+          const spH = Math.round(12 + (sp % 3) * 6);
+
+          // Púa de hielo (#0284C7 / #38BDF8 / #FFFFFF)
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(spX - 2, spY - spH, 4, spH);
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(spX - 1, spY - spH, 2, spH - 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(spX - 1, spY - spH - 1, 2, 2);
+        }
+      });
+
+      ctx.restore();
+    });
+  }
+
+  private static drawCryoLightningStormStrikes(
+    ctx: CanvasRenderingContext2D,
+    cls: CryoLightningStormEntity
+  ) {
+    if (cls.finished) return;
+
+    const alpha = Math.max(0, 1 - cls.elapsedMs / cls.durationMs);
+    if (alpha <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+    // 1. Rayos verticales en cian brillante (#38BDF8) y azul glacial (#0284C7)
+    cls.strikes.forEach((s, idx) => {
+      const tx = Math.round(s.targetX);
+      const groundY = Math.round(s.targetY);
+      const skyY = groundY - 210;
+      const steps = 9;
+      const stepH = (groundY - skyY) / steps;
+
+      let curX = tx;
+      for (let st = 0; st < steps; st++) {
+        const segY = Math.round(skyY + st * stepH);
+        const jitter = Math.sin(cls.elapsedMs * 0.03 + idx * 3 + st * 1.8) * 10;
+        const nextX = Math.round(tx + jitter);
+
+        // Borde azul glacial (#0284C7)
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(Math.min(curX, nextX) - 3, segY, Math.abs(nextX - curX) + 6, Math.round(stepH) + 1);
+
+        // Cuerpo cian brillante (#38BDF8)
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(Math.min(curX, nextX) - 1, segY, Math.abs(nextX - curX) + 3, Math.round(stepH) + 1);
+
+        // Núcleo blanco (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(Math.min(curX, nextX), segY, Math.max(2, Math.abs(nextX - curX)), Math.round(stepH) + 1);
+
+        curX = nextX;
+      }
+    });
+
+    // 2. Arcos voltaicos horizontales conectando puntos adyacentes
+    if (cls.strikes.length >= 2) {
+      for (let i = 0; i < cls.strikes.length - 1; i++) {
+        const s1 = cls.strikes[i];
+        const s2 = cls.strikes[i + 1];
+        const midX = Math.round((s1.targetX + s2.targetX) / 2);
+        const midY = Math.round((s1.targetY + s2.targetY) / 2) - 15;
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(Math.min(s1.targetX, midX), Math.min(s1.targetY, midY), Math.abs(midX - s1.targetX) + 2, 2);
+        ctx.fillRect(Math.min(midX, s2.targetX), Math.min(midY, s2.targetY), Math.abs(s2.targetX - midX) + 2, 2);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // MARTILLO DE THOR TECTÓNICO (RAYO x3 + TIERRA: COLUMNA RUNAS Y GRIETAS)
+  // =========================================================================
+  private static drawTectonicLightningHammerGround(
+    ctx: CanvasRenderingContext2D,
+    hammers: TectonicLightningHammerEntity[]
+  ) {
+    if (!hammers || hammers.length === 0) return;
+
+    hammers.forEach((tlh) => {
+      if (tlh.finished) return;
+
+      const alpha = Math.max(0, 1 - tlh.elapsedMs / tlh.durationMs);
+      if (alpha <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+      const tx = Math.round(tlh.targetX);
+      const ty = Math.round(tlh.targetY);
+      const squish = 0.58;
+
+      // 1. Onda de choque radial expansiva (hasta 120px)
+      const prog = Math.min(1, tlh.elapsedMs / 200);
+      const curR = Math.round(tlh.impactRadius * prog);
+
+      ctx.fillStyle = 'rgba(253, 224, 71, 0.25)';
+      ctx.fillRect(tx - curR, ty - Math.round(curR * squish), curR * 2, Math.round(curR * squish * 2));
+
+      // 2. Grietas de roca gris (#27272A) que se abren en el suelo
+      tlh.fissures.forEach((f) => {
+        const fLen = Math.round(f.length * prog);
+        const segments = 6;
+        for (let s = 0; s < segments; s++) {
+          const d1 = (s / segments) * fLen;
+          const d2 = ((s + 1) / segments) * fLen;
+          const fx1 = Math.round(tx + Math.cos(f.angle) * d1);
+          const fy1 = Math.round(ty + Math.sin(f.angle) * d1 * squish);
+          const fx2 = Math.round(tx + Math.cos(f.angle) * d2);
+          const fy2 = Math.round(ty + Math.sin(f.angle) * d2 * squish);
+
+          // Hendidura abisal (#27272A)
+          ctx.fillStyle = '#27272a';
+          ctx.fillRect(Math.min(fx1, fx2) - 3, Math.min(fy1, fy2) - 2, Math.abs(fx2 - fx1) + 6, Math.abs(fy2 - fy1) + 4);
+
+          // Borde de roca (#78350F)
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(Math.min(fx1, fx2) - 2, Math.min(fy1, fy2) - 2, Math.abs(fx2 - fx1) + 4, 1);
+        }
+      });
+
+      // 3. Esquirlas cuadradas de roca gris (#52525B)
+      const shardProg = Math.min(1, tlh.elapsedMs / 250);
+      for (let sh = 0; sh < 8; sh++) {
+        const shAng = (sh / 8) * Math.PI * 2;
+        const shDist = Math.round((40 + (sh % 3) * 25) * shardProg);
+        const shX = Math.round(tx + Math.cos(shAng) * shDist);
+        const shY = Math.round(ty + Math.sin(shAng) * shDist * squish);
+
+        ctx.fillStyle = sh % 2 === 0 ? '#52525b' : '#27272a';
+        ctx.fillRect(shX - 2, shY - 2, 5, 4);
+      }
+
+      ctx.restore();
+    });
+  }
+
+  private static drawTectonicLightningHammerPillar(
+    ctx: CanvasRenderingContext2D,
+    tlh: TectonicLightningHammerEntity
+  ) {
+    if (tlh.finished) return;
+
+    const alpha = Math.max(0, 1 - tlh.elapsedMs / tlh.durationMs);
+    if (alpha <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+    const tx = Math.round(tlh.targetX);
+    const groundY = Math.round(tlh.targetY);
+    const skyY = groundY - 320;
+    const pillarH = groundY - skyY;
+    const halfW = Math.round(tlh.pillarWidth / 2); // 20px
+
+    // 1. Columna de luz vertical de 40px de ancho:
+    // Borde exterior ámbar (#F59E0B)
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.4)';
+    ctx.fillRect(tx - halfW, skyY, tlh.pillarWidth, pillarH);
+
+    // Manto intermedio amarillo (#FDE047)
+    const midW = 26;
+    ctx.fillStyle = 'rgba(253, 224, 71, 0.7)';
+    ctx.fillRect(tx - Math.round(midW / 2), skyY, midW, pillarH);
+
+    // Núcleo blanco puro (#FFFFFF)
+    const coreW = 12;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(tx - Math.round(coreW / 2), skyY, coreW, pillarH);
+
+    // 2. Runas amarillas grabadas en la columna
+    const runeCount = 5;
+    for (let r = 0; r < runeCount; r++) {
+      const runeY = Math.round(skyY + 40 + r * 50);
+
+      // Símbolo rúnico 16-bit
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(tx - 6, runeY, 12, 3);
+      ctx.fillRect(tx - 2, runeY - 6, 4, 15);
+      ctx.fillRect(tx - 5, runeY + 6, 10, 3);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(tx - 1, runeY, 2, 3);
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // VENTISCA ÍGNEA (HIELO x3 + FUEGO: HIELO CANDENTE, MAGMA Y VAPOR)
+  // =========================================================================
+  private static drawMoltenBlizzardGround(
+    ctx: CanvasRenderingContext2D,
+    blizzards: MoltenBlizzardEntity[]
+  ) {
+    if (!blizzards || blizzards.length === 0) return;
+
+    blizzards.forEach((mb) => {
+      if (mb.finished) return;
+
+      const alpha = Math.max(0, 1 - mb.elapsedMs / mb.durationMs);
+      if (alpha <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.4);
+
+      const cx = Math.round(mb.centerX);
+      const cy = Math.round(mb.centerY);
+      const rad = mb.radius;
+      const squish = 0.58;
+
+      // 1. Suelo escarchado con fracturas térmicas
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+      ctx.fillRect(cx - rad, cy - Math.round(rad * squish), rad * 2, Math.round(rad * squish * 2));
+
+      // Centro magmático incandescente
+      const innerR = Math.round(rad * 0.55);
+      ctx.fillStyle = 'rgba(234, 88, 12, 0.35)';
+      ctx.fillRect(cx - innerR, cy - Math.round(innerR * squish), innerR * 2, Math.round(innerR * squish * 2));
+
+      // 2. Nubes de vapor blanco (#F8FAFC) al tocar el suelo
+      const vaporPuffs = 8;
+      for (let v = 0; v < vaporPuffs; v++) {
+        const vAng = (v / vaporPuffs) * Math.PI * 2 + (mb.elapsedMs * 0.003);
+        const vDist = (rad * 0.3) + ((v * 17) % Math.round(rad * 0.5));
+        const vx = Math.round(cx + Math.cos(vAng) * vDist);
+        const vy = Math.round(cy + Math.sin(vAng) * vDist * squish) - Math.round((mb.elapsedMs * 0.04 + v * 8) % 24);
+        const vSize = 10 + (v % 3) * 4;
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(vx - Math.round(vSize / 2), vy - Math.round((vSize * squish) / 2), vSize, Math.round(vSize * squish));
+      }
+
+      ctx.restore();
+    });
+  }
+
+  private static drawMoltenBlizzardWeather(
+    ctx: CanvasRenderingContext2D,
+    mb: MoltenBlizzardEntity
+  ) {
+    if (mb.finished) return;
+
+    const alpha = Math.max(0, 1 - mb.elapsedMs / mb.durationMs);
+    if (alpha <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+    const cx = Math.round(mb.centerX);
+    const cy = Math.round(mb.centerY);
+    const rad = mb.radius;
+    const squish = 0.58;
+
+    // Lluvia de partículas cuadradas cian (#38BDF8) y gotas de magma (#EA580C)
+    const dropCount = 24;
+    for (let d = 0; d < dropCount; d++) {
+      const dropOffset = (mb.elapsedMs * 0.5 + d * 35) % 220;
+      const dAng = (d * 1.95) % 6.28;
+      const dDist = (d * 13) % Math.round(rad * 0.85);
+
+      const dx = Math.round(cx + Math.cos(dAng) * dDist);
+      const dy = Math.round(cy + Math.sin(dAng) * dDist * squish - 180 + dropOffset);
+
+      if (dy <= cy + 10) {
+        if (d % 2 === 0) {
+          // Partícula cuadrada cian de hielo (#38BDF8)
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(dx - 2, dy - 2, 4, 4);
+          ctx.fillStyle = '#bae6fd';
+          ctx.fillRect(dx - 1, dy - 1, 2, 2);
+        } else {
+          // Gota de magma naranja brillante (#EA580C)
+          ctx.fillStyle = '#ea580c';
+          ctx.fillRect(dx - 2, dy - 3, 5, 6);
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(dx - 1, dy - 1, 2, 3);
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // AGUJAS SUPERCONDUCTORAS (HIELO x3 + RAYO: PÚAS ÁRTICAS Y RAYO VIOLETA)
+  // =========================================================================
+  private static drawSuperconductingNeedleStormGround(
+    ctx: CanvasRenderingContext2D,
+    storms: SuperconductingNeedleStormEntity[]
+  ) {
+    if (!storms || storms.length === 0) return;
+
+    storms.forEach((sns) => {
+      if (sns.finished) return;
+
+      const alpha = Math.max(0, 1 - sns.elapsedMs / sns.durationMs);
+      if (alpha <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+      // 1. Dibujar líneas quebradas de 2px de rayo violeta (#A855F7) entre agujas
+      if (sns.needles.length >= 2) {
+        ctx.fillStyle = '#a855f7';
+        for (let i = 0; i < sns.needles.length - 1; i++) {
+          const n1 = sns.needles[i];
+          const n2 = sns.needles[i + 1];
+          const midX = Math.round((n1.x + n2.x) / 2);
+          const midY = Math.round(((n1.y - n1.height) + (n2.y - n2.height)) / 2) - 8;
+
+          const top1Y = Math.round(n1.y - n1.height);
+          const top2Y = Math.round(n2.y - n2.height);
+
+          // Segmentos de 2px en zig-zag violeta
+          ctx.fillRect(Math.min(n1.x, midX), Math.min(top1Y, midY), Math.abs(midX - n1.x) + 2, 2);
+          ctx.fillRect(Math.min(midX, n2.x), Math.min(midY, top2Y), Math.abs(n2.x - midX) + 2, 2);
+        }
+      }
+
+      // 2. Dibujar púas geométricas afiladas en blanco y azul ártico (#BAE6FD) clavadas
+      sns.needles.forEach((needle) => {
+        const nx = Math.round(needle.x);
+        const ny = Math.round(needle.y);
+        const curH = Math.round(needle.height);
+
+        if (curH <= 2) return;
+
+        // Base de roca fracturada en suelo
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(nx - 6, ny - 3, 12, 6);
+
+        // Aguja geométrica escalonada (ancho base 8px hasta punta 2px)
+        const steps = 6;
+        const stepH = Math.max(2, Math.round(curH / steps));
+        for (let st = 0; st < steps; st++) {
+          const segY = ny - (st + 1) * stepH;
+          const wProg = (steps - st) / steps;
+          const curW = Math.max(2, Math.round(8 * wProg));
+          const halfW = Math.round(curW / 2);
+
+          // Sombra azul ártico profundo (#0284C7)
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(nx - halfW, segY, halfW, stepH);
+
+          // Cara frontal azul ártico brillante (#BAE6FD)
+          ctx.fillStyle = '#bae6fd';
+          ctx.fillRect(nx, segY, halfW, stepH);
+        }
+
+        // Punta afilada en blanco puro (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(nx - 1, ny - curH - 2, 3, 3);
+      });
+
+      ctx.restore();
+    });
+  }
+
+  // =========================================================================
+  // GLACIAR TECTÓNICO (HIELO x3 + TIERRA: MURO PIEDRA 1E293B Y HIELO 0284C7)
+  // =========================================================================
+  private static drawTectonicGlacierWallMoving(
+    ctx: CanvasRenderingContext2D,
+    tgw: TectonicGlacierWallEntity
+  ) {
+    if (tgw.finished) return;
+
+    const alpha = Math.max(0, 1 - tgw.elapsedMs / tgw.durationMs);
+    if (alpha <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.5);
+
+    const squish = 0.58;
+    const wallCenterX = tgw.originX + Math.cos(tgw.aimAngle) * tgw.currentDist;
+    const wallCenterY = tgw.originY + Math.sin(tgw.aimAngle) * tgw.currentDist * squish;
+
+    const perpAngle = tgw.aimAngle + Math.PI / 2;
+    const perpCos = Math.cos(perpAngle);
+    const perpSin = Math.sin(perpAngle) * squish;
+
+    // Sombra del glaciar en el suelo
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+    ctx.fillRect(Math.round(wallCenterX - tgw.width / 2), Math.round(wallCenterY - 6), tgw.width, 12);
+
+    // Muro escalonado de bloques de piedra gris (#1E293B) y hielo azul profundo (#0284C7)
+    tgw.blocks.forEach((block) => {
+      const bx = Math.round(wallCenterX + perpCos * block.offsetDist);
+      const by = Math.round(wallCenterY + perpSin * block.offsetDist);
+      const blockW = 16;
+      const halfW = 8;
+      const blockH = Math.round(block.height);
+
+      if (block.isRock) {
+        // Bloque de roca sólida (#1E293B y #334155)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(bx - halfW, by - blockH, blockW, blockH);
+
+        // Aristas iluminadas de pizarra
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(bx - halfW, by - blockH, 3, blockH);
+        ctx.fillRect(bx + halfW - 3, by - blockH, 3, blockH);
+
+        // Cresta blanca de nieve dura (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bx - halfW + 1, by - blockH - 3, blockW - 2, 3);
+      } else {
+        // Bloque de hielo azul profundo (#0284C7 y #38BDF8)
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(bx - halfW, by - blockH, blockW, blockH);
+
+        // Faceta de cristal gélido
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(bx - 2, by - blockH + 3, 5, blockH - 6);
+
+        // Cresta glaciar afilada en blanco puro (#FFFFFF)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bx - halfW, by - blockH - 4, blockW, 4);
       }
     });
 

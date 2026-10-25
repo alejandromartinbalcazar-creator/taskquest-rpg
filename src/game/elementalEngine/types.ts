@@ -77,6 +77,22 @@ export type SpellCastType =
   | 'primordial_supernova'   // Fuego x4 (🔥🔥🔥🔥) - Supernova Primordial
   | 'absolute_zero_age'      // Hielo x4 (❄️❄️❄️❄️) - Era Glacial
   | 'tectonic_cataclysm'     // Tierra x4 (🌍🌍🌍🌍) - Cataclismo Tectónico
+  // Nivel 4 - Cuádruples Asimétricas: Set 1 (Fuego x3 + Secundario, Cooldown: 0)
+  | 'kinetic_plasma_meteor'   // Fuego x3 + Rayo (🔥🔥🔥⚡) - Meteoro de Plasma Cinético
+  | 'frostburn_comet'         // Fuego x3 + Hielo (🔥🔥🔥❄️) - Cometa de Frío Abrasador
+  | 'caldera_cataclysm'       // Fuego x3 + Tierra (🔥🔥🔥🌍) - Caldera Volcánica Profunda
+  // Nivel 4 - Cuádruples Asimétricas: Set 2 (Rayo x3 + Secundario, Cooldown: 0)
+  | 'solar_arc_tempest'       // Rayo x3 + Fuego (⚡⚡⚡🔥) - Tempestad Solar
+  | 'cryo_lightning_storm'    // Rayo x3 + Hielo (⚡⚡⚡❄️) - Rayo Criogénico Puro
+  | 'tectonic_lightning_hammer' // Rayo x3 + Tierra (⚡⚡⚡🌍) - Martillo de Thor Tectónico
+  // Nivel 4 - Cuádruples Asimétricas: Set 3 (Hielo x3 + Secundario, Cooldown: 0)
+  | 'molten_blizzard'         // Hielo x3 + Fuego (❄️❄️❄️🔥) - Ventisca Ígnea
+  | 'superconducting_needle_storm' // Hielo x3 + Rayo (❄️❄️❄️⚡) - Agujas Superconductoras
+  | 'tectonic_glacier_wall'   // Hielo x3 + Tierra (❄️❄️❄️🌍) - Glaciar Tectónico
+  // Nivel 4 - Cuádruples Asimétricas: Set 4 (Tierra x3 + Secundario, Cooldown: 0)
+  | 'primordial_magma_bastion' // Tierra x3 + Fuego (🌍🌍🌍🔥) - Bastión de Magma Primordial
+  | 'eternal_permafrost_fortress' // Tierra x3 + Hielo (🌍🌍🌍❄️) - Fortaleza de Permafrost Eterno
+  | 'magnetic_telluric_spire' // Tierra x3 + Rayo (🌍🌍🌍⚡) - Espira Telúrica Imantada
   // Combinación Suprema de 4 Elementos
   | 'elemental_cataclysm'; // Fuego + Rayo + Hielo + Tierra
 
@@ -378,6 +394,7 @@ export interface GameEnemy {
   teleportTimer?: number;
   custodianState?: CustodianState;
   fracturedArmorTimer?: number; // Deflagración Térmica: fractura de armadura (+30% daño recibido)
+  defenseBrokenTimer?: number; // Martillo de Thor Tectónico: quiebre de defensas (+35% daño recibido)
 }
 
 // Trinchera de Magma (Fuego + Fuego + Tierra)
@@ -672,6 +689,233 @@ export interface TectonicCataclysmEntity {
   elapsedMs: number;
   damage: number;
   monoliths: TectonicCataclysmMonolith[];
+  finished: boolean;
+}
+
+// Meteoro de Plasma Cinético (Fuego x3 + Rayo)
+export interface KineticPlasmaMeteorEntity {
+  id: string;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  currentX: number;
+  currentY: number;
+  impactRadius: number; // 90px
+  damage: number;
+  durationMs: number; // 450ms
+  elapsedMs: number;
+  telegraphDurationMs: number; // 150ms
+  exploded: boolean;
+  finished: boolean;
+}
+
+// Cometa de Frío Abrasador (Fuego x3 + Hielo)
+export interface FrostburnCometEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  targetX: number;
+  targetY: number;
+  currentX: number;
+  currentY: number;
+  currentZ: number; // Elevación parabólica
+  impactRadius: number; // 80px
+  damage: number;
+  durationMs: number; // 550ms
+  elapsedMs: number;
+  exploded: boolean;
+  finished: boolean;
+}
+
+// Caldera Volcánica Profunda (Fuego x3 + Tierra)
+export interface CalderaCataclysmEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number; // 100px
+  durationMs: number; // 3500ms
+  elapsedMs: number;
+  damagePerTick: number;
+  lastTickMs: number;
+  finished: boolean;
+}
+
+// Tempestad Solar (Rayo x3 + Fuego)
+export interface SolarArcTempestPlasmaColumn {
+  x: number;
+  y: number;
+  radius: number;
+  height: number;
+}
+
+export interface SolarArcTempestEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  length: number; // 350px
+  width: number; // 140px
+  durationMs: number; // 800ms
+  elapsedMs: number;
+  damagePerTick: number;
+  lastTickMs: number;
+  plasmaColumns: SolarArcTempestPlasmaColumn[];
+  finished: boolean;
+}
+
+// Rayo Criogénico Puro (Rayo x3 + Hielo)
+export interface CryoLightningStrikePoint {
+  targetX: number;
+  targetY: number;
+  spikeHeight: number;
+}
+
+export interface CryoLightningStormEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  radius: number; // 100px
+  durationMs: number; // 450ms
+  elapsedMs: number;
+  strikes: CryoLightningStrikePoint[];
+  struck: boolean;
+  finished: boolean;
+}
+
+// Martillo de Thor Tectónico (Rayo x3 + Tierra)
+export interface TectonicLightningHammerFissure {
+  angle: number;
+  length: number;
+}
+
+export interface TectonicLightningHammerEntity {
+  id: string;
+  targetX: number;
+  targetY: number;
+  impactRadius: number; // 120px
+  pillarWidth: number; // 40px
+  durationMs: number; // 600ms
+  elapsedMs: number;
+  damage: number;
+  fissures: TectonicLightningHammerFissure[];
+  struck: boolean;
+  finished: boolean;
+}
+
+// Ventisca Ígnea (Hielo x3 + Fuego)
+export interface MoltenBlizzardEntity {
+  id: string;
+  centerX: number;
+  centerY: number;
+  radius: number; // 110px
+  durationMs: number; // 1000ms
+  elapsedMs: number;
+  damagePerTick: number;
+  lastTickMs: number;
+  finished: boolean;
+}
+
+// Agujas Superconductoras (Hielo x3 + Rayo)
+export interface SuperconductingNeedle {
+  x: number;
+  y: number;
+  height: number;
+  maxHeight: number;
+  angle: number;
+}
+
+export interface SuperconductingNeedleStormEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  coneAngle: number; // 140° (2.44 rad)
+  maxRange: number; // 280px
+  durationMs: number; // 1500ms
+  elapsedMs: number;
+  damage: number;
+  needles: SuperconductingNeedle[];
+  lastArcTickMs: number;
+  finished: boolean;
+}
+
+// Glaciar Tectónico (Hielo x3 + Tierra)
+export interface TectonicGlacierWallBlock {
+  offsetDist: number; // distancia en el eje perpendicular (-80 a +80)
+  height: number;
+  isRock: boolean; // alternating rock and deep blue ice
+}
+
+export interface TectonicGlacierWallEntity {
+  id: string;
+  originX: number;
+  originY: number;
+  aimAngle: number;
+  width: number; // 160px
+  maxTravelDist: number; // 300px
+  currentDist: number;
+  speed: number; // px per sec
+  durationMs: number; // 1200ms
+  elapsedMs: number;
+  damage: number;
+  blocks: TectonicGlacierWallBlock[];
+  hitEnemyIds: Set<string>;
+  finished: boolean;
+}
+
+// Bastión de Magma Primordial (Tierra x3 + Fuego)
+export interface PrimordialMagmaMonolith {
+  angleOffset: number;
+  height: number;
+  width: number;
+}
+
+export interface PrimordialMagmaBastionEntity {
+  id: string;
+  radius: number; // 80px
+  durationMs: number; // 3500ms
+  elapsedMs: number;
+  damagePerTick: number;
+  lastTickMs: number;
+  orbitAngle: number;
+  monoliths: PrimordialMagmaMonolith[];
+  finished: boolean;
+}
+
+// Fortaleza de Permafrost Eterno (Tierra x3 + Hielo)
+export interface EternalPermafrostShard {
+  angle: number;
+  dist: number;
+  speed: number;
+  isRock: boolean;
+}
+
+export interface EternalPermafrostFortressEntity {
+  id: string;
+  radius: number; // 100px
+  durationMs: number; // 3000ms
+  elapsedMs: number;
+  damage: number;
+  burst: boolean;
+  burstProgress: number; // 0..1
+  shards: EternalPermafrostShard[];
+  hitEnemyIds: Set<string>;
+  finished: boolean;
+}
+
+// Espira Telúrica Imantada (Tierra x3 + Rayo)
+export interface MagneticTelluricSpireEntity {
+  id: string;
+  targetX: number;
+  targetY: number;
+  radius: number; // 240px pull radius
+  durationMs: number; // 4000ms
+  elapsedMs: number;
+  damagePerTick: number;
+  lastArcTickMs: number;
+  obeliskHeight: number;
   finished: boolean;
 }
 

@@ -14,6 +14,87 @@ export interface VersionEntry {
 
 export const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: '0.5.3',
+    date: '2026-10-23',
+    title: 'Set 3 Cuádruple Asimétrico: Hielo Supremo (3+1) con Cooldown 0',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Ventisca Ígnea [Hielo x3 + Fuego]: Tormenta en área circular de 110px a 200px con lluvia rápida de fragmentos de hielo al rojo vivo durante 1s, ralentización extrema (60%) y daño continuo por quemadura crítica simultánea con cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Agujas Superconductoras [Hielo x3 + Rayo]: Abanico frontal de 140° (280px) que clava múltiples púas de hielo electrificadas en el suelo, inmovilizando enemigos durante 1.5s con descargas de arco voltaico en cadena y cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Glaciar Tectónico [Hielo x3 + Tierra]: Cordillera masiva de estalagmitas y roca sólida (ancho 160px) que avanza 300px hacia adelante empujando monstruos con daño contundente masivo y aturdimiento de 1.2s con cooldown 0.',
+      },
+      {
+        type: 'fix',
+        description: 'Corrección de Fallback Tier 4 para Hielo x3: Evaluación estricta de combinaciones asimétricas de Hielo x3 antes de descender a Glaciar Devastador (nivel 3), permitiendo cualquier permutación de orden (ej. [Fuego, Hielo, Hielo, Hielo]).',
+      },
+      {
+        type: 'engine',
+        description: 'Renderizado Procedural Pixel Art 16-bit: Nube de partículas cuadradas cian combinada con gotas de magma naranja brillante y nubes de vapor blanco; púas geométricas afiladas en blanco y azul ártico interconectadas por líneas quebradas de 2px de rayo violeta; y muro escalonado de bloques de piedra gris oscuro y hielo azul profundo con crestas blancas que se desplazan hacia adelante cuadro a cuadro.',
+      },
+    ],
+  },
+  {
+    version: '0.5.2',
+    date: '2026-10-23',
+    title: 'Set 2 Cuádruple Asimétrico: Rayo Supremo (3+1) con Cooldown 0',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Tempestad Solar [Rayo x3 + Fuego]: Cascada continua de rayos solares en un área frontal de 350x140px durante 800ms con daño acelerado, columnas de plasma solar residuales y quemadura continua con cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Rayo Criogénico Puro [Rayo x3 + Hielo]: Descarga vertical crioelectrostática instantánea sobre los 4 enemigos más cercanos con parálisis y congelación de 1.8s, destruyendo proyectiles hostiles en vuelo con cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Martillo de Thor Tectónico [Rayo x3 + Tierra]: Impacto central a 200px con onda radial de 120px, aturdimiento de 1.5s, empuje radial y quiebre de defensas (+35% de daño recibido durante 4 segundos) con cooldown 0.',
+      },
+      {
+        type: 'fix',
+        description: 'Corrección de Fallback Tier 4 para Rayo x3: Evaluación estricta de combinaciones asimétricas de Rayo x3 antes de descender a Tormenta Celestial (nivel 3), permitiendo cualquier permutación de orden (ej. [Tierra, Rayo, Rayo, Rayo]).',
+      },
+      {
+        type: 'engine',
+        description: 'Renderizado Procedural Pixel Art 16-bit: Rayos verticales quebrados en blanco puro y amarillo entrelazados con filamentos de fuego naranja; arcos voltaicos en cian brillante y azul glacial con púas de hielo que brotan en los impactos; y columna de luz vertical de 40px con runas amarillas y grietas de roca gris.',
+      },
+    ],
+  },
+  {
+    version: '0.5.1',
+    date: '2026-10-23',
+    title: 'Set 1 Cuádruple Asimétrico: Fuego Supremo (3+1) con Cooldown 0',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Meteoro de Plasma Cinético [Fuego x3 + Rayo]: Impacto supersónico telegrafiado (150ms) a 260px o sobre el grupo enemigo más denso, explosión masiva de 90px con micro-empuje radial, barrido de proyectiles enemigos y cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Cometa de Frío Abrasador [Fuego x3 + Hielo]: Proyectil parabólico masivo con choque térmico de 80px, congelamiento/aturdimiento de 1.2 segundos y quemadura continua simultánea por 3 segundos con cooldown 0.',
+      },
+      {
+        type: 'feature',
+        description: 'Caldera Volcánica Profunda [Fuego x3 + Tierra]: Cráter magmático a 180px activo durante 3.5 segundos con succión continua leve hacia el centro, daño ígneo por tick cada 400ms y cooldown 0.',
+      },
+      {
+        type: 'fix',
+        description: 'Corrección de Fallback Tier 4 en recetas: Evaluación estricta de combinaciones asimétricas de 4 elementos previo a las reglas de nivel 3 puro, evitando que combinaciones como [Fuego, Fuego, Fuego, Rayo] cayeran erróneamente en Lluvia del Infierno.',
+      },
+      {
+        type: 'engine',
+        description: 'Renderizado Procedural Pixel Art 16-bit: Bólido de plasma con núcleo blanco, bordes amarillos y estela violeta escalonada; cometa dividido en dos mitades (fuego rojo y azul glaciar) con detonación de vapor blanco; cráter con losas de basalto negro, vetas de lava viva y burbujas cuadradas que estallan proceduralmente sin difuminado suave.',
+      },
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-10-23',
     title: 'Habilidades Cuádruples Puras Tier 4 y Optimización Móvil 60 FPS',
