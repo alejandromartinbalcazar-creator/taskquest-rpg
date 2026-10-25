@@ -4228,8 +4228,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const baseDmg = Math.round((recipe.damage + statBonus * 0.7) * chargeMultiplier);
 
         // Ubicar al enemigo más peligroso (jefe o más cercano) o disparar al frente
-        let targetX = wizard.x + Math.cos(aimAngle) * 180;
-        let targetY = wizard.y + Math.sin(aimAngle) * 180 * 0.58;
+        // Mantener un punto de impacto visible frente al mago aunque no haya enemigos.
+        let targetX = wizard.x + Math.cos(aimAngle) * 200;
+        let targetY = wizard.y + Math.sin(aimAngle) * 200 * 0.58;
         const boss = g.enemyManager.enemies.find((e) => e.hp > 0 && e.archetype === 'boss');
         if (boss) {
           targetX = boss.x;

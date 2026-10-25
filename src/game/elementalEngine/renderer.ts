@@ -846,9 +846,6 @@ export class IsometricRenderer {
     // 6.91 Dibujar Crestas Concéntricas y Relámpagos de Fisura Resonante (Tierra + Tierra + Rayo)
     this.drawResonantQuakeArches(ctx, resonantQuakes);
 
-    // 6.92 Dibujar Haz Vertical Colosal de Juicio del Dios del Trueno (Rayo x4)
-    this.drawThundergodJudgmentBeam(ctx, thundergodJudgments);
-
     // 7. Dibujar Partículas
     this.drawParticles(ctx, particles);
 
@@ -860,6 +857,9 @@ export class IsometricRenderer {
       this.drawCanopyLayer(ctx, frustum, forestLevel.trees);
       this.drawAmbientLeaves(ctx, frustum, forestLevel.ambientLeaves);
     }
+
+    // El pilar se dibuja sobre la escena y las copas para que no quede oculto en el bosque.
+    this.drawThundergodJudgmentBeam(ctx, thundergodJudgments);
 
     ctx.restore(); // Fin del espacio transformado con Zoom
 
