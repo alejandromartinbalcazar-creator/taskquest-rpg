@@ -103,6 +103,7 @@ import {
   DUNGEON_RELICS,
 } from './physicsAndTerrain';
 import { EnemyManager } from './enemyAI';
+import { setupTutorialRoom } from './tutorialRooms';
 import { createThresholdCustodian } from './BossCustodian';
 import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
@@ -610,6 +611,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Progresión de salas conectadas
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
   const [tutorialStep, setTutorialStep] = useState(isTutorial ? 1 : 5);
+  const tutorialStepRef = useRef(tutorialStep);
+  tutorialStepRef.current = tutorialStep;
   const tutorialStartRef = useRef<{ x: number; y: number } | null>(null);
   const roomSet = isTutorial ? TUTORIAL_ROOMS : DUNGEON_ROOMS;
   const currentRoom = roomSet[currentRoomIndex];
@@ -891,6 +894,23 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.roomIndex = 0;
     g.roomCleared = false;
 
+    if (isTutorial) {
+      g.tilemap = null;
+      g.forestLevel = null;
+      setupTutorialRoom(0, g.terrainManager, g.enemyManager);
+      g.wizard.x = g.prevWizardX = 550;
+      g.wizard.y = g.prevWizardY = 600;
+      g.camera.x = 550;
+      g.camera.y = 600;
+      g.cameraSystem.reset(550, 600);
+      tutorialStartRef.current = { x: 550, y: 600 };
+      setTutorialStep(1);
+      setRoomBanner(TUTORIAL_ROOMS[0].title);
+      const bannerTimer = window.setTimeout(() => setRoomBanner(null), 3000);
+      audioManager.startAmbient('exploration');
+      return () => { window.clearTimeout(bannerTimer); audioManager.stopAmbient(); audioManager.stopCharge(); };
+    }
+
     // Recuperar último punto de control persistido en localStorage
     let savedCheckpointId: string | null = null;
     try {
@@ -953,7 +973,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       audioManager.stopAmbient();
       audioManager.stopCharge();
     };
-  }, [currentRoom.roomType]);
+  }, [isTutorial]);
 
   // Manejo de derrota y reaparición en el último punto de control (400ms fade -> 100% HP -> 1.5s i-frames)
   const triggerPlayerDefeatAndRespawn = useCallback(() => {
@@ -1209,7 +1229,17 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       g.eternalPermafrostFortresses = [];
       g.magneticTelluricSpires = [];
 
-      if (nextIndex === 0) {
+      if (isTutorial) {
+        g.tilemap = null;
+        g.forestLevel = null;
+        g.wizard.x = g.prevWizardX = 550;
+        g.wizard.y = g.prevWizardY = 600;
+        g.camera.x = 550;
+        g.camera.y = 600;
+        g.cameraSystem.reset(550, 600);
+        setupTutorialRoom(nextIndex, g.terrainManager, g.enemyManager);
+        setTutorialStep(nextIndex === 1 ? 4 : 5);
+      } else if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(LEVEL_1_LAYOUT);
         g.tilemap = tilemap;
         g.forestLevel = null;
@@ -1255,7 +1285,6 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const nextRoom = roomSet[nextIndex];
         g.terrainManager.setupRoomTerrain(nextRoom.roomType);
         g.enemyManager.spawnRoomEnemies(nextRoom.roomType);
-        if (isTutorial && nextIndex === 1) g.enemyManager.enemies = g.enemyManager.enemies.slice(0, 2);
       }
 
       const nextRoom = roomSet[nextIndex];
@@ -1350,8 +1379,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const g = gameStateRef.current;
       const rawRecipe = activeRecipe;
       if (isTutorial) {
-        if (tutorialStep === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
-        else if (tutorialStep === 3 && rawRecipe.elements.length > 0) { setTutorialStep(4); changeToRoom(1); }
+        if (tutorialStepRef.current === 2 && rawRecipe.id === 'basic_spark') setTutorialStep(3);
+        else if (tutorialStepRef.current === 3 && rawRecipe.elements.length > 0) {
+          setElementQueue([]);
+          changeToRoom(1);
+          return;
+        }
       }
 
       // Cooldown individual por receta/hechizo con reducción por nivel (solo Cataclismo de 4 elementos tiene cooldown)
@@ -5102,7 +5135,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
       setElementQueue([]);
     },
-    [activeRecipe, getEffectiveCooldown, isDefeated, isVictorious, player.level, player.stats, player.unlockedMilestones, startChanneledAttack, stopChanneledAttack]
+    [activeRecipe, changeToRoom, isTutorial, getEffectiveCooldown, isDefeated, isVictorious, player.level, player.stats, player.unlockedMilestones, startChanneledAttack, stopChanneledAttack]
   );
 
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
@@ -13999,6 +14032,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       if (enemies.length === 0 && !g.roomCleared && currentRoom.roomType !== 'entrance') {
         g.roomCleared = true;
         g.terrainManager.unlockRoomDoors(g.floatingTexts);
+        if (isTutorial && g.roomIndex === 1) changeToRoom(2);
       }
 
       // 6. Textos Flotantes
@@ -14110,21 +14144,22 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       cancelAnimationFrame(animId);
       elementalSound.stopContinuousStream();
     };
-  }, [changeToRoom, currentRoom.roomType, isDefeated, isVictorious]);
+  }, [changeToRoom, currentRoom.roomType, isTutorial, isDefeated, isVictorious]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#040509] flex flex-col items-center justify-center select-none overflow-hidden touch-none font-sans">
-      {isTutorial && tutorialStep < 5 && (
-        <div className="absolute inset-x-0 bottom-0 z-[70] flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-auto">
-          <div className="w-full max-w-xl border-2 border-amber-300 bg-[#10142d]/95 p-4 shadow-[4px_4px_0_#000]">
-            <p className="font-pixel-title text-[9px] text-amber-300">{['BIENVENIDO, MAGO', 'MOVIMIENTO', 'ATAQUE BÁSICO', 'MAGIA ELEMENTAL', 'TU PRIMERA MISIÓN'][tutorialStep]}</p>
-            <p className="mt-2 font-pixel-text text-xl leading-tight text-slate-100">
+      {isTutorial && (
+        <div className="absolute top-20 inset-x-0 z-[60] flex justify-center px-4 pointer-events-none">
+          <div className="w-full max-w-md border-2 border-amber-300 bg-[#10142d]/95 p-2 shadow-[4px_4px_0_#000]">
+            <p className="font-pixel-title text-[9px] text-amber-300">{currentRoom.title}</p>
+            <p className="mt-1 font-pixel-text text-lg leading-tight text-slate-100">
               {[
-                'Explora con calma. Puedes omitir esta guía cuando quieras.',
+                '',
                 'Usa el joystick izquierdo o toca el suelo para mover al mago.',
-                'El proyectil verde es tu ataque básico: empuja a los enemigos sin gastar elementos.',
-                'Combina esferas para lanzar hechizos. El fuego hace más daño a criaturas de hielo.',
-                'Derrota enemigos y busca la salida. Las misiones reales te abrirán niveles nuevos.',
+                'Sin esferas seleccionadas, pulsa atacar a la derecha para lanzar el proyectil verde.',
+                'Selecciona una esfera a la derecha y lanza tu primer hechizo para entrar a la sala 2.',
+                'Solo dos guardianes: usa hielo contra fuego y fuego contra hielo.',
+                'Acércate al cofre para elegir una reliquia. Después busca la puerta dorada al norte.',
               ][tutorialStep]}
             </p>
           </div>
