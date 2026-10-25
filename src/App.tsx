@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent, HeroMilestone } from './types';
+import { Player, Task, DungeonFloor, StatType, DelevelEvent, HeroMilestone } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
 import { HeroHeader } from './components/HeroHeader';
 import { Navbar, TabType } from './components/Navbar';
 import { TaskView } from './components/TaskView';
-import { SkillsView } from './components/SkillsView';
 import { DungeonView } from './components/DungeonView';
-import { CharacterView } from './components/CharacterView';
 import { StatsView } from './components/StatsView';
+import { ConcentrationTreeView } from './components/ConcentrationTreeView';
 import { ApkExportModal } from './components/ApkExportModal';
 import { DelevelModal } from './components/DelevelModal';
 import { ChangelogModal } from './components/ChangelogModal';
@@ -277,63 +276,6 @@ export function App() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   };
 
-  // Desbloquear Habilidad en el Árbol
-  const handleUnlockSkill = (skillId: string, costSP: number) => {
-    if (player.skillPoints < costSP) return;
-
-    sound.playTaskComplete();
-    setPlayer((prev) => ({
-      ...prev,
-      skillPoints: prev.skillPoints - costSP,
-      unlockedSkills: [...prev.unlockedSkills, skillId],
-    }));
-  };
-
-  // Desbloquear Fusión Elemental
-  const handleUnlockFusion = (fusionId: string) => {
-    setPlayer((prev) => {
-      if (prev.unlockedFusions.includes(fusionId)) return prev;
-      return {
-        ...prev,
-        unlockedFusions: [...prev.unlockedFusions, fusionId],
-      };
-    });
-  };
-
-  // Equipar Hechizo (hasta 3 slots)
-  const handleEquipSpell = (spell: ElementSkillNode | FusedSpell) => {
-    setPlayer((prev) => {
-      const alreadyEquipped = prev.equippedSpells.some((s) => s.id === spell.id);
-      if (alreadyEquipped) {
-        return {
-          ...prev,
-          equippedSpells: prev.equippedSpells.filter((s) => s.id !== spell.id),
-        };
-      }
-      // Mantener máximo 3
-      const updated = [spell, ...prev.equippedSpells.slice(0, 2)];
-      return {
-        ...prev,
-        equippedSpells: updated,
-      };
-    });
-  };
-
-  // Asignar Puntos de Atributo (Ataque, Velocidad, Resistencia, Conocimiento)
-  const handleAllocateStat = (stat: StatType) => {
-    if (player.skillPoints <= 0) return;
-    sound.playMicroStepDing();
-    setPlayer((prev) => ({
-      ...prev,
-      skillPoints: prev.skillPoints - 1,
-      stats: {
-        ...prev.stats,
-        [stat]: prev.stats[stat] + 1,
-      },
-      maxHp: stat === 'defense' ? prev.maxHp + 10 : prev.maxHp,
-      currentHp: stat === 'defense' ? prev.currentHp + 10 : prev.currentHp,
-    }));
-  };
 
   // Victoria en Mazmorra
   const handleBattleVictory = (floorNumber: number, expReward: number, goldReward: number) => {
@@ -419,7 +361,6 @@ export function App() {
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           pendingTasksCount={pendingTasksCount}
-          availableSp={player.skillPoints}
         />
       </div>
 
@@ -490,13 +431,8 @@ export function App() {
           />
         )}
 
-        {currentTab === 'skills' && (
-          <SkillsView
-            player={player}
-            onUnlockSkill={handleUnlockSkill}
-            onUnlockFusion={handleUnlockFusion}
-            onEquipSpell={handleEquipSpell}
-          />
+        {currentTab === 'focus' && (
+          <ConcentrationTreeView player={player} />
         )}
 
         {currentTab === 'dungeon' && (
@@ -506,15 +442,6 @@ export function App() {
             onBattleVictory={handleBattleVictory}
             onTakeBattleDamage={handleTakeBattleDamage}
             onConsumeKey={handleConsumeKey}
-          />
-        )}
-
-        {currentTab === 'character' && (
-          <CharacterView
-            player={player}
-            onUpdateName={handleUpdateHeroName}
-            onAllocateStat={handleAllocateStat}
-            onOpenProgressModal={() => setIsProgressModalOpen(true)}
           />
         )}
 

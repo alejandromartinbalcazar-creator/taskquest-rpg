@@ -73,7 +73,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0d0f17] border-b-4 border-[#18181b] outline-1 outline-[#334155] px-3 py-2 shadow-[0_4px_0_0_#000000] landscape:static landscape:z-auto landscape:min-h-0 landscape:flex-1 landscape:overflow-y-auto landscape:border-b-0 landscape:px-2 landscape:py-2 landscape:shadow-none">
+    <header className="sticky top-0 z-30 border-b-2 border-violet-950 bg-[#111426] px-3 py-2 shadow-[0_3px_0_0_#080914] landscape:static landscape:z-auto landscape:min-h-0 landscape:flex-1 landscape:overflow-y-auto landscape:border-b-0 landscape:px-2 landscape:py-2 landscape:shadow-none">
       <div className="max-w-xl mx-auto flex flex-col gap-1.5 landscape:max-w-none landscape:gap-2">
         {/* Fila Principal: Título, Recursos y Controles */}
         <div className="flex items-center justify-between">
@@ -81,10 +81,10 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
             <button
               type="button"
               onClick={handleLogoTap}
-              className="font-pixel-title text-[11px] font-black text-amber-400 tracking-wider flex items-center gap-1.5 focus:outline-none select-none active:translate-x-[1px] active:translate-y-[1px] transition-transform drop-shadow-[2px_2px_0px_#000000]"
+              className="font-pixel-title text-[10px] font-black text-violet-200 tracking-wider flex items-center gap-1.5 focus:outline-none select-none active:translate-x-[1px] active:translate-y-[1px] transition-transform"
               title="FocusMission (5 toques para Dev Changelog)"
             >
-              ⚔️ FOCUSMISSION
+              ✦ FOCUSMISSION
             </button>
             {isAgony && (
               <span className="retro-badge bg-red-950 text-red-300 border-red-500 animate-pulse flex items-center gap-1">
@@ -102,31 +102,23 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
             <button
               type="button"
               onClick={onOpenProgressModal}
-              className="retro-btn-stone flex items-center gap-1 px-2 py-1 text-[8px] font-bold text-amber-300"
-              title="Ver Progresión Directa e Hitos del Héroe"
+              className="border border-violet-400/60 bg-violet-950/40 flex items-center gap-1 px-2 py-1 text-[8px] font-bold text-violet-100"
+              title="Ver hitos y progreso"
             >
               <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
               <span>Nv.{player.level}</span>
-              <span className="text-orange-400 font-pixel-title text-[7px]">🔥{player.cleanStreakDays || 0}d</span>
+              <span className="text-amber-300 font-pixel-title text-[7px]">✦{player.cleanStreakDays || 0}d</span>
             </button>
           </div>
 
           <div className="flex items-center gap-1.5">
             {/* Recursos: Oro y Llaves */}
-            <div className="flex items-center gap-1.5 bg-[#171a26] px-2 py-1 border-2 border-[#18181b] outline-1 outline-[#334155] shadow-[2px_2px_0_0_#000000] text-xs font-pixel-title">
-              <Coins className="w-3 h-3 text-amber-400" />
-              <span className="font-bold text-amber-300 text-[9px]">{player.gold}</span>
+            <div className="flex items-center gap-1.5 bg-[#171a26] px-2 py-1 border border-slate-600 text-xs font-pixel-title">
+              <Coins className="w-3 h-3 text-amber-300" />
+              <span className="font-bold text-amber-200 text-[9px]">{player.gold}</span>
               <span className="text-stone-600">|</span>
               <Key className="w-3 h-3 text-cyan-400" />
               <span className="font-bold text-cyan-300 text-[9px]">{player.dungeonKeys}</span>
-              {player.skillPoints > 0 && (
-                <>
-                  <span className="text-stone-600">|</span>
-                  <span className="text-purple-300 font-bold text-[8px] animate-pulse">
-                    +{player.skillPoints} SP
-                  </span>
-                </>
-              )}
             </div>
 
             {/* Sonido */}
@@ -152,7 +144,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
 
         {/* Alerta si hay tareas vencidas */}
         {overdueCount > 0 && (
-          <div className={`retro-box-danger text-red-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse ${isDamagedAnimation ? 'animate-damage' : ''}`}>
+          <div className={`retro-box-danger text-red-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse landscape:hidden ${isDamagedAnimation ? 'animate-damage' : ''}`}>
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span>¡{overdueCount} tarea(s) vencida(s)! Penalización de deleveling aplicada.</span>
@@ -163,7 +155,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
 
         {/* Alerta de urgencia pre-expiración (<4 horas) */}
         {overdueCount === 0 && urgentTasks.length > 0 && (
-          <div className="retro-box-gold text-amber-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse">
+          <div className="retro-box-gold text-amber-200 px-2.5 py-1 text-xs flex items-center justify-between animate-pulse landscape:hidden">
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>¡{urgentTasks.length} tarea(s) al borde de vencer (&lt;4h)! Evita perder nivel.</span>

@@ -32,6 +32,30 @@
   height: 90px;
 }
 
+/* Home ligero: paneles suaves, bordes limpios y acentos pastel sin ruido visual. */
+.cute-panel {
+  background: #171b31;
+  border: 2px solid #545b82;
+  box-shadow: 3px 3px 0 #090a10;
+}
+
+.cute-primary-button {
+  background: #a78bfa;
+  border: 2px solid #ddd6fe;
+  color: #1f163a;
+  box-shadow: 3px 3px 0 #4c1d95;
+}
+
+.cute-primary-button:hover {
+  background: #c4b5fd;
+}
+
+.task-card-soft {
+  border-color: #303752;
+  outline-color: #5d668f;
+  box-shadow: 3px 3px 0 #090a10;
+}
+
 @media (orientation: landscape) and (max-height: 400px) {
   .home-hero-avatar canvas {
     width: 48px;

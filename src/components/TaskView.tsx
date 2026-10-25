@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Player, Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
-import { WizardAvatar } from './WizardAvatar';
 import { requestTaskReminderPermission } from '../services/taskReminders';
 import {
   CheckCircle2,
@@ -10,7 +9,6 @@ import {
   AlertTriangle,
   X,
   Award,
-  Sparkles,
   Trash2,
   Bell,
   Swords,
@@ -18,10 +16,8 @@ import {
   Shield,
   BookOpen,
   Calendar,
-  Heart,
   Skull,
-  Scale,
-  ShieldAlert
+  Scale
 } from 'lucide-react';
 
 interface TaskViewProps {
@@ -90,16 +86,6 @@ export const TaskView: React.FC<TaskViewProps> = ({
     setSelectedDays((prev) =>
       prev.includes(dayId) ? prev.filter((d) => d !== dayId) : [...prev, dayId].sort()
     );
-  };
-
-  const getActiveElement = (): 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma' => {
-    if (player.unlockedFusions.includes('fusion-fire-lightning')) return 'plasma';
-    if (player.unlockedFusions.includes('fusion-fire-earth')) return 'magma';
-    if (player.equippedSpells.length > 0) {
-      const sp = player.equippedSpells[0];
-      if ('element' in sp) return sp.element;
-    }
-    return 'fire';
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -197,12 +183,6 @@ export const TaskView: React.FC<TaskViewProps> = ({
     return null;
   };
 
-  const hpPercent = Math.max(0, Math.min(100, (player.currentHp / player.maxHp) * 100));
-  const expPercent = Math.max(0, Math.min(100, (player.exp / player.maxExp) * 100));
-  const isCriticalHp = player.currentHp <= 25;
-  const isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > nowTime));
-  const isAgony = !!player.isAgony;
-
   // Misiones a menos de 4 horas de expirar (urgencia crítica)
   const urgentTasks = sortedPendingTasks.filter((t) => {
     if (t.isFailed || t.isHonorDebt) return false;
@@ -211,101 +191,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   });
 
   return (
-    <div className="w-full max-w-xl mx-auto px-3 py-3 pb-24 landscape:max-w-none landscape:mx-0 landscape:h-full landscape:min-h-0 landscape:px-2 landscape:py-2 landscape:pb-2 landscape:flex landscape:gap-2 landscape:overflow-hidden">
-      {/* ============================================================== */}
-      {/* 1. TARJETA DEL HÉROE EN EL HOME CON BARRAS DE VIDA Y EXP (16-BIT) */}
-      {/* ============================================================== */}
-      <div className="retro-box-stone p-3 flex items-center gap-3 landscape:w-[32%] landscape:max-w-[250px] landscape:shrink-0 landscape:flex-col landscape:items-start landscape:justify-start landscape:gap-1.5 landscape:overflow-y-auto landscape:p-2">
-        {/* Sprite de Mago en Marco de Piedra */}
-        <div className="home-hero-avatar shrink-0 relative">
-          <WizardAvatar
-            size={90}
-            scale={1.7}
-            activeElement={getActiveElement()}
-            isAnimated={true}
-          />
-        </div>
-
-        {/* Datos y Barras de Vida / EXP */}
-        <div className="w-full min-w-0 flex-1 space-y-2 landscape:space-y-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-pixel-title text-xs text-white drop-shadow-[1px_1px_0px_#000]">{player.name}</span>
-              <span className="font-pixel-title text-[8px] text-purple-400 font-bold ml-1.5">
-                LV{player.level} • {player.title}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 flex-wrap justify-end">
-              {isAgony && (
-                <span className="retro-badge bg-red-950 text-red-300 border-red-500 animate-pulse flex items-center gap-1">
-                  <ShieldAlert className="w-2.5 h-2.5 text-red-400" />
-                  Agonía
-                </span>
-              )}
-              {isCursed && (
-                <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500 flex items-center gap-1">
-                  <Skull className="w-2.5 h-2.5 text-purple-400" />
-                  -15% EXP
-                </span>
-              )}
-              {isCriticalHp ? (
-                <span className="retro-badge bg-red-950 text-red-400 border-red-500 flex items-center gap-1 animate-pulse">
-                  <AlertTriangle className="w-2.5 h-2.5" />
-                  Crítico
-                </span>
-              ) : !isAgony && !isCursed && (
-                <span className="retro-badge bg-emerald-950 text-emerald-300 border-emerald-500 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                  Óptimo
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* BARRA DE VIDA (HP) RECTANGULAR 16-BIT */}
-          <div>
-            <div className="flex justify-between font-pixel-title text-[8px] mb-0.5">
-              <span className="text-rose-400 flex items-center gap-1">
-                <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
-                HP
-              </span>
-              <span className={isCriticalHp ? 'text-red-400' : 'text-stone-300'}>
-                {player.currentHp} / {player.maxHp}
-              </span>
-            </div>
-            <div className="retro-bar-container h-3.5 w-full">
-              <div
-                className={`retro-bar-fill ${
-                  isCriticalHp ? 'bg-red-600 animate-pulse' : 'bg-red-600'
-                }`}
-                style={{ width: `${hpPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* BARRA DE EXPERIENCIA (EXP) RECTANGULAR 16-BIT */}
-          <div>
-            <div className="flex justify-between font-pixel-title text-[8px] mb-0.5">
-              <span className="text-cyan-400 flex items-center gap-1">
-                <Zap className="w-2.5 h-2.5 text-cyan-400" />
-                EXP (Nv.{player.level})
-              </span>
-              <span className="text-stone-300">
-                {player.exp} / {player.maxExp}
-              </span>
-            </div>
-            <div className="retro-bar-container h-3.5 w-full">
-              <div
-                className="retro-bar-fill bg-cyan-500"
-                style={{ width: `${expPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-3 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-contain landscape:pr-2 landscape:gap-2">
+    <div className="w-full max-w-3xl mx-auto px-3 py-3 pb-24 landscape:max-w-none landscape:mx-0 landscape:h-full landscape:min-h-0 landscape:px-4 landscape:py-3 landscape:pb-3 landscape:overflow-y-auto landscape:overscroll-contain">
       {/* BANNER DE PELIGRO INMINENTE POR PROCRASTINACIÓN (<4 HORAS) */}
       {urgentTasks.length > 0 && (
         <div className="retro-box-danger p-3 flex items-center gap-3 animate-pulse">
@@ -326,19 +212,19 @@ export const TaskView: React.FC<TaskViewProps> = ({
       {/* ============================================================== */}
       {/* 2. CABECERA DE MISIONES Y BOTÓN NUEVA MISIÓN */}
       {/* ============================================================== */}
-      <div className="flex flex-col gap-3 px-1 landscape:flex-row landscape:items-center landscape:justify-between landscape:gap-2">
+      <div className="cute-panel flex flex-col gap-3 p-3 landscape:flex-row landscape:items-center landscape:justify-between landscape:gap-2">
         <div>
           <h2 className="font-pixel-title text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-            ⚔️ Misiones & Tareas
+            ✦ Misiones pendientes
           </h2>
           <p className="home-mission-subtitle font-pixel-text text-sm text-stone-300">
-            Ordenadas por la más próxima a vencer. ¡No dejes que se pongan rojas!
+            {sortedPendingTasks.length === 0 ? 'Tu día está despejado. Añade algo pequeño para empezar.' : `${sortedPendingTasks.length} misión${sortedPendingTasks.length === 1 ? '' : 'es'} esperándote.`}
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="retro-btn-gold w-full min-h-16 px-4 py-3 flex items-center justify-center gap-3 text-base shadow-lg hover:brightness-110 active:translate-y-0.5 landscape:w-auto landscape:min-h-10 landscape:shrink-0 landscape:px-3 landscape:py-1.5"
+          className="cute-primary-button w-full min-h-16 px-5 py-3 flex items-center justify-center gap-3 text-base shadow-lg active:translate-y-0.5 landscape:w-auto landscape:min-h-11 landscape:shrink-0 landscape:px-4 landscape:py-2"
         >
           <Plus className="w-6 h-6" />
           <span className="font-pixel-title text-sm sm:text-base">Crear tarea o misión</span>
@@ -384,7 +270,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
             return (
               <div
                 key={task.id}
-                className={`${cardClass} p-3 landscape:p-2 flex flex-col justify-between gap-2 landscape:gap-1.5`}
+                className={`${cardClass} p-3 landscape:p-2 flex flex-col justify-between gap-2 landscape:gap-1.5 task-card-soft`}
               >
                 {/* Banner interno de Deuda de Honor */}
                 {isHonorDebt && (
@@ -538,8 +424,6 @@ export const TaskView: React.FC<TaskViewProps> = ({
           </div>
         </div>
       )}
-      </div>
-
       {/* ============================================================== */}
       {/* 4. MODAL CREAR NUEVA MISIÓN (RECORDATORIOS, REPETICIÓN Y STATS) */}
       {/* ============================================================== */}
