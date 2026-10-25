@@ -294,7 +294,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose 
         {/* Pie del Modal */}
         <div className="p-3 border-t border-stone-800 bg-[#121420] flex items-center justify-between text-xs">
           <span className="text-[10px] text-stone-500 font-mono">
-            TaskQuest RPG Engine • React 18 + Canvas 2.5D
+            FocusMission Engine • React 19 + Canvas 2.5D
           </span>
 
           <button

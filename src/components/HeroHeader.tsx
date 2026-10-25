@@ -82,9 +82,9 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
               type="button"
               onClick={handleLogoTap}
               className="font-pixel-title text-[11px] font-black text-amber-400 tracking-wider flex items-center gap-1.5 focus:outline-none select-none active:translate-x-[1px] active:translate-y-[1px] transition-transform drop-shadow-[2px_2px_0px_#000000]"
-              title="TaskQuest RPG (5 toques para Dev Changelog)"
+              title="FocusMission (5 toques para Dev Changelog)"
             >
-              ⚔️ TASKQUEST
+              ⚔️ FOCUSMISSION
             </button>
             {isAgony && (
               <span className="retro-badge bg-red-950 text-red-300 border-red-500 animate-pulse flex items-center gap-1">

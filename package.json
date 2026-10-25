@@ -1,5 +1,5 @@
 {
-  "name": "taskquest-rpg",
+  "name": "focusmission",
   "private": true,
   "version": "0.5.3",
   "type": "module",
@@ -12,8 +12,11 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@supabase/supabase-js": "^2.118.0",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.59.0",
     "react": "^19.2.8",

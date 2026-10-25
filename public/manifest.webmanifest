@@ -1,6 +1,6 @@
 {
-  "name": "TaskQuest RPG - Vence la Procrastinación",
-  "short_name": "TaskQuest",
+  "name": "FocusMission",
+  "short_name": "FocusMission",
   "description": "Gestiona tu vida real mediante un RPG de hábitos, micro-pasos y combate contra la inacción.",
   "start_url": "/",
   "display": "standalone",

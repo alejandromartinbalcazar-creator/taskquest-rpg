@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build TaskQuest RPG APK
+    name: Build FocusMission APK
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +31,9 @@ jobs:
         run: npm ci || npm install
 
       - name: Build Web Production Assets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
 
       - name: Sync Capacitor Android
@@ -49,11 +52,11 @@ jobs:
       - name: Locate and Prepare APK
         run: |
           mkdir -p output
-          find android/app/build/outputs/apk -name "*.apk" -exec cp {} output/TaskQuest-RPG-debug.apk \;
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} output/FocusMission-debug.apk \;
 
       - name: Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TaskQuest-RPG-APK
-          path: output/TaskQuest-RPG-debug.apk
+          name: FocusMission-APK
+          path: output/FocusMission-debug.apk
           retention-days: 14

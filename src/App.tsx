@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent, HeroMilestone } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
@@ -14,6 +14,8 @@ import { DelevelModal } from './components/DelevelModal';
 import { ChangelogModal } from './components/ChangelogModal';
 import { HeroProgressModal } from './components/HeroProgressModal';
 import { checkAndUnlockMilestones } from './data/heroMilestones';
+import { CloudSaveSnapshot } from './services/cloudSaveService';
+import { useCloudSync } from './hooks/useCloudSync';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -28,6 +30,24 @@ export function App() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
+
+  const localSnapshot = useMemo<CloudSaveSnapshot>(() => ({
+    schemaVersion: 1,
+    player,
+    tasks,
+    dungeons,
+  }), [dungeons, player, tasks]);
+
+  const applyCloudSnapshot = useCallback((snapshot: CloudSaveSnapshot) => {
+    setPlayer(snapshot.player);
+    setTasks(snapshot.tasks);
+    setDungeons(snapshot.dungeons);
+  }, []);
+
+  const cloudSync = useCloudSync({
+    snapshot: localSnapshot,
+    onApplyCloudSave: applyCloudSnapshot,
+  });
 
   // Auto-cerrar alertas emergentes
   useEffect(() => {
@@ -503,6 +523,7 @@ export function App() {
           <StatsView
             player={player}
             tasks={tasks}
+            accountSync={cloudSync}
             onDataImported={handleDataImported}
             onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
           />

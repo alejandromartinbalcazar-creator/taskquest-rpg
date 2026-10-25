@@ -1,4 +1,4 @@
-# ⚔️ TaskQuest RPG - Tu Vida Real Convertida en Juego
+# ⚔️ FocusMission - Convierte tus tareas en misiones
 
 App para gestionar tu vida, superar la procrastinación y fortalecer a tu héroe mediante tus tareas reales.
 
@@ -16,7 +16,21 @@ App para gestionar tu vida, superar la procrastinación y fortalecer a tu héroe
 El proyecto ya cuenta con el archivo `.github/workflows/build-apk.yml`.
 1. Sube este proyecto a tu cuenta de GitHub (puede ser un repositorio privado).
 2. GitHub ejecutará automáticamente el flujo de trabajo en sus servidores en la nube.
-3. En la pestaña **Actions** de tu repositorio, podrás descargar directamente el archivo `TaskQuest-Android-Debug.apk` para instalarlo en cualquier Android.
+3. En la pestaña **Actions** de tu repositorio, podrás descargar directamente el archivo `FocusMission-debug.apk` para instalarlo en cualquier Android.
+
+## Cuenta Google y copia en la nube (piloto)
+
+FocusMission conserva el guardado local para jugar sin conexión. La cuenta Google es opcional y sincroniza una copia de personaje, tareas y mazmorras con una fila JSON por usuario en Supabase. Los cambios se agrupan antes de sincronizar y las políticas de Row Level Security limitan cada copia a su dueño.
+
+Para activar el piloto:
+
+1. Crea un proyecto Supabase en el plan Free y ejecuta `supabase/migrations/20261024000000_create_focusmission_saves.sql` desde el SQL Editor.
+2. En **Authentication → Providers → Google**, activa Google e ingresa un OAuth Web Client ID y Client Secret creados en Google Cloud. La URI de retorno autorizada de Google será `https://<PROJECT_REF>.supabase.co/auth/v1/callback`.
+3. En **Authentication → URL Configuration**, agrega `com.taskquest.rpg://auth-callback` a las URLs permitidas. Para desarrollo web agrega también `http://localhost:5173/**`; cuando exista sitio público, agrega su dominio.
+4. Crea `.env.local` a partir de `.env.example` y completa `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`. Para compilar con GitHub Actions, guarda esos mismos valores como los secretos `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` del repositorio.
+5. En la pantalla de consentimiento de Google, deja la aplicación en modo **Testing** y añade tu cuenta como usuario de prueba mientras FocusMission sea piloto.
+
+Nunca pongas el Google Client Secret ni una clave `service_role` en la app o en GitHub Actions. El cliente solo usa la clave publicable; RLS protege cada partida. Las credenciales aún deben configurarse antes de que el botón de Google pueda iniciar sesión. El plan Free de Supabase sirve para el piloto, aunque los proyectos gratuitos pueden pausarse tras una semana sin actividad.
 
 ---
 

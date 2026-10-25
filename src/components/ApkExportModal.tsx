@@ -34,13 +34,13 @@ jobs:
       - name: Generar APK con Capacitor
         run: |
           npm i -D @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init TaskQuest com.taskquest.rpg --web-dir dist
+          npx cap init FocusMission com.taskquest.rpg --web-dir dist
           npx cap add android
           cd android && ./gradlew assembleDebug
       - name: Subir APK descargable
         uses: actions/upload-artifact@v4
         with:
-          name: TaskQuest-RPG.apk
+          name: FocusMission-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
 `;
 
@@ -126,7 +126,7 @@ jobs:
                 Selecciona <strong>"Instalar aplicación"</strong> o <strong>"Añadir a la pantalla principal"</strong>.
               </li>
               <li>
-                <strong>¡Listo!</strong> Tendrás el icono de <strong>TaskQuest</strong> en el menú de tu teléfono. Se abre en pantalla completa exactamente igual que una app nativa descargada de la Play Store, guarda tus datos offline y no requirió 15GB de Android Studio.
+              <strong>¡Listo!</strong> Tendrás el icono de <strong>FocusMission</strong> en el menú de tu teléfono. Se abre en pantalla completa, guarda tus datos sin conexión y no requirió instalar Android Studio.
               </li>
             </ol>
           </div>
@@ -149,7 +149,7 @@ jobs:
             </div>
 
             <p className="text-slate-300">
-              Ya hemos preparado este flujo. Al subir este proyecto a un repositorio privado de GitHub, los servidores de GitHub compilan el archivo <code className="text-amber-300">TaskQuest-RPG.apk</code> en 2 minutos y lo descargas directo a tu móvil.
+              Ya hemos preparado este flujo. Al subir este proyecto a GitHub, sus servidores compilan el archivo <code className="text-amber-300">FocusMission.apk</code> para descargarlo en tu móvil.
             </p>
 
             <div className="bg-[#0b0d14] p-2.5 rounded-xl border border-slate-800 text-[10px] font-mono text-slate-400 max-h-36 overflow-y-auto">

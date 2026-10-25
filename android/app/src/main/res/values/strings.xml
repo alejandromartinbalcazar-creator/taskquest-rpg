@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">TaskQuest RPG</string>
-    <string name="title_activity_main">TaskQuest RPG</string>
+    <string name="app_name">FocusMission</string>
+    <string name="title_activity_main">FocusMission</string>
     <string name="package_name">com.taskquest.rpg</string>
     <string name="custom_url_scheme">com.taskquest.rpg</string>
 </resources>

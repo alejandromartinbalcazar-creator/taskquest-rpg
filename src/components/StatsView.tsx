@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Player, Task } from '../types';
 import { StorageService } from '../services/storageService';
 import { sound } from '../services/soundService';
+import { AccountSyncPanel } from './AccountSyncPanel';
+import { CloudSyncControls } from '../hooks/useCloudSync';
 import {
   BarChart3,
   Download,
@@ -18,6 +20,7 @@ import {
 interface StatsViewProps {
   player: Player;
   tasks: Task[];
+  accountSync: CloudSyncControls;
   onDataImported: () => void;
   onOpenChangelogModal?: () => void;
 }
@@ -25,6 +28,7 @@ interface StatsViewProps {
 export const StatsView: React.FC<StatsViewProps> = ({
   player,
   tasks,
+  accountSync,
   onDataImported,
   onOpenChangelogModal,
 }) => {
@@ -74,7 +78,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `taskquest_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `focusmission_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -99,6 +103,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
   return (
     <div className="max-w-xl mx-auto px-3 py-4 pb-24 space-y-4">
+      <AccountSyncPanel {...accountSync} />
+
       {/* Resumen Principal 16-Bit */}
       <div className="retro-box-stone p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -279,7 +285,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
           className="font-pixel-title text-[7px] text-stone-600 hover:text-stone-400 transition select-none px-2 py-1"
           title="Toca 5 veces para ver el registro de versiones (Changelog)"
         >
-          TaskQuest RPG v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0'}
+          FocusMission v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0'}
         </button>
       </div>
     </div>
