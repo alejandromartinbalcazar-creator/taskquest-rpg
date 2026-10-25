@@ -87,6 +87,8 @@
   box-shadow: 3px 3px 0 #07091a;
 }
 
+.focusmission-navbar { padding-bottom: max(8px, env(safe-area-inset-bottom, 8px)); }
+
 /* 16-Bit Pixel Art Rendering Engine */
 .pixelated, canvas, img.pixelated, svg.pixelated {
   image-rendering: -moz-crisp-edges;

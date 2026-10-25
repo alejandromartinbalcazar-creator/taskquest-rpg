@@ -216,17 +216,12 @@ export const TaskView: React.FC<TaskViewProps> = ({
     <div className="w-full max-w-xl mx-auto px-3 py-4 pb-24 space-y-3">
       {/* BANNER DE PELIGRO INMINENTE POR PROCRASTINACIÓN (<4 HORAS) */}
       {urgentTasks.length > 0 && (
-        <div className="retro-box-danger p-3 flex items-center gap-3 animate-pulse">
+        <div className="retro-box-danger p-2 flex items-center gap-2">
           <div className="p-1.5 bg-red-950 border-2 border-red-500 text-red-300 shrink-0">
             <AlertTriangle className="w-4 h-4 text-red-400 animate-bounce" />
           </div>
           <div className="flex-1">
-            <h4 className="font-pixel-title text-[9px] text-red-100 uppercase tracking-wide flex items-center gap-1.5">
-              ⚠️ ¡Peligro Inminente de Deleveling!
-            </h4>
-            <p className="font-pixel-text text-sm text-red-200 leading-tight mt-0.5">
-              Tu héroe está al borde del abismo. Completa <span className="font-bold underline text-white">"{urgentTasks[0].title}"</span> en las próximas {Math.max(1, Math.ceil((new Date(urgentTasks[0].dueDate).getTime() - nowTime) / (1000 * 60 * 60)))}h para evitar la pérdida directa de nivel y degradación de atributos.
-            </p>
+            <p className="font-pixel-text text-lg text-red-100 leading-tight">⚠️ <b>{urgentTasks[0].title}</b> vence en {Math.max(1, Math.ceil((new Date(urgentTasks[0].dueDate).getTime() - nowTime) / 3600000))}h.</p>
           </div>
         </div>
       )}
@@ -690,6 +685,9 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
               {/* Botones de Acción */}
               <div className="pt-2 flex gap-2">
+                {editingTask && onDeleteTask && (
+                  <button type="button" onClick={() => { onDeleteTask(editingTask.id); setShowAddModal(false); setEditingTask(null); }} className="py-2 px-3 retro-btn-danger" aria-label="Eliminar misión"><Trash2 className="w-4 h-4" /></button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}

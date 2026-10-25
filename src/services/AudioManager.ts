@@ -1212,7 +1212,10 @@ export class AudioManager {
     // Escala Mayor Pentatónica / Dórica Heroica para Exploración: C4, D4, E4, G4, A4, C5
     const exploreMelody = [
       261.63, 0, 329.63, 0, 392.00, 0, 440.00, 392.00, // C4, E4, G4, A4, G4
-      329.63, 0, 293.66, 0, 392.00, 440.00, 523.25, 0  // E4, D4, G4, A4, C5
+      329.63, 0, 293.66, 0, 392.00, 440.00, 523.25, 0,
+      392.00, 0, 329.63, 293.66, 261.63, 0, 293.66, 0,
+      329.63, 392.00, 0, 440.00, 392.00, 0, 329.63, 0,
+      293.66, 261.63, 0, 392.00, 440.00, 523.25, 440.00, 0
     ];
 
     // Arpegios Dórico/Menor de Batalla para Boss a 128 BPM:
@@ -1266,7 +1269,7 @@ export class AudioManager {
         }
       }
 
-      step = (step + 1) % 16;
+      step = (step + 1) % (isBoss ? 16 : exploreMelody.length);
     }, stepIntervalMs);
 
     this.ambientState = {

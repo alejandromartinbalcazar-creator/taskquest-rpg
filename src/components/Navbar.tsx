@@ -46,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t-2 border-violet-950 bg-[#0c1028] shadow-[0_-3px_0_#07081a] pb-safe">
+    <nav className="focusmission-navbar fixed bottom-0 left-0 right-0 z-40 border-t-2 border-violet-950 bg-[#0c1028] shadow-[0_-3px_0_#07081a]">
       <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
