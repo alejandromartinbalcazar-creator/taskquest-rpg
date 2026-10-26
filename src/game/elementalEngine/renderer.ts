@@ -889,7 +889,7 @@ export class IsometricRenderer {
     this.drawInfernalCrownFlames(ctx, infernalCrowns);
 
     // 6. Dibujar Proyectiles con SILUETAS FÍSICAS DIFERENCIADAS (Fuego, Rayo, Hielo, Tierra, etc.)
-    this.drawProjectiles(ctx, projectiles);
+    this.drawProjectiles(ctx, projectiles, tilemap?.backgroundKey ? 1.34 : 1);
 
     // Dibujar Rayos Eléctricos Instantáneos y Ramificados con Chispas
     this.drawLightningBolts(ctx, lightningBolts);
@@ -3055,7 +3055,7 @@ export class IsometricRenderer {
   }
 
   // DIBUJO DE PROYECTILES EN PIXEL ART 16-BIT (Bloques geométricos, estelas en dientes de sierra y cero arcos suaves)
-  private static drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
+  private static drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[], visualScale = 1) {
     projectiles.forEach((p) => {
       // Ignorar proyectiles inactivos de la piscina de memoria
       if ((p as any).active === false || p.life <= 0) return;
@@ -3065,6 +3065,7 @@ export class IsometricRenderer {
 
       const angle = Math.atan2(p.vy, p.vx);
       ctx.rotate(p.rotation !== undefined ? p.rotation : angle);
+      if (visualScale !== 1) ctx.scale(visualScale, visualScale);
 
       const OUTLINE = '#0f172a';
 

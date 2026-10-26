@@ -19,10 +19,12 @@ function createForestTrailLevel(): string[] {
   grid[9][35] = '3';
   grid[10][43] = '1';
   grid[9][48] = 'C';
-  grid[9][51] = 'D';
-  grid[10][51] = 'D';
-  grid[9][53] = 'B';
-  grid[10][53] = 'B';
+  // Guardián y portón se ubican sobre las zonas verde/amarilla de la máscara.
+  // Antes estaban detrás del borde rojo del arte, por eso podían quedar atrapados.
+  grid[8][45] = 'B';
+  grid[9][45] = 'B';
+  grid[8][50] = 'D';
+  grid[9][50] = 'D';
 
   return grid.map((row) => row.join(''));
 }

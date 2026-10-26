@@ -5818,7 +5818,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
             // 6. Respawn de enemigos manteniendo elementos permanentes (portón abierto, rueda resuelta)
             if (g.tilemap) {
-              g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, g.tilemap, campaignRoute?.run);
+              g.enemyManager.enemies = floor.floorNumber === 2
+                ? createLevel2IceEnemies(g.enemyManager, g.tilemap)
+                : createLevel1TilemapEnemies(g.enemyManager, g.tilemap, campaignRoute?.run);
             } else {
               g.enemyManager.enemies = createLevel1ForestEnemies(g.enemyManager);
             }
@@ -7824,6 +7826,34 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         }
 
         if (g.isBossDefeated) {
+          tm.victoryPortal.isActive = true;
+        }
+
+        // El portón del sendero es la salida real del Nivel 1. Al derrotar a
+        // todos los defensores, se abre aunque el jugador no haya usado la
+        // antigua rueda de prueba, y el portal de salida se coloca en él.
+        if (tm.backgroundKey === 'level1-trail' && !tm.gate.isOpen && enemies.every((enemy) => enemy.hp <= 0)) {
+          tm.openGate();
+          tm.victoryPortal = { x: tm.gate.x, y: tm.gate.y, radius: 68, isActive: true };
+          elementalSound.playGateOpen();
+          g.screenShake = Math.max(g.screenShake, 7);
+          g.floatingTexts.push({
+            id: `level1-gate-open-${frameNow}`,
+            x: tm.gate.x,
+            y: tm.gate.y - 36,
+            text: '❄️ ¡PORTÓN ABIERTO! AVANZA AL CAMPAMENTO GLACIAL',
+            color: '#67e8f9',
+            fontSize: 15,
+            opacity: 1,
+            vy: -1.1,
+            life: 80,
+          });
+        }
+
+        if (tm.backgroundKey === 'level1-trail' && tm.gate.isOpen) {
+          tm.victoryPortal.x = tm.gate.x;
+          tm.victoryPortal.y = tm.gate.y;
+          tm.victoryPortal.radius = 68;
           tm.victoryPortal.isActive = true;
         }
 
