@@ -98,29 +98,43 @@ import {
 } from './custodianRenderer';
 import { Tilemap } from '../map/Tilemap';
 import { LEVEL_1_BACKGROUND, LEVEL_1_BACKGROUND_SIZE } from '../levels/level1BackgroundLayout';
+import { LEVEL_2_BACKGROUND, LEVEL_2_BACKGROUND_SIZE } from '../levels/level2BackgroundLayout';
 
 export class IsometricRenderer {
   private static level1TrailImage: HTMLImageElement | null = null;
   private static level1TrailReady = false;
+  private static level2IceImage: HTMLImageElement | null = null;
+  private static level2IceReady = false;
 
   /** Carga una sola vez el arte panorámico, sin bloquear el bucle de combate. */
-  private static getLevel1TrailImage(): HTMLImageElement | null {
+  private static getHandcraftedBackground(key: 'level1-trail' | 'level2-ice'): HTMLImageElement | null {
     if (typeof Image === 'undefined') return null;
-    if (!this.level1TrailImage) {
-      this.level1TrailImage = new Image();
-      this.level1TrailImage.onload = () => { this.level1TrailReady = true; };
-      this.level1TrailImage.src = LEVEL_1_BACKGROUND;
+    const isIce = key === 'level2-ice';
+    const current = isIce ? this.level2IceImage : this.level1TrailImage;
+    if (!current) {
+      const image = new Image();
+      image.onload = () => {
+        if (isIce) this.level2IceReady = true;
+        else this.level1TrailReady = true;
+      };
+      image.src = isIce ? LEVEL_2_BACKGROUND : LEVEL_1_BACKGROUND;
+      if (isIce) this.level2IceImage = image;
+      else this.level1TrailImage = image;
     }
-    return this.level1TrailReady ? this.level1TrailImage : null;
+    return isIce
+      ? (this.level2IceReady ? this.level2IceImage : null)
+      : (this.level1TrailReady ? this.level1TrailImage : null);
   }
 
-  private static drawLevel1TrailBackground(ctx: CanvasRenderingContext2D, tilemap: Tilemap): void {
+  private static drawHandcraftedBackground(ctx: CanvasRenderingContext2D, tilemap: Tilemap): void {
     // Rellena todo el mundo para que la cámara jamás muestre bandas negras.
     ctx.fillStyle = '#163724';
     ctx.fillRect(0, 0, tilemap.width, tilemap.height);
-    const background = this.getLevel1TrailImage();
+    const key = tilemap.backgroundKey!;
+    const background = this.getHandcraftedBackground(key);
     if (background) {
-      ctx.drawImage(background, 0, 0, LEVEL_1_BACKGROUND_SIZE.width, LEVEL_1_BACKGROUND_SIZE.height);
+      const size = key === 'level2-ice' ? LEVEL_2_BACKGROUND_SIZE : LEVEL_1_BACKGROUND_SIZE;
+      ctx.drawImage(background, 0, 0, size.width, size.height);
     }
   }
 
@@ -239,7 +253,7 @@ export class IsometricRenderer {
     // El fondo artesanal cubre un mapa mucho más grande que una sala; una
     // cámara ligeramente más abierta evita que árboles y troncos se vean
     // gigantes y permite leer mejor el camino hacia la derecha.
-    const zoom = tilemap?.backgroundKey === 'level1-trail' ? 1.08 : 1.32;
+    const zoom = tilemap?.backgroundKey ? 1.08 : 1.32;
     ctx.translate(width / 2, height / 2);
     ctx.scale(zoom, zoom);
     ctx.translate(-camera.x, -camera.y);
@@ -248,8 +262,8 @@ export class IsometricRenderer {
 
     // 2. Dibujar Suelo (Tilemap procedural estructurado, o Bosque Extendido 2.5D, o Suelo de Mazmorra clásica)
     if (tilemap) {
-      if (tilemap.backgroundKey === 'level1-trail') {
-        this.drawLevel1TrailBackground(ctx, tilemap);
+      if (tilemap.backgroundKey) {
+        this.drawHandcraftedBackground(ctx, tilemap);
       } else {
         tilemap.renderFloor(ctx, frustum, performance.now());
       }
@@ -431,7 +445,7 @@ export class IsometricRenderer {
     });
 
     // Si hay un Tilemap activo: añadir muros de piedra ancestral 2.5D y el portón al Y-Sorting
-    if (tilemap && tilemap.backgroundKey !== 'level1-trail') {
+    if (tilemap && !tilemap.backgroundKey) {
       tilemap.addWallsToRenderList(ctx, frustum, renderList, performance.now());
     }
 
@@ -838,7 +852,7 @@ export class IsometricRenderer {
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
-      draw: () => this.drawWizard(ctx, wizard, tilemap?.backgroundKey === 'level1-trail' ? 1.55 : 1),
+      draw: () => this.drawWizard(ctx, wizard, tilemap?.backgroundKey ? 1.55 : 1),
     });
 
     // Enemigos y Jefes (Frustum Culling optimizado con margen de seguridad de 100px)
@@ -849,7 +863,7 @@ export class IsometricRenderer {
         draw: () => this.drawEnemy(
           ctx,
           enemy,
-          tilemap?.backgroundKey === 'level1-trail' && enemy.archetype !== 'boss' ? 1.42 : 1,
+          tilemap?.backgroundKey && enemy.archetype !== 'boss' ? 1.42 : 1,
         ),
       });
     });

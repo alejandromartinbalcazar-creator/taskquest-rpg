@@ -125,9 +125,18 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
       <div className="space-y-3">
         {levels.map((level) => {
           const floor = dungeons.find((item) => item.floorNumber === level);
-          const unlocked = level === 1;
-          const title = level === 1 ? 'Nivel 1: Bosque Profundo' : `Nivel ${level}: Región por descubrir`;
-          const description = level === 1 ? 'La primera expedición real: combate, tesoros y guardián.' : `Completa misiones para abrir esta expedición.`;
+          const previousFloor = dungeons.find((item) => item.floorNumber === level - 1);
+          const unlocked = level === 1 || !!previousFloor?.cleared;
+          const title = level === 1
+            ? 'Nivel 1: Bosque Profundo'
+            : level === 2
+              ? 'Nivel 2: Campamento Glacial'
+              : `Nivel ${level}: Región por descubrir`;
+          const description = level === 1
+            ? 'La primera expedición real: combate, tesoros y guardián.'
+            : level === 2
+              ? 'Un campamento congelado custodiado solo por acechadores de hielo.'
+              : `Completa misiones para abrir esta expedición.`;
           return (
           <div
             key={level}

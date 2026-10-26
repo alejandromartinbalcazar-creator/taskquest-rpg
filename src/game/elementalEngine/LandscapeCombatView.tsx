@@ -89,13 +89,14 @@ import {
 import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
 import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
-import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
+import { mapManager, Tilemap, LEVEL_1_LAYOUT, LEVEL_2_LAYOUT } from '../map';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
 import { setDungeonFullscreen } from '../../services/androidFullscreen';
 import { haptics } from '../../services/haptics';
 import { prepareLevel1CollisionMask, resolveLevel1MaskMovement } from '../levels/level1BackgroundLayout';
+import { prepareLevel2CollisionMask, resolveLevel2MaskMovement } from '../levels/level2BackgroundLayout';
 import { CameraSystem } from './Camera';
 import {
   TerrainManager,
@@ -522,11 +523,25 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
   return enemies;
 }
 
-function getLevel1Layout(_run?: ExpeditionRun): string[] {
+/** Nivel 2: el campamento glacial solo alberga acechadores de hielo. */
+function createLevel2IceEnemies(enemyManager: EnemyManager, tilemap: Tilemap): GameEnemy[] {
+  return tilemap.enemySpawns.map((spawn, index) => {
+    const enemy = enemyManager.createFrostLurker(`ice-camp-${index}`, spawn.x, spawn.y);
+    enemy.isRevealed = false;
+    return enemy;
+  });
+}
+
+function getFloorLayout(floorNumber: number, _run?: ExpeditionRun): string[] {
+  if (floorNumber === 2) return LEVEL_2_LAYOUT;
   // El primer nivel es un sendero artesanal con fondo panorámico. La ruta con
   // semilla vuelve a utilizarse desde los niveles posteriores, donde haya
   // varios fondos y salas modulares disponibles.
   return LEVEL_1_LAYOUT;
+}
+
+function getFloorBackgroundKey(floorNumber: number): 'level1-trail' | 'level2-ice' {
+  return floorNumber === 2 ? 'level2-ice' : 'level1-trail';
 }
 
 function revealTilesWithTorch(
@@ -985,9 +1000,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
 
     // Inicializar el Nivel 1 con motor de Tilemap procedural estructurado
-    const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
-    tilemap.backgroundKey = 'level1-trail';
-    prepareLevel1CollisionMask();
+    const tilemap = mapManager.loadLevel(getFloorLayout(floor.floorNumber, campaignRoute?.run));
+    tilemap.backgroundKey = getFloorBackgroundKey(floor.floorNumber);
+    if (floor.floorNumber === 2) prepareLevel2CollisionMask(); else prepareLevel1CollisionMask();
     g.tilemap = tilemap;
     g.forestLevel = null;
 
@@ -1023,7 +1038,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     g.exploredTiles.clear();
 
     // Generar patrullas del Bestiario y jefe a lo largo de las celdas del Tilemap
-    g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
+    g.enemyManager.enemies = floor.floorNumber === 2
+      ? createLevel2IceEnemies(g.enemyManager, tilemap)
+      : createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
 
     g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
     const initialHp = Math.max(1, player.currentHp > 0 ? player.currentHp : player.maxHp);
@@ -1324,9 +1341,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (nextIndex === 2) setVesselsRemaining(g.terrainManager.obstacles.filter((obs) => obs.obstacleType === 'vessel').length);
         setTutorialStep(nextIndex === 1 ? 4 : 5);
       } else if (nextIndex === 0) {
-        const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
-        tilemap.backgroundKey = 'level1-trail';
-        prepareLevel1CollisionMask();
+        const tilemap = mapManager.loadLevel(getFloorLayout(floor.floorNumber, campaignRoute?.run));
+        tilemap.backgroundKey = getFloorBackgroundKey(floor.floorNumber);
+        if (floor.floorNumber === 2) prepareLevel2CollisionMask(); else prepareLevel1CollisionMask();
         g.tilemap = tilemap;
         g.forestLevel = null;
         let savedCpId: string | null = null;
@@ -1357,7 +1374,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         g.cameraSystem.reset(rx, ry);
         g.terrainManager.obstacles = [];
         g.exploredTiles.clear();
-        g.enemyManager.enemies = createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
+        g.enemyManager.enemies = floor.floorNumber === 2
+          ? createLevel2IceEnemies(g.enemyManager, tilemap)
+          : createLevel1TilemapEnemies(g.enemyManager, tilemap, campaignRoute?.run);
         g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
       } else {
         g.tilemap = null;
@@ -6913,6 +6932,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         wizard.y = resolved.y;
         if (g.tilemap.backgroundKey === 'level1-trail') {
           resolveLevel1MaskMovement(wizard, { x: g.prevWizardX, y: g.prevWizardY }, g.tilemap.gate.isOpen);
+        } else if (g.tilemap.backgroundKey === 'level2-ice') {
+          resolveLevel2MaskMovement(wizard, { x: g.prevWizardX, y: g.prevWizardY }, g.tilemap.gate.isOpen);
         }
       } else if (g.forestLevel) {
         wizard.x = Math.max(80, Math.min(LEVEL_WIDTH - 80, wizard.x));
@@ -7058,7 +7079,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         viewH,
         worldW,
         worldH,
-        g.tilemap?.backgroundKey === 'level1-trail' ? 1.08 : 1.32
+        g.tilemap?.backgroundKey ? 1.08 : 1.32
       );
 
       g.camera.x = g.cameraSystem.x;

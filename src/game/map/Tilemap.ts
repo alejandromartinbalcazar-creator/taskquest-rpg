@@ -75,7 +75,7 @@ export interface FrustumBounds {
 
 export class Tilemap {
   /** Fondo artesanal opcional; conserva la física del mapa pero reemplaza su suelo vectorial. */
-  public backgroundKey: 'level1-trail' | null = null;
+  public backgroundKey: 'level1-trail' | 'level2-ice' | null = null;
   public cols: number = 0;
   public rows: number = 0;
   public width: number = 0;
