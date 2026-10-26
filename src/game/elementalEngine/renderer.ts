@@ -97,8 +97,33 @@ import {
   drawCustodianHUD,
 } from './custodianRenderer';
 import { Tilemap } from '../map/Tilemap';
+import { LEVEL_1_BACKGROUND, LEVEL_1_BACKGROUND_SIZE } from '../levels/level1BackgroundLayout';
 
 export class IsometricRenderer {
+  private static level1TrailImage: HTMLImageElement | null = null;
+  private static level1TrailReady = false;
+
+  /** Carga una sola vez el arte panorámico, sin bloquear el bucle de combate. */
+  private static getLevel1TrailImage(): HTMLImageElement | null {
+    if (typeof Image === 'undefined') return null;
+    if (!this.level1TrailImage) {
+      this.level1TrailImage = new Image();
+      this.level1TrailImage.onload = () => { this.level1TrailReady = true; };
+      this.level1TrailImage.src = LEVEL_1_BACKGROUND;
+    }
+    return this.level1TrailReady ? this.level1TrailImage : null;
+  }
+
+  private static drawLevel1TrailBackground(ctx: CanvasRenderingContext2D, tilemap: Tilemap): void {
+    // Rellena todo el mundo para que la cámara jamás muestre bandas negras.
+    ctx.fillStyle = '#163724';
+    ctx.fillRect(0, 0, tilemap.width, tilemap.height);
+    const background = this.getLevel1TrailImage();
+    if (background) {
+      ctx.drawImage(background, 0, 0, LEVEL_1_BACKGROUND_SIZE.width, LEVEL_1_BACKGROUND_SIZE.height);
+    }
+  }
+
   // Renderiza el frame completo del juego con CÁMARA CERCANA (Zoom 1.32x) y siluetas físicas únicas
   public static render(
     ctx: CanvasRenderingContext2D,
@@ -220,7 +245,11 @@ export class IsometricRenderer {
 
     // 2. Dibujar Suelo (Tilemap procedural estructurado, o Bosque Extendido 2.5D, o Suelo de Mazmorra clásica)
     if (tilemap) {
-      tilemap.renderFloor(ctx, frustum, performance.now());
+      if (tilemap.backgroundKey === 'level1-trail') {
+        this.drawLevel1TrailBackground(ctx, tilemap);
+      } else {
+        tilemap.renderFloor(ctx, frustum, performance.now());
+      }
     } else if (forestLevel) {
       this.drawForestGround(ctx, frustum, forestLevel);
     } else {
@@ -399,7 +428,7 @@ export class IsometricRenderer {
     });
 
     // Si hay un Tilemap activo: añadir muros de piedra ancestral 2.5D y el portón al Y-Sorting
-    if (tilemap) {
+    if (tilemap && tilemap.backgroundKey !== 'level1-trail') {
       tilemap.addWallsToRenderList(ctx, frustum, renderList, performance.now());
     }
 

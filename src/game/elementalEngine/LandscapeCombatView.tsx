@@ -89,12 +89,13 @@ import {
 import { ParticlePool, PooledParticle } from '../combat/ParticlePool';
 import { ProjectilePool, PooledProjectile } from '../combat/ProjectilePool';
 import { createLevel1Forest, LEVEL_WIDTH, LEVEL_HEIGHT } from './level1ForestMap';
-import { mapManager, Tilemap, LEVEL_1_LAYOUT, assembleLevel1CampaignMap } from '../map';
+import { mapManager, Tilemap, LEVEL_1_LAYOUT } from '../map';
 import { identifyRecipe } from './recipes';
 import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
 import { setDungeonFullscreen } from '../../services/androidFullscreen';
 import { haptics } from '../../services/haptics';
+import { resolveLevel1DecorationCollisions } from '../levels/level1BackgroundLayout';
 import { CameraSystem } from './Camera';
 import {
   TerrainManager,
@@ -521,8 +522,11 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
   return enemies;
 }
 
-function getLevel1Layout(run?: ExpeditionRun): string[] {
-  return run ? assembleLevel1CampaignMap(run.rooms) : LEVEL_1_LAYOUT;
+function getLevel1Layout(_run?: ExpeditionRun): string[] {
+  // El primer nivel es un sendero artesanal con fondo panorámico. La ruta con
+  // semilla vuelve a utilizarse desde los niveles posteriores, donde haya
+  // varios fondos y salas modulares disponibles.
+  return LEVEL_1_LAYOUT;
 }
 
 function revealTilesWithTorch(
@@ -982,6 +986,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     // Inicializar el Nivel 1 con motor de Tilemap procedural estructurado
     const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
+    tilemap.backgroundKey = 'level1-trail';
     g.tilemap = tilemap;
     g.forestLevel = null;
 
@@ -1319,6 +1324,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         setTutorialStep(nextIndex === 1 ? 4 : 5);
       } else if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
+        tilemap.backgroundKey = 'level1-trail';
         g.tilemap = tilemap;
         g.forestLevel = null;
         let savedCpId: string | null = null;
@@ -6903,6 +6909,9 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const resolved = g.tilemap.resolveEntityCollision(wizard, 0, 0);
         wizard.x = resolved.x;
         wizard.y = resolved.y;
+        if (g.tilemap.backgroundKey === 'level1-trail') {
+          resolveLevel1DecorationCollisions(wizard);
+        }
       } else if (g.forestLevel) {
         wizard.x = Math.max(80, Math.min(LEVEL_WIDTH - 80, wizard.x));
         wizard.y = Math.max(80, Math.min(LEVEL_HEIGHT - 80, wizard.y));
