@@ -12,7 +12,8 @@ function createForestTrailLevel(): string[] {
   );
 
   // Inicio, patrullas medidas y portón congelado al extremo derecho.
-  grid[9][4] = 'P';
+  // Punto comprobado sobre la zona verde de la máscara, no dentro del arco.
+  grid[10][8] = 'P';
   grid[9][18] = '1';
   grid[10][27] = '2';
   grid[9][35] = '3';

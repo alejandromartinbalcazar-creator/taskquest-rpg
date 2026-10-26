@@ -7058,7 +7058,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         viewH,
         worldW,
         worldH,
-        1.32
+        g.tilemap?.backgroundKey === 'level1-trail' ? 1.08 : 1.32
       );
 
       g.camera.x = g.cameraSystem.x;

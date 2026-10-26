@@ -236,7 +236,10 @@ export class IsometricRenderer {
     // CÁMARA CERCANA: Aplicar factor de Zoom 1.35x para apreciar claramente las siluetas,
     // animaciones y reacciones de los personajes sin perder visibilidad táctica
     ctx.save();
-    const zoom = 1.32;
+    // El fondo artesanal cubre un mapa mucho más grande que una sala; una
+    // cámara ligeramente más abierta evita que árboles y troncos se vean
+    // gigantes y permite leer mejor el camino hacia la derecha.
+    const zoom = tilemap?.backgroundKey === 'level1-trail' ? 1.08 : 1.32;
     ctx.translate(width / 2, height / 2);
     ctx.scale(zoom, zoom);
     ctx.translate(-camera.x, -camera.y);
@@ -835,7 +838,7 @@ export class IsometricRenderer {
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
-      draw: () => this.drawWizard(ctx, wizard),
+      draw: () => this.drawWizard(ctx, wizard, tilemap?.backgroundKey === 'level1-trail' ? 1.55 : 1),
     });
 
     // Enemigos y Jefes (Frustum Culling optimizado con margen de seguridad de 100px)
@@ -1729,7 +1732,8 @@ export class IsometricRenderer {
       castFlashColor?: string;
       activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
       staffCastTimer?: number;
-    }
+    },
+    visualScale = 1,
   ) {
     // 1. Estela fantasmal durante la esquiva (Dash Afterimages)
     if (wizard.dashTrail && wizard.dashTrail.length > 0) {
@@ -1741,7 +1745,7 @@ export class IsometricRenderer {
           ctx,
           x: 0,
           y: 0,
-          scale: 1.15,
+          scale: 1.15 * visualScale,
           facingAngle: trail.facingAngle,
           isMoving: true,
         });
@@ -2774,7 +2778,7 @@ export class IsometricRenderer {
       ctx,
       x: 0,
       y: levY,
-      scale: 1.15 * (wizard.victoryScale !== undefined ? wizard.victoryScale : 1.0), // Mago con presencia visual y absorción en vórtice
+      scale: 1.15 * visualScale * (wizard.victoryScale !== undefined ? wizard.victoryScale : 1.0), // Mago con presencia visual y absorción en vórtice
       facingAngle: wizard.facingAngle,
       isMoving: wizard.isMoving,
       vx: wizard.vx,
