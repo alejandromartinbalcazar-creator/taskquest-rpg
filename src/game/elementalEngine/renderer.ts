@@ -846,7 +846,11 @@ export class IsometricRenderer {
       if ((forestLevel || tilemap) && !isInFrustum(enemy.x, enemy.y, enemy.radius + 100, frustum)) return;
       renderList.push({
         y: enemy.y,
-        draw: () => this.drawEnemy(ctx, enemy),
+        draw: () => this.drawEnemy(
+          ctx,
+          enemy,
+          tilemap?.backgroundKey === 'level1-trail' && enemy.archetype !== 'boss' ? 1.42 : 1,
+        ),
       });
     });
 
@@ -2796,10 +2800,13 @@ export class IsometricRenderer {
   }
 
   // Dibuja Enemigos y Jefes con renderizado vectorial procedural del Bestiario (cero emojis)
-  private static drawEnemy(ctx: CanvasRenderingContext2D, enemy: GameEnemy) {
+  private static drawEnemy(ctx: CanvasRenderingContext2D, enemy: GameEnemy, visualScale = 1) {
     const now = performance.now();
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
+    // El arte panorámico del Sendero usa objetos más grandes que el suelo
+    // procedural. Escalamos únicamente la silueta: física y daño no cambian.
+    if (visualScale !== 1) ctx.scale(visualScale, visualScale);
 
     // 1. Telégrafo de Ataque Rojo (para ataques en carga o melé)
     if (enemy.isTelegraphing) {
