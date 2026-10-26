@@ -44,7 +44,27 @@ export function resolveLevel2MaskMovement(
   if (!collisionPixels) return;
   const inset = Math.max(8, entity.radius * 0.7);
   const samples = [[0, 0], [inset, 0], [-inset, 0], [0, inset], [0, -inset]];
-  if (samples.every(([dx, dy]) => canWalkAt(entity.x + dx, entity.y + dy, gateOpen))) return;
+  const isWalkablePosition = (x: number, y: number) =>
+    samples.every(([dx, dy]) => canWalkAt(x + dx, y + dy, gateOpen));
+  if (isWalkablePosition(entity.x, entity.y)) return;
+
+  // La misma resolución independiente de ejes del Nivel 1: el jugador sigue
+  // avanzando paralelo al hielo, las rocas o las carpas al caminar en diagonal.
+  const allowX = isWalkablePosition(entity.x, previous.y);
+  const allowY = isWalkablePosition(previous.x, entity.y);
+  if (allowX && !allowY) {
+    entity.y = previous.y;
+    return;
+  }
+  if (allowY && !allowX) {
+    entity.x = previous.x;
+    return;
+  }
+  if (allowX && allowY) {
+    if (Math.abs(entity.x - previous.x) >= Math.abs(entity.y - previous.y)) entity.y = previous.y;
+    else entity.x = previous.x;
+    return;
+  }
   entity.x = previous.x;
   entity.y = previous.y;
 }

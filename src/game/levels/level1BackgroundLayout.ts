@@ -48,8 +48,9 @@ function canWalkAt(x: number, y: number, gateOpen: boolean): boolean {
 }
 
 /**
- * Valida centro y borde del personaje. Si el siguiente paso toca un tronco,
- * muro, charco, bosque o portón cerrado, devuelve la posición anterior.
+ * Valida centro y borde del personaje. Cuando un movimiento diagonal toca un
+ * límite, resuelve X e Y por separado para conservar el componente paralelo
+ * al muro: el mago se desliza, en lugar de quedar detenido en seco.
  */
 export function resolveLevel1MaskMovement(
   entity: { x: number; y: number; radius: number },
@@ -62,10 +63,33 @@ export function resolveLevel1MaskMovement(
   const samples = [
     [0, 0], [inset, 0], [-inset, 0], [0, inset], [0, -inset],
   ];
-  if (samples.every(([dx, dy]) => canWalkAt(entity.x + dx, entity.y + dy, gateOpen))) return;
+  const isWalkablePosition = (x: number, y: number) =>
+    samples.every(([dx, dy]) => canWalkAt(x + dx, y + dy, gateOpen));
 
-  // Conservar el último punto válido evita atravesar la decoración y hace que
-  // el movimiento se sienta como un borde físico, no como un teletransporte.
+  // Movimiento libre completo.
+  if (isWalkablePosition(entity.x, entity.y)) return;
+
+  // Wall sliding: intentar cada eje por separado desde la última posición
+  // válida. Esto es idéntico para teclado y joystick porque ambos ya dejaron
+  // su resultado en entity.x/entity.y.
+  const allowX = isWalkablePosition(entity.x, previous.y);
+  const allowY = isWalkablePosition(previous.x, entity.y);
+  if (allowX && !allowY) {
+    entity.y = previous.y;
+    return;
+  }
+  if (allowY && !allowX) {
+    entity.x = previous.x;
+    return;
+  }
+  if (allowX && allowY) {
+    // En una esquina ambos ejes por sí solos funcionan. Mantener el de mayor
+    // intención evita rebotes y micro-atascos al rozar salientes.
+    if (Math.abs(entity.x - previous.x) >= Math.abs(entity.y - previous.y)) entity.y = previous.y;
+    else entity.x = previous.x;
+    return;
+  }
+
   entity.x = previous.x;
   entity.y = previous.y;
 }
