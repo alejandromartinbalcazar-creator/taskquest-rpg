@@ -1,25 +1,27 @@
 // Nivel 1 — El Gran Sendero. Primer tramo artesanal de la campaña.
-// 43 x 16 celdas de 64px = 2752 x 1024px, alineado al fondo panorámico.
+// 56 x 19 celdas de 64px = 3584 x 1216px, alineado al fondo panorámico.
 
-const COLS = 43;
-const ROWS = 16;
+const COLS = 56;
+const ROWS = 19;
 
 function createForestTrailLevel(): string[] {
+  // El detalle de paso lo resuelve la máscara por píxel; esta cuadrícula solo
+  // delimita el mundo y conserva spawns, portal y lógica de combate.
   const grid: string[][] = Array.from({ length: ROWS }, (_, row) =>
-    Array.from({ length: COLS }, () => (row >= 6 && row <= 9 ? '.' : '#'))
+    Array.from({ length: COLS }, () => (row === 0 || row === ROWS - 1 ? '#' : '.'))
   );
 
   // Inicio, patrullas medidas y portón congelado al extremo derecho.
-  grid[7][3] = 'P';
-  grid[7][13] = '1';
-  grid[8][20] = '2';
-  grid[7][27] = '3';
-  grid[8][34] = '1';
-  grid[7][39] = 'C';
-  grid[7][40] = 'D';
-  grid[8][40] = 'D';
-  grid[7][41] = 'B';
-  grid[8][41] = 'B';
+  grid[9][4] = 'P';
+  grid[9][18] = '1';
+  grid[10][27] = '2';
+  grid[9][35] = '3';
+  grid[10][43] = '1';
+  grid[9][48] = 'C';
+  grid[9][51] = 'D';
+  grid[10][51] = 'D';
+  grid[9][53] = 'B';
+  grid[10][53] = 'B';
 
   return grid.map((row) => row.join(''));
 }

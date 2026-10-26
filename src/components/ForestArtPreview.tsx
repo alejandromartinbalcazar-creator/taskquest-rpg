@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { LEVEL_1_BACKGROUND, LEVEL_1_BACKGROUND_SIZE, LEVEL_1_WALKABLE_LANES } from '../game/levels/level1BackgroundLayout';
+import { LEVEL_1_BACKGROUND, LEVEL_1_BACKGROUND_SIZE } from '../game/levels/level1BackgroundLayout';
 
 /**
  * Maqueta visual aislada del Gran Sendero. No cambia la mazmorra jugable:
@@ -44,8 +44,7 @@ export function ForestArtPreview() {
           className="w-full border-2 border-emerald-900 shadow-2xl"
         />
         <p className="mt-3 text-center text-sm text-emerald-100/80">
-          Sendero central transitable · muros, bosque, agua y portón son límites físicos.
-          {LEVEL_1_WALKABLE_LANES.length > 0 ? '' : null}
+          Máscara verde: caminar · rojo y azul: bloqueo · amarillo: portón.
         </p>
       </section>
     </main>

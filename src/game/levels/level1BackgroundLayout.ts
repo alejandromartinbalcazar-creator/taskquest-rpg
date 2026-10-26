@@ -1,90 +1,71 @@
 /**
- * Geometría del fondo de Nivel 1. El arte y la física viven separados:
- * cambiar una ilustración no crea hitboxes accidentales.
+ * Nivel 1 artesanal. El arte visible y su máscara de navegación comparten el
+ * mismo tamaño: no hay que adivinar hitboxes a partir de una ilustración.
  */
 export const LEVEL_1_BACKGROUND = '/assets/levels/level1-background.jpeg';
+export const LEVEL_1_COLLISION_MASK = '/assets/levels/level1-collision.jpeg';
 
 export const LEVEL_1_BACKGROUND_SIZE = {
-  width: 2752,
-  height: 979,
+  width: 3584,
+  height: 1184,
 } as const;
 
-export interface WalkableLane {
-  /** Límite inclusivo de la zona por la que se puede caminar. */
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
+let collisionPixels: ImageData | null = null;
+let loadingMask = false;
 
-/**
- * La calzada central del fondo. Las franjas verdes, muros, árboles, charcos
- * y portón permanecen fuera de estos límites. Más adelante, cada sala puede
- * recortar o ampliar este carril sin editar la imagen.
- */
-export const LEVEL_1_WALKABLE_LANES: readonly WalkableLane[] = [
-  { minX: 36, maxX: 2400, minY: 382, maxY: 617 },
-] as const;
-
-export interface Level1DecorationCollider {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label: 'trunk' | 'puddle' | 'frozen-gate';
-}
-
-/**
- * Obstáculos visibles del fondo. Se mantienen explícitos, pequeños y
- * auditables: nunca se deducen por el color de los píxeles de la imagen.
- */
-export const LEVEL_1_DECORATION_COLLIDERS: readonly Level1DecorationCollider[] = [
-  { x: 660, y: 282, width: 82, height: 72, label: 'trunk' },
-  { x: 1764, y: 286, width: 88, height: 72, label: 'trunk' },
-  { x: 670, y: 594, width: 96, height: 85, label: 'trunk' },
-  { x: 1758, y: 598, width: 96, height: 85, label: 'trunk' },
-  { x: 1116, y: 324, width: 192, height: 52, label: 'puddle' },
-  { x: 1108, y: 642, width: 198, height: 56, label: 'puddle' },
-  { x: 2412, y: 0, width: 340, height: 979, label: 'frozen-gate' },
-] as const;
-
-/** Desliza un círculo fuera de los objetos pintados en el fondo. */
-export function resolveLevel1DecorationCollisions(entity: { x: number; y: number; radius: number }): void {
-  for (const collider of LEVEL_1_DECORATION_COLLIDERS) {
-    const left = collider.x;
-    const top = collider.y;
-    const right = collider.x + collider.width;
-    const bottom = collider.y + collider.height;
-    const closestX = Math.max(left, Math.min(entity.x, right));
-    const closestY = Math.max(top, Math.min(entity.y, bottom));
-    const dx = entity.x - closestX;
-    const dy = entity.y - closestY;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance >= entity.radius) continue;
-
-    if (distance > 0.001) {
-      const overlap = entity.radius - distance + 0.1;
-      entity.x += (dx / distance) * overlap;
-      entity.y += (dy / distance) * overlap;
-      continue;
+/** Carga la máscara fuera del bucle de combate. Es segura de invocar más de una vez. */
+export function prepareLevel1CollisionMask(): void {
+  if (collisionPixels || loadingMask || typeof document === 'undefined') return;
+  loadingMask = true;
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = LEVEL_1_BACKGROUND_SIZE.width;
+    canvas.height = LEVEL_1_BACKGROUND_SIZE.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      ctx.drawImage(image, 0, 0);
+      collisionPixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
     }
-
-    // Centro dentro del rectángulo: expulsar por el borde más cercano.
-    const distances = [entity.x - left, right - entity.x, entity.y - top, bottom - entity.y];
-    const side = distances.indexOf(Math.min(...distances));
-    if (side === 0) entity.x = left - entity.radius - 0.1;
-    else if (side === 1) entity.x = right + entity.radius + 0.1;
-    else if (side === 2) entity.y = top - entity.radius - 0.1;
-    else entity.y = bottom + entity.radius + 0.1;
-  }
+    loadingMask = false;
+  };
+  image.onerror = () => { loadingMask = false; };
+  image.src = LEVEL_1_COLLISION_MASK;
 }
 
-export function isInsideLevel1Walkway(x: number, y: number, radius = 0): boolean {
-  return LEVEL_1_WALKABLE_LANES.some((lane) => (
-    x - radius >= lane.minX
-    && x + radius <= lane.maxX
-    && y - radius >= lane.minY
-    && y + radius <= lane.maxY
-  ));
+function canWalkAt(x: number, y: number, gateOpen: boolean): boolean {
+  if (!collisionPixels || x < 0 || y < 0 || x >= LEVEL_1_BACKGROUND_SIZE.width || y >= LEVEL_1_BACKGROUND_SIZE.height) return false;
+  const pixel = (Math.floor(y) * LEVEL_1_BACKGROUND_SIZE.width + Math.floor(x)) * 4;
+  const { data } = collisionPixels;
+  const r = data[pixel];
+  const g = data[pixel + 1];
+  const b = data[pixel + 2];
+
+  // La máscara es JPEG, por eso se usan rangos y no igualdad exacta de color.
+  const isWalkableGreen = g > 125 && g > r * 1.35 && g > b * 1.35;
+  const isGateYellow = r > 150 && g > 125 && b < 105;
+  return isWalkableGreen || (gateOpen && isGateYellow);
+}
+
+/**
+ * Valida centro y borde del personaje. Si el siguiente paso toca un tronco,
+ * muro, charco, bosque o portón cerrado, devuelve la posición anterior.
+ */
+export function resolveLevel1MaskMovement(
+  entity: { x: number; y: number; radius: number },
+  previous: { x: number; y: number },
+  gateOpen: boolean,
+): void {
+  prepareLevel1CollisionMask();
+  if (!collisionPixels) return;
+  const inset = Math.max(8, entity.radius * 0.7);
+  const samples = [
+    [0, 0], [inset, 0], [-inset, 0], [0, inset], [0, -inset],
+  ];
+  if (samples.every(([dx, dy]) => canWalkAt(entity.x + dx, entity.y + dy, gateOpen))) return;
+
+  // Conservar el último punto válido evita atravesar la decoración y hace que
+  // el movimiento se sienta como un borde físico, no como un teletransporte.
+  entity.x = previous.x;
+  entity.y = previous.y;
 }

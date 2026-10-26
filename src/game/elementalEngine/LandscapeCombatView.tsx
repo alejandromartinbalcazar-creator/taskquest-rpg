@@ -95,7 +95,7 @@ import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
 import { setDungeonFullscreen } from '../../services/androidFullscreen';
 import { haptics } from '../../services/haptics';
-import { resolveLevel1DecorationCollisions } from '../levels/level1BackgroundLayout';
+import { prepareLevel1CollisionMask, resolveLevel1MaskMovement } from '../levels/level1BackgroundLayout';
 import { CameraSystem } from './Camera';
 import {
   TerrainManager,
@@ -987,6 +987,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     // Inicializar el Nivel 1 con motor de Tilemap procedural estructurado
     const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
     tilemap.backgroundKey = 'level1-trail';
+    prepareLevel1CollisionMask();
     g.tilemap = tilemap;
     g.forestLevel = null;
 
@@ -1325,6 +1326,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       } else if (nextIndex === 0) {
         const tilemap = mapManager.loadLevel(getLevel1Layout(campaignRoute?.run));
         tilemap.backgroundKey = 'level1-trail';
+        prepareLevel1CollisionMask();
         g.tilemap = tilemap;
         g.forestLevel = null;
         let savedCpId: string | null = null;
@@ -6910,7 +6912,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         wizard.x = resolved.x;
         wizard.y = resolved.y;
         if (g.tilemap.backgroundKey === 'level1-trail') {
-          resolveLevel1DecorationCollisions(wizard);
+          resolveLevel1MaskMovement(wizard, { x: g.prevWizardX, y: g.prevWizardY }, g.tilemap.gate.isOpen);
         }
       } else if (g.forestLevel) {
         wizard.x = Math.max(80, Math.min(LEVEL_WIDTH - 80, wizard.x));
