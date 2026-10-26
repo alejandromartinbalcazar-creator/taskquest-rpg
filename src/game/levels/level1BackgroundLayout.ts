@@ -59,9 +59,13 @@ export function resolveLevel1MaskMovement(
 ): void {
   prepareLevel1CollisionMask();
   if (!collisionPixels) return;
-  const inset = Math.max(8, entity.radius * 0.7);
+  // El punto físico del mago es el apoyo de sus pies. La parte alta del sprite
+  // puede pasar visualmente frente a ramas y salientes si el suelo bajo él es válido.
+  const inset = Math.max(6, entity.radius * 0.48);
   const samples = [
-    [0, 0], [inset, 0], [-inset, 0], [0, inset], [0, -inset],
+    [0, entity.radius * 0.34],
+    [inset, entity.radius * 0.34], [-inset, entity.radius * 0.34],
+    [0, entity.radius * 0.34 + inset * 0.65], [0, entity.radius * 0.34 - inset * 0.45],
   ];
   const isWalkablePosition = (x: number, y: number) =>
     samples.every(([dx, dy]) => canWalkAt(x + dx, y + dy, gateOpen));
@@ -88,6 +92,51 @@ export function resolveLevel1MaskMovement(
     if (Math.abs(entity.x - previous.x) >= Math.abs(entity.y - previous.y)) entity.y = previous.y;
     else entity.x = previous.x;
     return;
+  }
+
+  // Superficies diagonales y puntas: probar pequeños desvíos perpendiculares
+  // al vector solicitado. Esto encuentra la cara libre de una roca triangular
+  // sin teletransportar al jugador ni anular el impulso de avance.
+  const dx = entity.x - previous.x;
+  const dy = entity.y - previous.y;
+  const intendedLength = Math.hypot(dx, dy);
+  if (intendedLength > 0.01) {
+    const forwardX = dx / intendedLength;
+    const forwardY = dy / intendedLength;
+    const sideX = -forwardY;
+    const sideY = forwardX;
+    let best: { x: number; y: number; score: number } | null = null;
+
+    for (const distance of [4, 8, 12, 18, 26]) {
+      for (const side of [-1, 1]) {
+        const candidateX = entity.x + sideX * distance * side;
+        const candidateY = entity.y + sideY * distance * side;
+        const progress = (candidateX - previous.x) * forwardX + (candidateY - previous.y) * forwardY;
+        if (progress < intendedLength * 0.35 || !isWalkablePosition(candidateX, candidateY)) continue;
+        const score = distance + Math.abs(progress - intendedLength) * 0.25;
+        if (!best || score < best.score) best = { x: candidateX, y: candidateY, score };
+      }
+    }
+
+    // Corner nudging: cuando el centro toca exactamente un vértice, buscar una
+    // corrección corta ligeramente hacia delante para redondearlo con suavidad.
+    if (!best) {
+      for (const distance of [5, 10, 16]) {
+        for (const side of [-1, 1]) {
+          const candidateX = previous.x + forwardX * Math.max(1, intendedLength * 0.6) + sideX * distance * side;
+          const candidateY = previous.y + forwardY * Math.max(1, intendedLength * 0.6) + sideY * distance * side;
+          const progress = (candidateX - previous.x) * forwardX + (candidateY - previous.y) * forwardY;
+          if (progress <= 0 || !isWalkablePosition(candidateX, candidateY)) continue;
+          const score = distance + Math.abs(progress - intendedLength) * 0.4;
+          if (!best || score < best.score) best = { x: candidateX, y: candidateY, score };
+        }
+      }
+    }
+    if (best) {
+      entity.x = best.x;
+      entity.y = best.y;
+      return;
+    }
   }
 
   entity.x = previous.x;
