@@ -1199,6 +1199,7 @@ export class IsometricRenderer {
   private static drawTerrainZones(ctx: CanvasRenderingContext2D, zones: TerrainZone[]) {
     zones.forEach((z) => {
       const alpha = Math.min(1, z.life / 30);
+      const pulse = 0.5 + 0.5 * Math.sin((performance.now() + z.x * 11 + z.y * 7) * 0.008);
       ctx.save();
       ctx.globalAlpha = alpha;
 
@@ -1219,6 +1220,20 @@ export class IsometricRenderer {
         ctx.lineTo(z.x, z.y + z.radius * 0.2);
         ctx.lineTo(z.x + z.radius * 0.7, z.y - z.radius * 0.2);
         ctx.stroke();
+
+        // Grietas vivas: el magma debe parecer una herida caliente en el suelo,
+        // no solo un círculo de color sobre el mapa.
+        ctx.strokeStyle = '#7c2d12';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 4; i++) {
+          const a = i * (Math.PI / 2) + pulse * 0.24;
+          ctx.beginPath();
+          ctx.moveTo(z.x + Math.cos(a) * z.radius * 0.15, z.y + Math.sin(a) * z.radius * 0.15);
+          ctx.lineTo(z.x + Math.cos(a + 0.18) * z.radius * 0.56, z.y + Math.sin(a + 0.18) * z.radius * 0.56);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect((z.x - 3) | 0, (z.y - 3) | 0, 6, 6);
       } else if (z.zoneType === 'frost') {
         const grad = ctx.createRadialGradient(z.x, z.y, 5, z.x, z.y, z.radius);
         grad.addColorStop(0, 'rgba(56, 189, 248, 0.55)');
@@ -1227,6 +1242,21 @@ export class IsometricRenderer {
         ctx.beginPath();
         ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
+
+        // Cristales angulares de escarcha que quedan sobre el terreno tras un impacto.
+        ctx.strokeStyle = '#e0f2fe';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          const a = i * (Math.PI / 3) + pulse * 0.18;
+          const inner = z.radius * 0.18;
+          const outer = z.radius * (0.52 + (i % 2) * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(z.x + Math.cos(a) * inner, z.y + Math.sin(a) * inner * 0.62);
+          ctx.lineTo(z.x + Math.cos(a) * outer, z.y + Math.sin(a) * outer * 0.62);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect((z.x - 2) | 0, (z.y - 2) | 0, 4, 4);
       } else if (z.zoneType === 'water') {
         const grad = ctx.createRadialGradient(z.x, z.y, 5, z.x, z.y, z.radius);
         grad.addColorStop(0, 'rgba(2, 132, 199, 0.65)');
@@ -1235,11 +1265,43 @@ export class IsometricRenderer {
         ctx.beginPath();
         ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
-      } else if (z.zoneType === 'steam') {
-        ctx.fillStyle = 'rgba(203, 213, 225, 0.4)';
+
+        // Reflejos escalonados: hace que los charcos se integren con el fondo y
+        // comunica visualmente cuándo una habilidad ha alterado el suelo.
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.75)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.ellipse(z.x, z.y, z.radius * (0.32 + pulse * 0.1), z.radius * 0.16, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#bae6fd';
+        ctx.fillRect((z.x - z.radius * 0.26) | 0, (z.y - z.radius * 0.18) | 0, Math.max(3, (z.radius * 0.26) | 0), 2);
+      } else if (z.zoneType === 'steam') {
+        // Vapor compuesto de nubes ligeras y desplazadas, en vez de una mancha plana.
+        for (let i = 0; i < 4; i++) {
+          const ox = Math.sin(performance.now() * 0.003 + i * 2.1) * z.radius * 0.18;
+          const oy = -i * z.radius * 0.13 - pulse * 4;
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(241, 245, 249, 0.35)' : 'rgba(148, 163, 184, 0.28)';
+          ctx.beginPath();
+          ctx.arc(z.x + ox, z.y + oy, z.radius * (0.36 - i * 0.035), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (z.zoneType === 'electric_field') {
+        // Campo eléctrico: círculo rúnico y descargas cortas sobre suelo mojado.
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(z.x, z.y, z.radius, z.radius * 0.54, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+          const a = i * (Math.PI * 2 / 5) + pulse * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(z.x, z.y);
+          ctx.lineTo(z.x + Math.cos(a) * z.radius * 0.38, z.y + Math.sin(a) * z.radius * 0.22);
+          ctx.lineTo(z.x + Math.cos(a + 0.2) * z.radius * 0.72, z.y + Math.sin(a + 0.2) * z.radius * 0.4);
+          ctx.stroke();
+        }
       }
 
       ctx.restore();
@@ -3068,6 +3130,45 @@ export class IsometricRenderer {
       if (visualScale !== 1) ctx.scale(visualScale, visualScale);
 
       const OUTLINE = '#0f172a';
+      const spellName = String(p.spellType);
+      const isFire = p.element === 'fire' || spellName.includes('fire') || spellName.includes('magma');
+      const isIce = p.element === 'ice' || spellName.includes('ice') || spellName.includes('cryo');
+      const isEarth = p.element === 'earth' || spellName.includes('earth') || spellName.includes('tectonic');
+      const isLightning = p.element === 'lightning' || spellName.includes('lightning') || spellName.includes('overload');
+      const travelPulse = Math.floor(performance.now() * 0.02) % 3;
+
+      // Estela visual dibujada directamente en Canvas. No crea objetos ni
+      // partículas nuevas por frame: mantiene la fluidez incluso al spamear poderes.
+      if (!p.isHostile) {
+        if (isFire) {
+          ctx.fillStyle = 'rgba(234, 88, 12, 0.38)';
+          ctx.fillRect(-30, -7, 24, 14);
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(-24 - travelPulse * 2, -3, 15, 6);
+        } else if (isIce) {
+          ctx.fillStyle = 'rgba(125, 211, 252, 0.35)';
+          ctx.fillRect(-28, -5, 21, 10);
+          ctx.fillStyle = '#e0f2fe';
+          ctx.fillRect(-22 - travelPulse * 2, -1, 12, 2);
+        } else if (isEarth) {
+          ctx.fillStyle = '#57534e';
+          ctx.fillRect(-25, 7, 7, 4);
+          ctx.fillRect(-16 - travelPulse * 2, -9, 5, 4);
+          ctx.fillStyle = '#a8a29e';
+          ctx.fillRect(-31, 3, 5, 3);
+        } else if (isLightning) {
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-30, -5);
+          ctx.lineTo(-21, 3);
+          ctx.lineTo(-13, -4);
+          ctx.lineTo(-4, 1);
+          ctx.stroke();
+          ctx.fillStyle = '#a855f7';
+          ctx.fillRect(-18 - travelPulse * 2, -2, 7, 4);
+        }
+      }
 
       // A. FUEGO: Cometa de llamas en bloques rectangulares escalonados
       if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
