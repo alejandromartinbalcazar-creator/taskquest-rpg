@@ -95,8 +95,8 @@ import { elementalSound } from './soundEngine';
 import { audioManager } from '../../services/AudioManager';
 import { setDungeonFullscreen } from '../../services/androidFullscreen';
 import { haptics } from '../../services/haptics';
-import { prepareLevel1CollisionMask, resolveLevel1MaskMovement } from '../levels/level1BackgroundLayout';
-import { prepareLevel2CollisionMask, resolveLevel2MaskMovement } from '../levels/level2BackgroundLayout';
+import { prepareLevel1CollisionMask, resolveLevel1MaskMovement, canWalkAt as canWalkLevel1At } from '../levels/level1BackgroundLayout';
+import { prepareLevel2CollisionMask, resolveLevel2MaskMovement, canWalkAt as canWalkLevel2At } from '../levels/level2BackgroundLayout';
 import { CameraSystem } from './Camera';
 import {
   TerrainManager,
@@ -113,6 +113,7 @@ import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from '.
 import { IsometricRenderer } from './renderer';
 import { emitProjectileImpact } from './projectileVfx';
 import { DungeonClock } from './DungeonClock';
+import { applyWindKnockback, isWindCircleWalkable, WIND_KNOCKBACK_DISTANCE } from './windAttack';
 import type { CampaignRoute, ExpeditionRun } from '../expedition/types';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass, Pause, Play } from 'lucide-react';
 
@@ -822,7 +823,7 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
       castFlashColor: undefined as string | undefined,
       castFlashTimer: 0,
       staffCastTimer: 0,
-      activeElement: 'fire' as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma',
+      activeElement: 'wind' as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma' | 'wind',
       staffOrbColor: '#94a3b8',
       isCursed: !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now())),
       hasLightningAura: (player.unlockedMilestones || []).includes('mente_inquebrantable'),
@@ -1490,6 +1491,24 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
   }, [isDefeated, isVictorious]);
 
   // Lanzamiento de Hechizo (con soporte para variante Cargada)
+  const canWindOccupy = useCallback((x: number, y: number, radius: number) => {
+    const g = gameStateRef.current;
+    const tm = g.tilemap;
+    const fitsMap = isWindCircleWalkable(x, y, radius, (px, py) => {
+      if (tm?.backgroundKey === 'level1-trail') return canWalkLevel1At(px, py, tm.gate.isOpen);
+      if (tm?.backgroundKey === 'level2-ice') return canWalkLevel2At(px, py, tm.gate.isOpen);
+      if (tm) return !tm.isCellSolid(Math.floor(px / 64), Math.floor(py / 64));
+      if (g.forestLevel) return px >= 0 && py >= 0 && px < LEVEL_WIDTH && py < LEVEL_HEIGHT;
+      return px >= 80 && px <= 1020 && py >= 80 && py <= 680;
+    });
+    if (!fitsMap) return false;
+    if (g.forestLevel?.trees.some((tree) => Math.hypot(x - tree.x, y - tree.y) < radius + tree.trunkRadius)) return false;
+    return g.terrainManager.obstacles.every((obs) => {
+      if (obs.hp <= 0 || !obs.solid || (obs.obstacleType === 'door_gate' && !obs.doorLocked)) return true;
+      return Math.hypot(x - obs.x, y - obs.y) >= radius + obs.radius;
+    });
+  }, []);
+
   const handleAttack = useCallback(
     (isCharged: boolean = false, chargeRatio?: number) => {
       if (clock.isPaused || isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
@@ -1561,10 +1580,10 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
         ice: 'rgba(56, 189, 248, 0.45)',
         earth: 'rgba(34, 197, 94, 0.45)',
       };
-      wizard.castFlashColor = flashMap[primaryElem] || 'rgba(255, 255, 255, 0.4)';
+      wizard.castFlashColor = recipe.id === 'basic_spark' ? 'rgba(207, 250, 254, 0.7)' : flashMap[primaryElem] || 'rgba(255, 255, 255, 0.4)';
       wizard.castFlashTimer = 60;
       wizard.staffCastTimer = 190;
-      wizard.activeElement = (recipe.elements[0] || 'fire') as 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
+      wizard.activeElement = (recipe.id === 'basic_spark' ? 'wind' : recipe.elements[0] || 'fire') as typeof wizard.activeElement;
 
       // Feedback Háptico
       if (recipe.id === 'elemental_cataclysm') {
@@ -5238,20 +5257,20 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
             rotation: 0,
           });
         } else {
-          // Chispa básica
+          // Ráfaga de viento: control de espacio sin daño, incluso al cargarla.
           g.projectiles.push({
             id: `proj-${now}`,
             x: wizard.x,
             y: wizard.y,
             vx: Math.cos(aimAngle) * 7.0,
             vy: Math.sin(aimAngle) * 7.0,
-            radius: 8,
+            radius: recipe.id === 'basic_spark' ? 14 : 8,
             color: recipe.color,
             secondaryColor: recipe.secondaryColor,
             damage: recipe.id === 'basic_spark'
-              ? Math.max(1, Math.round((recipe.damage + statBonus * 0.35) * 0.55))
+              ? 0
               : recipe.damage + statBonus,
-            knockback: recipe.knockback,
+            knockback: recipe.id === 'basic_spark' ? WIND_KNOCKBACK_DISTANCE : recipe.knockback,
             life: 45,
             maxLife: 45,
             pierce: 1,
@@ -8136,7 +8155,8 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
         }
 
         // Comprobar colisión con muros ancestrales o portón cerrado del Tilemap
-        if (g.tilemap && g.tilemap.blocksProjectilesAt(p.x, p.y)) {
+        const isWind = p.spellType === 'basic_spark' && !p.isHostile;
+        if ((isWind && !canWindOccupy(p.x, p.y, p.radius)) || (g.tilemap && !isWind && g.tilemap.blocksProjectilesAt(p.x, p.y))) {
           emitProjectileImpact(g.particlePool, p);
           if (p.areaOfEffect) {
             triggerAoEExplosion(
@@ -8254,6 +8274,7 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
         }
 
         if (hitPermafrost) {
+          emitProjectileImpact(g.particlePool, p);
           g.projectilePool.deactivate(p);
           continue;
         }
@@ -8270,12 +8291,18 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
         else {
           for (let eIdx = enemies.length - 1; eIdx >= 0; eIdx--) {
             const enemy = enemies[eIdx];
-            if (p.piercedIds.includes(enemy.id)) continue;
+            if (enemy.hp <= 0 || p.piercedIds.includes(enemy.id)) continue;
 
             if (checkCircleCollision(p.x, p.y, p.radius, enemy.x, enemy.y, enemy.radius)) {
               emitProjectileImpact(g.particlePool, p);
               p.piercedIds.push(enemy.id);
               p.pierce--;
+
+              if (p.spellType === 'basic_spark') {
+                applyWindKnockback(enemy, { x: p.vx, y: p.vy }, canWindOccupy);
+                g.projectilePool.deactivate(p);
+                break;
+              }
 
               // Si tiene detonación en área radial (AoE):
               if (p.areaOfEffect) {
@@ -14444,7 +14471,7 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
                 : [
                 '',
                 'Usa el joystick izquierdo o toca el suelo para mover al mago.',
-                'Sin esferas seleccionadas, pulsa atacar a la derecha para lanzar el proyectil verde.',
+                'Sin esferas, pulsa atacar para lanzar viento. Empuja a los enemigos sin causar daño.',
                 'Selecciona una esfera a la derecha y lanza tu primer hechizo para entrar a la sala 2.',
                 'Solo dos guardianes: usa hielo contra fuego y fuego contra hielo.',
                 'Acércate al cofre para elegir una reliquia. Después busca la puerta dorada al norte.',

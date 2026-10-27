@@ -6,14 +6,53 @@ export function emitProjectileImpact(pool: ParticlePool, p: Projectile): void {
   const fire = p.spellType === 'fire_shot' || p.spellType === 'fire_inferno';
   const ice = p.spellType === 'ice_shard' || p.spellType === 'ice_lance';
   const earth = p.spellType === 'earth_toss' || p.spellType === 'earth_megalith';
-  if (!fire && !ice && !earth) return;
-  pool.spawn({ x: p.x, y: p.y, radius: 9, life: 25, type: 'ring',
-    color: fire ? '#fb923c' : ice ? '#7dd3fc' : '#a8a29e',
-    secondaryColor: fire ? '#fef08a' : ice ? '#e0f2fe' : '#57534e' });
+  const wind = p.spellType === 'basic_spark';
+  if (!fire && !ice && !earth && !wind) return;
+  pool.spawn({ x: p.x, y: p.y, radius: wind ? 13 : 9, life: wind ? 18 : 25, type: 'ring',
+    color: wind ? '#a5f3fc' : fire ? '#fb923c' : ice ? '#7dd3fc' : '#a8a29e',
+    secondaryColor: wind ? '#f1f5f9' : fire ? '#fef08a' : ice ? '#e0f2fe' : '#57534e' });
 }
 
 /** Detailed silhouettes share world coordinates with gameplay; drawing adds no hitboxes. */
 export function drawElementalProjectile(ctx: CanvasRenderingContext2D, p: Projectile, now: number): boolean {
+  if (p.spellType === 'basic_spark' && !p.isHostile) {
+    ctx.save();
+    const frame = Math.floor(now / 90) % 3;
+    ctx.fillStyle = 'rgba(207, 250, 254, 0.18)';
+    ctx.beginPath();
+    for (let vertex = 0; vertex < 12; vertex++) {
+      const angle = vertex * Math.PI / 6;
+      const x = Math.round(Math.cos(angle) * 20);
+      const y = Math.round(Math.sin(angle) * 17);
+      if (vertex === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+    // Three discrete poses rotate broken currents around a transparent center.
+    for (let current = 0; current < 3; current++) {
+      ctx.strokeStyle = current % 2 ? 'rgba(241,245,249,0.9)' : 'rgba(165,243,252,0.85)';
+      ctx.lineWidth = current === 0 ? 3 : 2;
+      ctx.beginPath();
+      for (let segment = 0; segment < 6; segment++) {
+        const angle = frame * Math.PI * 2 / 9 + current * Math.PI * 2 / 3 + segment * 0.24;
+        const radius = 8 + segment * 2;
+        const x = Math.round(Math.cos(angle) * radius);
+        const y = Math.round(Math.sin(angle) * radius * 0.85);
+        if (segment === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(226,232,240,0.65)';
+    ctx.lineWidth = 2;
+    for (let ribbon = 0; ribbon < 2; ribbon++) {
+      const side = ribbon === 0 ? -1 : 1;
+      ctx.beginPath(); ctx.moveTo(-12, side * 8);
+      ctx.lineTo(-23, side * (10 + frame)); ctx.lineTo(-34, side * 5);
+      ctx.lineTo(-44 - frame * 2, side * 7); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
   const fire = p.spellType === 'fire_shot' || p.spellType === 'fire_inferno';
   const ice = p.spellType === 'ice_shard' || p.spellType === 'ice_lance';
   const earth = p.spellType === 'earth_toss' || p.spellType === 'earth_megalith';

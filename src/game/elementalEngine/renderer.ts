@@ -1812,7 +1812,7 @@ export class IsometricRenderer {
       recoilX?: number;
       recoilY?: number;
       castFlashColor?: string;
-      activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
+      activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma' | 'wind';
       staffCastTimer?: number;
     },
     visualScale = 1,
@@ -3276,18 +3276,6 @@ export class IsometricRenderer {
         ctx.fillRect(0, 0, 14, 14);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(-4, -4, 8, 8);
-      }
-      // Chispa Arcana: proyectil verde de baja potencia con estela breve y pixelada.
-      else if (p.spellType === 'basic_spark') {
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(-8, -8, 16, 16);
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(-7, -5, 12, 10);
-        ctx.fillRect(-11, -3, 4, 6);
-        ctx.fillStyle = '#86efac';
-        ctx.fillRect(-3, -3, 8, 6);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(1, -1, 3, 2);
       }
       // I. PROYECTIL ENEMIGO (HOSTIL): Bloque de sombra umbría con núcleo carmesí
       else if (p.isHostile) {

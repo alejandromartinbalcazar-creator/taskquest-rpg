@@ -35,7 +35,7 @@ export function prepareLevel1CollisionMask(): void {
   image.src = LEVEL_1_COLLISION_MASK;
 }
 
-function canWalkAt(x: number, y: number, gateOpen: boolean): boolean {
+export function canWalkAt(x: number, y: number, gateOpen: boolean): boolean {
   if (!collisionPixels || x < 0 || y < 0 || x >= LEVEL_1_BACKGROUND_SIZE.width || y >= LEVEL_1_BACKGROUND_SIZE.height) return false;
   const pixel = (Math.floor(y) * LEVEL_1_BACKGROUND_SIZE.width + Math.floor(x)) * 4;
   const { data } = collisionPixels;
