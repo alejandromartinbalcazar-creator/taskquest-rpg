@@ -112,8 +112,9 @@ import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
 import { emitProjectileImpact } from './projectileVfx';
+import { DungeonClock } from './DungeonClock';
 import type { CampaignRoute, ExpeditionRun } from '../expedition/types';
-import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
+import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass, Pause, Play } from 'lucide-react';
 
 interface LandscapeCombatViewProps {
   player: Player;
@@ -645,7 +646,7 @@ export function findNearestCombatTarget(
   return bestTarget;
 }
 
-export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
+const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () => void; restartFromStart: boolean }> = ({
   player,
   floor,
   onExit,
@@ -653,7 +654,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   onPlayerTakeDamage,
   isTutorial = false,
   campaignRoute,
+  onRestart,
+  restartFromStart,
 }) => {
+  const [clock] = useState(() => new DungeonClock());
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseConfirmation, setPauseConfirmation] = useState<'exit' | 'restart' | null>(null);
+  const streamStopDeadlineRef = useRef<number | null>(null);
+  const resetFrameTimeRef = useRef(false);
   // En Android la mazmorra usa toda la pantalla; un deslizamiento desde el borde muestra los controles del sistema temporalmente.
   useEffect(() => {
     void setDungeonFullscreen(true);
@@ -679,7 +687,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [vesselsRemaining, setVesselsRemaining] = useState(4);
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setChargedBoostSeconds(Math.max(0, Math.ceil((chargedBoostUntilRef.current - Date.now()) / 1000)));
+      if (clock.isPaused) return;
+      setChargedBoostSeconds(Math.max(0, Math.ceil((chargedBoostUntilRef.current - clock.now()) / 1000)));
     }, 250);
     return () => window.clearInterval(timer);
   }, []);
@@ -709,7 +718,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const [chargeVisualRatio, setChargeVisualRatio] = useState(0);
   const lastCdRatioRef = useRef(0);
   const lastAttackCdRatioRef = useRef(0);
-  const runStartTimeRef = useRef<number>(Date.now());
+  const runStartTimeRef = useRef<number>(clock.now());
   const suctionStateRef = useRef<{ isSuctioning: boolean; startTime: number }>({ isSuctioning: false, startTime: 0 });
 
   // Reducción de enfriamiento por progresión de nivel: solo la habilidad suprema de 4 elementos tiene cooldown
@@ -754,6 +763,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   useEffect(() => {
     if (!isTutorial) return;
     const timer = window.setInterval(() => {
+      if (clock.isPaused) return;
       const wizard = gameStateRef.current.wizard;
       if (!tutorialStartRef.current) tutorialStartRef.current = { x: wizard.x, y: wizard.y };
       const start = tutorialStartRef.current;
@@ -987,15 +997,15 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       tutorialStartRef.current = { x: 180, y: 380 };
       setTutorialStep(1);
       setRoomBanner(TUTORIAL_ROOMS[0].title);
-      const bannerTimer = window.setTimeout(() => setRoomBanner(null), 3000);
+      const cancelBanner = clock.schedule(() => setRoomBanner(null), 3000);
       audioManager.startAmbient('exploration');
-      return () => { window.clearTimeout(bannerTimer); audioManager.stopAmbient(); audioManager.stopCharge(); };
+      return () => { cancelBanner(); audioManager.stopAmbient(); audioManager.stopCharge(); };
     }
 
     // Recuperar último punto de control persistido en localStorage
     let savedCheckpointId: string | null = null;
     try {
-      savedCheckpointId = localStorage.getItem('taskquest_level1_last_checkpoint');
+      if (!restartFromStart) savedCheckpointId = localStorage.getItem('taskquest_level1_last_checkpoint');
     } catch {
       // Ignorar error de sandbox / storage
     }
@@ -1050,7 +1060,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     setCurrentHp(initialHp);
     setMaxHp(player.maxHp);
     setRoomBanner(roomSet[0].title);
-    setTimeout(() => setRoomBanner(null), 3000);
+    clock.schedule(() => setRoomBanner(null), 3000);
 
     // Iniciar atmósfera y paisaje sonoro procedural
     audioManager.startAmbient(currentRoom.roomType.startsWith('boss_') ? 'boss' : 'exploration');
@@ -1079,7 +1089,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     elementalSound.playPlayerHurt();
     g.floatingTexts.push({
-      id: `hero-fallen-${Date.now()}`,
+      id: `hero-fallen-${clock.now()}`,
       x: wizard.x,
       y: wizard.y - 30,
       text: '💀 ¡HÉROE CAÍDO! REAPARECIENDO...',
@@ -1154,7 +1164,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Selección de elemento
   const handleSelectElement = useCallback(
     (el: ElementType) => {
-      if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
+      if (clock.isPaused || isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
       const activeStream = gameStateRef.current.wizard.channeledStream;
       if (activeStream.active && activeStream.type !== el) {
         stopChanneledAttack();
@@ -1186,7 +1196,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   const startChanneledAttack = useCallback(
     (type: 'fire' | 'ice', sourceButton: 'element' | 'attack' = 'element') => {
-      if (isDefeated || isVictorious) return;
+      if (clock.isPaused || isDefeated || isVictorious) return;
       const g = gameStateRef.current;
       const wizard = g.wizard;
       if (wizard.isDashing) return;
@@ -1255,6 +1265,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   );
 
   const handleClearQueue = useCallback(() => {
+    if (clock.isPaused) return;
     stopChanneledAttack();
     setElementQueue([]);
     haptics.selection();
@@ -1397,7 +1408,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       const nextRoom = roomSet[nextIndex];
       setCurrentRoomIndex(nextIndex);
       setRoomBanner(nextRoom.title);
-      setTimeout(() => setRoomBanner(null), 3500);
+      clock.schedule(() => setRoomBanner(null), 3500);
 
       // Conmutar el modo de música procedural según el tipo de sala
       const isBossRoom = nextRoom?.roomType ? nextRoom.roomType.startsWith('boss_') : false;
@@ -1420,7 +1431,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
 
     gameStateRef.current.floatingTexts.push({
-      id: `relic-equipped-${Date.now()}`,
+      id: `relic-equipped-${clock.now()}`,
       x: gameStateRef.current.wizard.x,
       y: gameStateRef.current.wizard.y - 25,
       text: `✨ ${relic.name.toUpperCase()} EQUIPADA`,
@@ -1434,7 +1445,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Esquiva Rápida (Dash / Glide)
   const handleDash = useCallback(() => {
-    if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
+    if (clock.isPaused || isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
     const g = gameStateRef.current;
     const wizard = g.wizard;
     if (wizard.dashCooldown > 0 || wizard.isDashing) return;
@@ -1465,7 +1476,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     for (let s = 0; s < 8; s++) {
       const ang = dashAngle + Math.PI + (Math.random() - 0.5) * 0.9;
       g.particles.push({
-        id: `dash-${Date.now()}-${s}`,
+        id: `dash-${clock.now()}-${s}`,
         x: wizard.x,
         y: wizard.y,
         vx: Math.cos(ang) * (3 + Math.random() * 3),
@@ -1481,8 +1492,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   // Lanzamiento de Hechizo (con soporte para variante Cargada)
   const handleAttack = useCallback(
     (isCharged: boolean = false, chargeRatio?: number) => {
-      if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
-      const now = Date.now();
+      if (clock.isPaused || isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
+      const now = clock.now();
       const g = gameStateRef.current;
       if (chargedBoostUntilRef.current > now) { isCharged = true; chargeRatio = 1; }
       const rawRecipe = activeRecipe;
@@ -5196,16 +5207,12 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (isFire) {
           // Flujo de Llamas Continuo: no genera proyectiles individuales
           startChanneledAttack('fire', 'attack');
-          setTimeout(() => {
-            stopChanneledAttack('fire');
-          }, 350);
+          streamStopDeadlineRef.current = clock.now() + 350;
           return;
         } else if (isIce) {
           // Chorro Criogénico Continuo: no genera proyectiles individuales
           startChanneledAttack('ice', 'attack');
-          setTimeout(() => {
-            stopChanneledAttack('ice');
-          }, 350);
+          streamStopDeadlineRef.current = clock.now() + 350;
           return;
         } else if (isEarth) {
           g.screenShake = isCharged ? 11 : 7;
@@ -5262,8 +5269,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   // Manejadores de Carga de Hechizo al presionar el botón de Ataque
   const startCharge = useCallback(() => {
-    if (isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
-    if (chargedBoostUntilRef.current > Date.now()) {
+    if (clock.isPaused || isDefeated || isVictorious || gameStateRef.current.wizard.isEnteringVictoryPortal) return;
+    if (chargedBoostUntilRef.current > clock.now()) {
       handleAttack(true, 1);
       return;
     }
@@ -5282,7 +5289,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     }
 
     const g = gameStateRef.current;
-    const now = Date.now();
+    const now = clock.now();
     const lastCast = g.recipeCooldowns[activeRecipe.id] || 0;
     const effectiveCooldownMs = getEffectiveCooldown(activeRecipe.cooldownMs, activeRecipe.id);
     const recipeCdRemaining = Math.max(0, effectiveCooldownMs - (now - lastCast));
@@ -5305,7 +5312,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     const wizard = g.wizard;
     wizard.isCharging = true;
-    wizard.chargeStartTime = Date.now();
+    wizard.chargeStartTime = clock.now();
     wizard.chargeRatio = 0;
     let cType = 'arcane';
     if (activeRecipe.id === 'elemental_cataclysm') cType = 'cataclysm';
@@ -5334,13 +5341,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   }, [activeRecipe.elements, activeRecipe.id, getEffectiveCooldown, handleAttack, isDefeated, isVictorious, startChanneledAttack]);
 
   const finishCharge = useCallback(() => {
+    if (clock.isPaused) return;
     const wizard = gameStateRef.current.wizard;
     if (wizard.channeledStream.active) {
       stopChanneledAttack();
       return;
     }
     if (!wizard.isCharging) return;
-    const elapsed = Date.now() - (wizard.chargeStartTime || 0);
+    const elapsed = clock.now() - (wizard.chargeStartTime || 0);
     const hasFocusMilestone = (player.unlockedMilestones || []).includes('maestro_enfoque');
     const holdThreshold = hasFocusMilestone ? 370 : 550;
     const wasCharged = (activeRecipe.id === 'elemental_cataclysm' || activeRecipe.id === 'glacial_plasma_storm' || activeRecipe.id === 'overload_core' || activeRecipe.id === 'conductive_prison' || activeRecipe.id === 'obsidian_volcano' || activeRecipe.id === 'telluric_barrier' || activeRecipe.id === 'devastating_glacier' || activeRecipe.id === 'celestial_storm' || activeRecipe.id === 'hell_rain' || activeRecipe.id === 'explosive_overload' || activeRecipe.id === 'cryo_storm' || activeRecipe.id === 'magma_eruption' || activeRecipe.id === 'thermal_shock' || activeRecipe.id === 'crystal_field' || activeRecipe.id === 'permafrost_prison')
@@ -5384,6 +5392,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   );
 
   const handleAttackPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (clock.isPaused) return;
     const aim = attackAimRef.current;
     if (!aim.active || aim.pointerId !== e.pointerId) return;
 
@@ -5427,8 +5436,48 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   );
 
   // Soporte de Teclado y Ratón Completo para PC / Navegador Chrome (WASD, Flechas, 1-4, Espacio, J/Enter)
+  const pauseGame = useCallback(() => {
+    if (clock.isPaused || isDefeated || isVictorious || victoryCommittedRef.current) return;
+    clock.pause();
+    keysPressedRef.current = {};
+    const g = gameStateRef.current;
+    g.joystick.active = false;
+    g.joystick.touchId = null;
+    g.joystick.vx = g.joystick.vy = 0;
+    g.wizard.isMoving = false;
+    attackAimRef.current.active = false;
+    mousePosRef.current.active = false;
+    swipeActiveRef.current = false;
+    if (joystickDOMRef.current) joystickDOMRef.current.style.opacity = '0';
+    // Releasing a held control cancels its input, rather than attacking after a menu closes.
+    stopChanneledAttack();
+    audioManager.stopCharge();
+    audioManager.stopAmbient();
+    setPauseConfirmation(null);
+    setIsPaused(true);
+  }, [clock, isDefeated, isVictorious, stopChanneledAttack]);
+
+  const resumeGame = useCallback(() => {
+    resetFrameTimeRef.current = true;
+    clock.resume();
+    setPauseConfirmation(null);
+    setIsPaused(false);
+    audioManager.startAmbient(currentRoom.roomType.startsWith('boss_') ? 'boss' : 'exploration');
+  }, [clock, currentRoom.roomType]);
+
+  useEffect(() => {
+    const handleVisibility = () => { if (document.hidden) pauseGame(); };
+    window.addEventListener('blur', pauseGame);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('blur', pauseGame);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [pauseGame]);
+
   useEffect(() => {
     const handleWindowPointerMove = (e: PointerEvent) => {
+      if (clock.isPaused) return;
       if (e.pointerType === 'mouse' && canvasRef.current) {
         const rect = canvasRef.current.getBoundingClientRect();
         const scaleX = 1000 / rect.width;
@@ -5456,6 +5505,14 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Escape' || e.code === 'KeyP') {
+        e.preventDefault();
+        if (!e.repeat) {
+          if (clock.isPaused) resumeGame(); else pauseGame();
+        }
+        return;
+      }
+      if (clock.isPaused) return;
       keysPressedRef.current[e.code] = true;
 
       if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
@@ -5491,6 +5548,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressedRef.current[e.code] = false;
+      if (clock.isPaused) return;
       if (e.code === 'KeyJ' || e.code === 'Enter') {
         if (gameStateRef.current.wizard.channeledStream.active) {
           stopChanneledAttack();
@@ -5517,6 +5575,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
     finishCharge,
     startChanneledAttack,
     stopChanneledAttack,
+    pauseGame,
+    resumeGame,
   ]);
 
   // Referencias para el renderizado vectorial del Joystick Dinámico Flotante y Swipe Casting
@@ -5552,7 +5612,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const g = gameStateRef.current;
-    if (g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
+    if (clock.isPaused || g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -5582,7 +5642,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
   const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gameStateRef.current;
-    if (g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
+    if (clock.isPaused || g.wizard.isEnteringVictoryPortal || isDefeated || isVictorious) return;
     if (!g.joystick.active || g.joystick.touchId !== e.pointerId) return;
 
     let dx = e.clientX - g.joystick.baseX;
@@ -5695,18 +5755,29 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
     const gameLoop = () => {
       try {
-        const frameNow = performance.now();
+        const realFrameNow = performance.now();
+        const frameNow = clock.performanceNow();
         if (victoryCommittedRef.current) return;
+        if (clock.isPaused || resetFrameTimeRef.current) {
+          lastFrameTimestamp = realFrameNow;
+          resetFrameTimeRef.current = false;
+          return;
+        }
         // El motor tiene contadores por frame: 120 Hz no debe duplicar su velocidad.
         const frameInterval = 1000 / 60;
-        const elapsedFrame = frameNow - lastFrameTimestamp;
+        clock.flushTimers();
+        const elapsedFrame = realFrameNow - lastFrameTimestamp;
         if (elapsedFrame < frameInterval) return;
         const dt = Math.min(50, Math.max(1, elapsedFrame));
-        lastFrameTimestamp = frameNow - (elapsedFrame % frameInterval);
+        lastFrameTimestamp = realFrameNow - (elapsedFrame % frameInterval);
         const dtSeconds = dt / 1000;
 
         const g = gameStateRef.current;
         const wizard = g.wizard;
+        if (streamStopDeadlineRef.current !== null && clock.now() >= streamStopDeadlineRef.current) {
+          streamStopDeadlineRef.current = null;
+          stopChanneledAttack();
+        }
         wizard.isCursed = !!(player.isCursed || (player.curseExpiresAt && new Date(player.curseExpiresAt).getTime() > Date.now()));
         const enemies = g.enemyManager.enemies;
 
@@ -5828,7 +5899,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.enemyManager.currentBoss = g.enemyManager.enemies.find((e) => e.archetype === 'boss') || null;
 
             g.floatingTexts.push({
-              id: `respawn-chime-${Date.now()}`,
+              id: `respawn-chime-${clock.now()}`,
               x: wizard.x,
               y: wizard.y - 30,
               text: `🛡️ ¡REAPARICIÓN EN ${cpName.toUpperCase()}! [+1.5s INVULNERABLE]`,
@@ -5866,7 +5937,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // 1.05 Actualizar Cooldown en tiempo real del Ataque / Habilidad Activa
       wizard.hasLightningAura = (player.unlockedMilestones || []).includes('mente_inquebrantable');
       const currentRecipe = activeRecipeRef.current;
-      const nowTs = Date.now();
+      const nowTs = clock.now();
       const lastCast = g.recipeCooldowns[currentRecipe.id] || 0;
       const effectiveCooldownMs = getEffectiveCooldown(currentRecipe.cooldownMs, currentRecipe.id);
       const attackCdRemaining = Math.max(0, effectiveCooldownMs - (nowTs - lastCast));
@@ -5997,7 +6068,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         const chargeSpeedMult = hasFocusMilestone ? (0.4 / 0.6) : 1.0;
         const baseChargeTime = (isCataclysm || isGlacialPlasma || isOverloadCore || isConductivePrison || isObsidian || isTelluric || isGlacier || isCelestial || isHellRain || isPlasma || isCryo || isVolcanic || isThermal || isConductive || isPermafrost) ? 500 : (isVoltaic ? 1800 : (isGlacial ? 1400 : (isTectonic ? 1400 : 380)));
         const maxChargeTime = baseChargeTime * chargeSpeedMult;
-        const elapsed = Date.now() - wizard.chargeStartTime;
+        const elapsed = clock.now() - wizard.chargeStartTime;
         wizard.chargeRatio = Math.min(1.0, elapsed / maxChargeTime);
         audioManager.updateCharge(wizard.chargeRatio);
 
@@ -6692,7 +6763,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       // 1.5 Actualizar Ataque Continuo Canalizado (Fuego y Hielo)
       if (wizard.channeledStream && wizard.channeledStream.active) {
         const stream = wizard.channeledStream;
-        const now = performance.now();
+        const now = clock.performanceNow();
         const originX = wizard.x + Math.cos(stream.aimAngle) * 18;
         const originY = wizard.y - 6 + Math.sin(stream.aimAngle) * 18;
 
@@ -7158,7 +7229,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
               // Feedback visual: texto flotante
               g.floatingTexts.push({
-                id: `cp-active-${Date.now()}`,
+                id: `cp-active-${clock.now()}`,
                 x: cp.x,
                 y: cp.y - 65,
                 text: `✨ ¡PUNTO DE CONTROL GUARDADO! (${cp.name})`,
@@ -7176,7 +7247,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 g.currentHp = Math.min(g.maxHp, g.currentHp + healAmt);
                 setCurrentHp(g.currentHp);
                 g.floatingTexts.push({
-                  id: `cp-heal-${Date.now()}`,
+                  id: `cp-heal-${clock.now()}`,
                   x: wizard.x,
                   y: wizard.y - 25,
                   text: `💚 +${healAmt} HP RESTAURADOS (50%)`,
@@ -7551,7 +7622,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.screenShake = 3;
 
             g.floatingTexts.push({
-              id: `tm-cp-active-${Date.now()}`,
+              id: `tm-cp-active-${clock.now()}`,
               x: cp.x,
               y: cp.y - 45,
               text: `✨ ¡ALTAR RÚNICO VINCULADO! (${cp.name})`,
@@ -7569,7 +7640,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               g.currentHp = Math.min(g.maxHp, g.currentHp + healAmt);
               setCurrentHp(g.currentHp);
               g.floatingTexts.push({
-                id: `tm-cp-heal-${Date.now()}`,
+                id: `tm-cp-heal-${clock.now()}`,
                 x: wizard.x,
                 y: wizard.y - 25,
                 text: `💚 +${healAmt} HP RESTAURADOS (50%)`,
@@ -7757,7 +7828,8 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         },
         (shake) => {
           g.screenShake = Math.max(g.screenShake, shake);
-        }
+        },
+        clock.performanceNow()
       );
 
       // Colisiones de enemigos con obstáculos
@@ -7871,13 +7943,13 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             g.joystick.vy = 0;
             suctionStateRef.current = {
               isSuctioning: true,
-              startTime: performance.now(),
+              startTime: clock.performanceNow(),
             };
           }
 
           // Cinemática de absorción espiralada (400ms)
           if (suctionStateRef.current.isSuctioning) {
-            const elapsed = performance.now() - suctionStateRef.current.startTime;
+            const elapsed = clock.performanceNow() - suctionStateRef.current.startTime;
             const progress = Math.min(1.0, elapsed / 900);
 
             // Reducción proporcional de escala 1.0 -> 0.0
@@ -7915,7 +7987,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               audioManager.playVictoryFanfare();
               elementalSound.playVictory();
 
-              const elapsedSec = Math.max(1, Math.floor((Date.now() - runStartTimeRef.current) / 1000));
+              const elapsedSec = Math.max(1, Math.floor((clock.now() - runStartTimeRef.current) / 1000));
               setFinalRunTimeSec(elapsedSec);
               setTotalKillsCount(g.enemyManager.totalKills || 0);
               setIsVictorious(true);
@@ -8008,7 +8080,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
           if (Math.random() < 0.65) {
             g.particles.push({
-              id: `ftrail-${Date.now()}-${Math.random()}`,
+              id: `ftrail-${clock.now()}-${Math.random()}`,
               x: p.x - p.vx * 0.4 + (Math.random() - 0.5) * 6,
               y: p.y - p.vy * 0.4 + (Math.random() - 0.5) * 6,
               vx: -p.vx * 0.15 + (Math.random() - 0.5) * 1.0,
@@ -8022,7 +8094,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         } else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
           if (Math.random() < 0.5) {
             g.particles.push({
-              id: `itrail-${Date.now()}-${Math.random()}`,
+              id: `itrail-${clock.now()}-${Math.random()}`,
               x: p.x - p.vx * 0.3 + (Math.random() - 0.5) * 5,
               y: p.y - p.vy * 0.3 + (Math.random() - 0.5) * 5,
               vx: -p.vx * 0.1 + (Math.random() - 0.5) * 0.8,
@@ -8036,7 +8108,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         } else if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
           if (Math.random() < 0.45) {
             g.particles.push({
-              id: `etrail-${Date.now()}-${Math.random()}`,
+              id: `etrail-${clock.now()}-${Math.random()}`,
               x: p.x - p.vx * 0.3 + (Math.random() - 0.5) * 8,
               y: p.y - p.vy * 0.3 + (Math.random() - 0.5) * 8,
               vx: (Math.random() - 0.5) * 1.2,
@@ -8050,7 +8122,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         } else if (p.spellType === 'cryo_storm') {
           if (Math.random() < 0.6) {
             g.particles.push({
-              id: `ctrail-${Date.now()}-${Math.random()}`,
+              id: `ctrail-${clock.now()}-${Math.random()}`,
               x: p.x + (Math.random() - 0.5) * 6,
               y: p.y + (Math.random() - 0.5) * 6,
               vx: (Math.random() - 0.5) * 2,
@@ -8087,7 +8159,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           for (let s = 0; s < 6; s++) {
             const spkAng = Math.random() * Math.PI * 2;
             g.particles.push({
-              id: `tm-wall-hit-${Date.now()}-${s}`,
+              id: `tm-wall-hit-${clock.now()}-${s}`,
               x: p.x,
               y: p.y,
               vx: Math.cos(spkAng) * (1.5 + Math.random() * 2),
@@ -8130,7 +8202,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             for (let s = 0; s < 8; s++) {
               const spkAng = Math.random() * Math.PI * 2;
               g.particles.push({
-                id: `espk-obs-${Date.now()}-${s}`,
+                id: `espk-obs-${clock.now()}-${s}`,
                 x: p.x,
                 y: p.y,
                 vx: Math.cos(spkAng) * (2 + Math.random() * 3),
@@ -8245,7 +8317,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 for (let s = 0; s < 10; s++) {
                   const spkAng = Math.random() * Math.PI * 2;
                   g.particles.push({
-                    id: `fspk-${Date.now()}-${s}`,
+                    id: `fspk-${clock.now()}-${s}`,
                     x: enemy.x,
                     y: enemy.y,
                     vx: Math.cos(spkAng) * (2 + Math.random() * 3),
@@ -8261,7 +8333,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 for (let s = 0; s < 8; s++) {
                   const spkAng = Math.random() * Math.PI * 2;
                   g.particles.push({
-                    id: `ispk-${Date.now()}-${s}`,
+                    id: `ispk-${clock.now()}-${s}`,
                     x: enemy.x,
                     y: enemy.y,
                     vx: Math.cos(spkAng) * (2 + Math.random() * 3),
@@ -8278,7 +8350,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
                 for (let s = 0; s < 8; s++) {
                   const spkAng = Math.random() * Math.PI * 2;
                   g.particles.push({
-                    id: `espk-${Date.now()}-${s}`,
+                    id: `espk-${clock.now()}-${s}`,
                     x: enemy.x,
                     y: enemy.y,
                     vx: Math.cos(spkAng) * (1.5 + Math.random() * 2.5),
@@ -11094,7 +11166,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
           barrier.finished = true;
           // Activar cooldown una vez concluida la habilidad
-          g.lastAttackTime = performance.now();
+          g.lastAttackTime = clock.now();
           g.telluricBarriers.splice(tbIdx, 1);
           continue;
         }
@@ -14191,7 +14263,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
               exitPortal.doorLocked = false;
               exitPortal.color = '#38bdf8';
               g.floatingTexts.push({
-                id: `portal-open-${Date.now()}`,
+                id: `portal-open-${clock.now()}`,
                 x: exitPortal.x,
                 y: exitPortal.y - 30,
                 text: '✨ ¡EL PORTAL DEL SANTUARIO HA SIDO DESBLOQUEADO!',
@@ -14214,7 +14286,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       vesselRewards.push(...collectVesselRewards(g.terrainManager.obstacles));
       for (const reward of vesselRewards) {
         if (reward.kind === 'charged') {
-          chargedBoostUntilRef.current = Date.now() + VESSEL_BOOST_MS;
+          chargedBoostUntilRef.current = clock.now() + VESSEL_BOOST_MS;
           setChargedBoostSeconds(10);
         } else {
           g.currentHp = Math.min(g.maxHp, g.currentHp + VESSEL_HEAL);
@@ -14411,7 +14483,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       )}
 
       {/* Cabecera Superior de Combate (HUD Horizontal 16-Bit) */}
-      <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] inset-x-3 z-40 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] left-[max(0.75rem,env(safe-area-inset-left))] right-[max(1.5rem,env(safe-area-inset-right))] z-40 flex items-center justify-between pointer-events-none">
         {/* Barra de Vida del Mago */}
         <div className="flex items-center gap-2 retro-box-stone px-2.5 py-1 pointer-events-auto">
           <div className="font-pixel-title text-[8px] text-rose-400">HP</div>
@@ -14438,6 +14510,10 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
         {/* Botones de Salir y Silenciar */}
         <div className="flex items-center gap-1.5 pointer-events-auto">
+          <button onClick={pauseGame} aria-label="Pausar partida" title="Pausar (Esc / P)"
+            className="retro-btn-stone min-w-11 min-h-11 flex items-center justify-center text-amber-200">
+            <Pause className="w-5 h-5" />
+          </button>
           {isTutorial && (
             <button onClick={onExit} className="retro-btn-stone px-2 py-1.5 text-[8px] text-slate-100">OMITIR</button>
           )}
@@ -14452,7 +14528,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
           <button
-            onClick={onExit}
+            onClick={() => { pauseGame(); setPauseConfirmation('exit'); }}
             className="retro-btn-danger p-1.5 text-slate-200"
           >
             <X className="w-3.5 h-3.5" />
@@ -14814,6 +14890,41 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
         </div>
       )}
 
+      {isPaused && (
+        <div className="absolute inset-0 z-[100] bg-black/65 flex items-center justify-center p-4"
+          onPointerDown={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="dungeon-pause-title"
+            className="retro-box-gold w-full max-w-sm max-h-[85dvh] overflow-y-auto p-5 text-center space-y-3">
+            <h2 id="dungeon-pause-title" className="font-pixel-title text-sm text-amber-200">PARTIDA EN PAUSA</h2>
+            <p className="text-sm text-slate-200">{isTutorial ? 'Tutorial' : `Nivel ${floor.floorNumber}`} · Vida {Math.round(currentHp)}/{maxHp}</p>
+            {pauseConfirmation ? (
+              <>
+                <p className="text-sm text-slate-200">
+                  {pauseConfirmation === 'restart'
+                    ? '¿Reiniciar el nivel desde el comienzo? Se perderá el avance de este recorrido.'
+                    : '¿Salir de la mazmorra? Se terminará este recorrido.'}
+                </p>
+                <button autoFocus className="retro-btn-danger w-full min-h-11 px-3 py-2 text-sm"
+                  onClick={pauseConfirmation === 'restart' ? onRestart : onExit}>
+                  {pauseConfirmation === 'restart' ? 'Sí, reiniciar nivel' : 'Sí, salir'}
+                </button>
+                <button className="retro-btn-stone w-full min-h-11 px-3 py-2 text-sm" onClick={() => setPauseConfirmation(null)}>Cancelar</button>
+              </>
+            ) : (
+              <>
+                <button autoFocus onClick={resumeGame} className="retro-btn-gold w-full min-h-11 px-3 py-2 flex items-center justify-center gap-2 text-sm"><Play className="w-4 h-4" />Reanudar</button>
+                <button onClick={() => setPauseConfirmation('restart')} className="retro-btn-stone w-full min-h-11 px-3 py-2 text-sm">Reiniciar nivel</button>
+                <button onClick={() => setPauseConfirmation('exit')} className="retro-btn-danger w-full min-h-11 px-3 py-2 text-sm">Salir</button>
+                <button className="retro-btn-stone w-full min-h-11 px-3 py-2 text-sm"
+                  onClick={() => setIsMuted(audioManager.toggleMute())}>
+                  Sonido: {isMuted ? 'desactivado' : 'activado'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE VICTORIA TOTAL */}
       {isVictorious && (
         <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none">
@@ -14892,4 +15003,11 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
       )}
     </div>
   );
+};
+
+/** Remounting creates fresh combat, pools, timers and tutorial state on restart. */
+export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = (props) => {
+  const [session, setSession] = useState(0);
+  return <DungeonCombatSession key={session} {...props} restartFromStart={session > 0}
+    onRestart={() => setSession((value) => value + 1)} />;
 };

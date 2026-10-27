@@ -93,7 +93,8 @@ export function updateThresholdCustodian(
   projectiles: Projectile[],
   floatingTexts: FloatingText[],
   onPlayerDamage: (amt: number, sourceX?: number, sourceY?: number) => void,
-  onScreenShake: (amt: number) => void
+  onScreenShake: (amt: number) => void,
+  simulationTime: number = performance.now()
 ) {
   const cs = boss.custodianState;
   if (!cs) return;
@@ -264,7 +265,7 @@ export function updateThresholdCustodian(
   boss.facingAngle = Math.atan2(dy, dx);
 
   // 4. ANIMACIÓN FLOTANTE DE LOS GUANTELETES
-  const now = performance.now();
+  const now = simulationTime;
   const gauntletHoverY = Math.sin(now * 0.005) * 8;
   const gauntletHoverX = Math.cos(now * 0.004) * 5;
 

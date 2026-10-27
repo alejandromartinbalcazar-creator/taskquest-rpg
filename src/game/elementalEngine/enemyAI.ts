@@ -242,7 +242,8 @@ export class EnemyManager {
     floatingTexts: FloatingText[],
     obstacles: Array<{ x: number; y: number; radius: number; obstacleType: string; solid: boolean }>,
     onPlayerDamage: (amount: number, sourceX?: number, sourceY?: number) => void,
-    onScreenShake?: (amount: number) => void
+    onScreenShake?: (amount: number) => void,
+    simulationTime: number = performance.now()
   ) {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
@@ -329,7 +330,7 @@ export class EnemyManager {
 
       // JEFE FINAL DEL NIVEL 1: EL CUSTODIO DEL UMBRAL (3 FASES, ROTACIÓN DE BARRERAS Y TELEGRAFIADOS)
       if (e.bossType === 'threshold_custodian') {
-        updateThresholdCustodian(e, wizard, projectiles, floatingTexts, onPlayerDamage, onScreenShake || (() => {}));
+        updateThresholdCustodian(e, wizard, projectiles, floatingTexts, onPlayerDamage, onScreenShake || (() => {}), simulationTime);
         continue;
       }
 
@@ -497,8 +498,8 @@ export class EnemyManager {
         }
 
         // Movimiento imponente en el centro superior
-        e.x += Math.sin(Date.now() * 0.0018) * 1.2;
-        e.y += Math.cos(Date.now() * 0.0012) * 0.6;
+        e.x += Math.sin(simulationTime * 0.0018) * 1.2;
+        e.y += Math.cos(simulationTime * 0.0012) * 0.6;
 
         e.attackCooldown++;
         if (e.attackCooldown >= e.attackMaxCooldown - e.telegraphMax) {
