@@ -15,7 +15,7 @@ export function resolveMaskMovement(
   if (distance < 0.0001) return;
 
   const inset = Math.max(6, entity.radius * 0.48);
-  const feetY = entity.radius * 0.34;
+  const feetY = 0; // Entity coordinates now match the rendered ground anchor.
   const fits = (x: number, y: number) =>
     canWalkAt(x, y + feetY) &&
     canWalkAt(x + inset, y + feetY) &&

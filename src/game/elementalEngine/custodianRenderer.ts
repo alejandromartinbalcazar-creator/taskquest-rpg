@@ -13,24 +13,26 @@ export function drawThresholdCustodian(
   now: number
 ) {
   const cs = boss.custodianState;
-  const r = boss.radius;
+  const r = boss.visualRadius ?? boss.radius;
+  const P = Math.max(1, Math.round(r / 16));
   const phase = cs?.currentPhase || 1;
   const isVulnerable = cs?.isShieldBroken || false;
   const isDefeated = cs?.isDefeated || false;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(boss.x, boss.y);
+  ctx.translate(Math.round(boss.x), Math.round(boss.y));
 
   // 1. SECUENCIA DE DERROTA: COLAPSO EN ESCOMBROS
   if (isDefeated) {
+    ctx.scale(2, 2);
     drawDefeatedRubble(ctx, boss, now);
     ctx.restore();
     return;
   }
 
-  // Píxel virtual escalado para proporciones monumentales de 48x48
-  const P = Math.max(1, Math.round(r / 16));
+  // The bottom of the torso, shadow and navigation footprint meet at boss.y.
+  ctx.translate(0, -17 * P);
 
   // 2. RUNA DE LEVITACIÓN Y SOMBRA ISOMÉTRICA EN EL SUELO (PIXEL ART)
   ctx.save();
@@ -377,6 +379,7 @@ function drawFloatingGauntlet(
   ctx.save();
   ctx.translate(Math.round(g.x), Math.round(g.y));
   ctx.rotate(g.angle);
+  ctx.scale(2, 2);
 
   const OUTLINE = '#0f172a';
   const STONE_DARK = hitFlash > 0 ? '#ffffff' : '#27272a';

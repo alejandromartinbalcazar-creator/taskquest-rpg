@@ -83,6 +83,7 @@ import {
 } from './types';
 import { PooledParticle } from '../combat/ParticlePool';
 import { drawElementalProjectile, drawProjectileGroundLight } from './projectileVfx';
+import { WIZARD_PANORAMA_SCALE, WIZARD_ROOM_SCALE } from './entityScale';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
 import {
@@ -854,12 +855,12 @@ export class IsometricRenderer {
     // Mago (Jugador)
     renderList.push({
       y: wizard.y,
-      draw: () => this.drawWizard(ctx, wizard, tilemap?.backgroundKey ? 1.55 : 1),
+      draw: () => this.drawWizard(ctx, wizard, tilemap?.backgroundKey ? WIZARD_PANORAMA_SCALE : WIZARD_ROOM_SCALE),
     });
 
     // Enemigos y Jefes (Frustum Culling optimizado con margen de seguridad de 100px)
     enemies.forEach((enemy) => {
-      if ((forestLevel || tilemap) && !isInFrustum(enemy.x, enemy.y, enemy.radius + 100, frustum)) return;
+      if ((forestLevel || tilemap) && !isInFrustum(enemy.x, enemy.y, (enemy.visualRadius ?? enemy.radius) * 3 + 100, frustum)) return;
       renderList.push({
         y: enemy.y,
         draw: () => this.drawEnemy(
@@ -1827,7 +1828,8 @@ export class IsometricRenderer {
           ctx,
           x: 0,
           y: 0,
-          scale: 1.15 * visualScale,
+          scale: visualScale,
+          anchorFeet: true,
           facingAngle: trail.facingAngle,
           isMoving: true,
         });
@@ -2860,7 +2862,8 @@ export class IsometricRenderer {
       ctx,
       x: 0,
       y: levY,
-      scale: 1.15 * visualScale * (wizard.victoryScale !== undefined ? wizard.victoryScale : 1.0), // Mago con presencia visual y absorción en vórtice
+      scale: visualScale * (wizard.victoryScale !== undefined ? wizard.victoryScale : 1.0),
+      anchorFeet: true,
       facingAngle: wizard.facingAngle,
       isMoving: wizard.isMoving,
       vx: wizard.vx,

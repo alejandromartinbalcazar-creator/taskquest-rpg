@@ -356,6 +356,10 @@ export interface GameEnemy {
   vx: number;
   vy: number;
   radius: number;
+  /** Optional body dimensions, independent of the ground-contact radius. */
+  visualRadius?: number;
+  damageRadius?: number;
+  damageOffsetY?: number;
   hp: number;
   maxHp: number;
   attackPower: number;

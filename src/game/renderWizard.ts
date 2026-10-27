@@ -16,6 +16,7 @@ export interface WizardRenderOptions {
   castFlashColor?: string; // tinte o destello elemental al castear
   activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma' | 'wind';
   time?: number; // para ciclos de animación escalonados
+  anchorFeet?: boolean;
 }
 
 export function drawWizardSprite({
@@ -33,6 +34,7 @@ export function drawWizardSprite({
   castFlashColor,
   activeElement = 'fire',
   time = Date.now() / 1000,
+  anchorFeet = false,
 }: WizardRenderOptions) {
   ctx.save();
 
@@ -47,7 +49,7 @@ export function drawWizardSprite({
 
   // Posicionamiento de base entera para evitar subpíxeles borrosos
   const baseX = Math.round(x + recoilX);
-  const baseY = Math.round(y + recoilY);
+  const baseY = Math.round(y + recoilY) - (anchorFeet ? 10 * P : 0);
   ctx.translate(baseX, baseY);
 
   // Orientación horizontal izquierda / derecha (Flip en eje X)

@@ -114,6 +114,7 @@ import { IsometricRenderer } from './renderer';
 import { emitProjectileImpact } from './projectileVfx';
 import { DungeonClock } from './DungeonClock';
 import { applyWindKnockback, isWindCircleWalkable, WIND_KNOCKBACK_DISTANCE } from './windAttack';
+import { getEnemyHurtbox, spellHitsEnemy, WIZARD_GROUND_RADIUS } from './entityScale';
 import type { CampaignRoute, ExpeditionRun } from '../expedition/types';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass, Pause, Play } from 'lucide-react';
 
@@ -595,8 +596,9 @@ export function findNearestCombatTarget(
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (e.hp <= 0) continue;
-    const dx = e.x - wizard.x;
-    const dy = e.y - wizard.y;
+    const body = getEnemyHurtbox(e);
+    const dx = body.x - wizard.x;
+    const dy = body.y - wizard.y;
     const dist = Math.hypot(dx, dy);
     if (dist > maxRange) continue;
 
@@ -614,7 +616,7 @@ export function findNearestCombatTarget(
 
     if (score < bestScore) {
       bestScore = score;
-      bestTarget = { x: e.x, y: e.y, angle, dist, id: e.id };
+      bestTarget = { x: body.x, y: body.y, angle, dist, id: e.id };
     }
   }
 
@@ -807,7 +809,7 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
     wizard: {
       x: 550,
       y: 560,
-      radius: 18,
+      radius: WIZARD_GROUND_RADIUS,
       facingAngle: -Math.PI / 2,
       isMoving: false,
       animFrame: 0,
@@ -6823,9 +6825,10 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
               } else {
                 const lockedEnemy = enemies.find((e) => e.id === stream.lockedEnemyId && e.hp > 0);
                 if (lockedEnemy) {
-                  const eDist = Math.hypot(lockedEnemy.x - wizard.x, lockedEnemy.y - wizard.y);
+                  const body = getEnemyHurtbox(lockedEnemy);
+                  const eDist = Math.hypot(body.x - wizard.x, body.y - wizard.y);
                   if (eDist <= 550) {
-                    currentTarget = { x: lockedEnemy.x, y: lockedEnemy.y, angle: Math.atan2(lockedEnemy.y - wizard.y, lockedEnemy.x - wizard.x), dist: eDist, id: lockedEnemy.id };
+                    currentTarget = { x: body.x, y: body.y, angle: Math.atan2(body.y - wizard.y, body.x - wizard.x), dist: eDist, id: lockedEnemy.id };
                   }
                 }
               }
@@ -6848,17 +6851,18 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
 
           enemies.forEach((enemy) => {
             if (enemy.hp <= 0) return;
-            const dx = enemy.x - originX;
-            const dy = enemy.y - originY;
+            const body = getEnemyHurtbox(enemy);
+            const dx = body.x - originX;
+            const dy = body.y - originY;
             const dist = Math.hypot(dx, dy);
 
-            if (dist <= stream.range + enemy.radius) {
+            if (dist <= stream.range + body.radius) {
               const angleToEnemy = Math.atan2(dy, dx);
               let angleDiff = angleToEnemy - stream.aimAngle;
               while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
               while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
 
-              const angularTolerance = halfArc + Math.asin(Math.min(0.9, enemy.radius / Math.max(dist, 1)));
+              const angularTolerance = halfArc + Math.asin(Math.min(0.9, body.radius / Math.max(dist, 1)));
               if (Math.abs(angleDiff) <= angularTolerance) {
                 // Comprobar obstáculos sólidos que bloqueen la línea de visión
                 let isBlocked = false;
@@ -7837,6 +7841,8 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
       }
 
       // 4. Actualizar IA de Enemigos
+      const bossPreviousPositions = new Map(enemies.filter((enemy) => enemy.archetype === 'boss')
+        .map((enemy) => [enemy.id, { x: enemy.x, y: enemy.y }]));
       g.enemyManager.update(
         wizard,
         g.projectiles,
@@ -7901,6 +7907,12 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
           const resolved = tm.resolveEntityCollision(enemy, 0, 0);
           enemy.x = resolved.x;
           enemy.y = resolved.y;
+          const previous = bossPreviousPositions.get(enemy.id);
+          if (previous && tm.backgroundKey === 'level1-trail') {
+            resolveLevel1MaskMovement(enemy, previous, tm.gate.isOpen);
+          } else if (previous && tm.backgroundKey === 'level2-ice') {
+            resolveLevel2MaskMovement(enemy, previous, tm.gate.isOpen);
+          }
         });
 
         // GESTIÓN DINÁMICA DE BGM (Exploración en sendero vs Combate heroico en arena del Custodio)
@@ -8293,7 +8305,7 @@ const DungeonCombatSession: React.FC<LandscapeCombatViewProps & { onRestart: () 
             const enemy = enemies[eIdx];
             if (enemy.hp <= 0 || p.piercedIds.includes(enemy.id)) continue;
 
-            if (checkCircleCollision(p.x, p.y, p.radius, enemy.x, enemy.y, enemy.radius)) {
+            if (spellHitsEnemy(p.x, p.y, p.radius, enemy)) {
               emitProjectileImpact(g.particlePool, p);
               p.piercedIds.push(enemy.id);
               p.pierce--;

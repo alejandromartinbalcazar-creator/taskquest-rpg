@@ -6,6 +6,8 @@ import {
   CustodianStalagmiteTelegraph,
 } from './types';
 import { elementalSound } from './soundEngine';
+import { CUSTODIAN_VISUAL_RADIUS, CUSTODIAN_GROUND_RADIUS, CUSTODIAN_DAMAGE_RADIUS,
+  CUSTODIAN_DAMAGE_OFFSET_Y, CUSTODIAN_ARM_SPACING, CUSTODIAN_ARM_HEIGHT } from './entityScale';
 
 /**
  * Entidad del Jefe Final del Nivel 1: El Custodio del Umbral (The Threshold Custodian)
@@ -27,18 +29,18 @@ export function createThresholdCustodian(x: number, y: number): GameEnemy {
     attackTimer: 0,
     nextAttackCooldown: 70,
     leftGauntlet: {
-      x: x - 68,
-      y: y - 15,
-      targetX: x - 68,
-      targetY: y - 15,
+      x: x - CUSTODIAN_ARM_SPACING,
+      y: y + CUSTODIAN_ARM_HEIGHT,
+      targetX: x - CUSTODIAN_ARM_SPACING,
+      targetY: y + CUSTODIAN_ARM_HEIGHT,
       angle: 0,
       slamProgress: 0,
     },
     rightGauntlet: {
-      x: x + 68,
-      y: y - 15,
-      targetX: x + 68,
-      targetY: y - 15,
+      x: x + CUSTODIAN_ARM_SPACING,
+      y: y + CUSTODIAN_ARM_HEIGHT,
+      targetX: x + CUSTODIAN_ARM_SPACING,
+      targetY: y + CUSTODIAN_ARM_HEIGHT,
       angle: 0,
       slamProgress: 0,
     },
@@ -63,7 +65,10 @@ export function createThresholdCustodian(x: number, y: number): GameEnemy {
     y,
     vx: 0,
     vy: 0,
-    radius: 52, // ~2.5x escala del jugador
+    radius: CUSTODIAN_GROUND_RADIUS,
+    visualRadius: CUSTODIAN_VISUAL_RADIUS,
+    damageRadius: CUSTODIAN_DAMAGE_RADIUS,
+    damageOffsetY: CUSTODIAN_DAMAGE_OFFSET_Y,
     hp: maxHp,
     maxHp,
     attackPower: 26,
@@ -273,9 +278,9 @@ export function updateThresholdCustodian(
   // El Custodio permanece levitando majestuosamente en su runa ancestral
   if (dist > 850 && boss.hp === boss.maxHp) {
     cs.activeAttack = 'none';
-    cs.leftGauntlet.targetX = boss.x - 70 + gauntletHoverX;
-    cs.leftGauntlet.targetY = boss.y - 15 + gauntletHoverY;
-    cs.rightGauntlet.targetX = boss.x + 70 - gauntletHoverX;
+    cs.leftGauntlet.targetX = boss.x - CUSTODIAN_ARM_SPACING + gauntletHoverX;
+    cs.leftGauntlet.targetY = boss.y + CUSTODIAN_ARM_HEIGHT + gauntletHoverY;
+    cs.rightGauntlet.targetX = boss.x + CUSTODIAN_ARM_SPACING - gauntletHoverX;
     cs.rightGauntlet.targetY = boss.y - 15 - gauntletHoverY;
     cs.leftGauntlet.x += (cs.leftGauntlet.targetX - cs.leftGauntlet.x) * 0.15;
     cs.leftGauntlet.y += (cs.leftGauntlet.targetY - cs.leftGauntlet.y) * 0.15;
@@ -298,9 +303,9 @@ export function updateThresholdCustodian(
   }
 
   if (cs.activeAttack === 'none') {
-    cs.leftGauntlet.targetX = boss.x - 70 + gauntletHoverX;
-    cs.leftGauntlet.targetY = boss.y - 15 + gauntletHoverY;
-    cs.rightGauntlet.targetX = boss.x + 70 - gauntletHoverX;
+    cs.leftGauntlet.targetX = boss.x - CUSTODIAN_ARM_SPACING + gauntletHoverX;
+    cs.leftGauntlet.targetY = boss.y + CUSTODIAN_ARM_HEIGHT + gauntletHoverY;
+    cs.rightGauntlet.targetX = boss.x + CUSTODIAN_ARM_SPACING - gauntletHoverX;
     cs.rightGauntlet.targetY = boss.y - 15 - gauntletHoverY;
   }
   cs.leftGauntlet.x += (cs.leftGauntlet.targetX - cs.leftGauntlet.x) * 0.15;
@@ -393,10 +398,10 @@ function initiateAttack(
     // El jefe se teletransporta al centro de su arena y canaliza durante 2.5s (150 frames)
     boss.x = cs.homeX || boss.x;
     boss.y = cs.homeY || boss.y;
-    cs.leftGauntlet.x = boss.x - 75;
-    cs.leftGauntlet.y = boss.y - 45;
-    cs.rightGauntlet.x = boss.x + 75;
-    cs.rightGauntlet.y = boss.y - 45;
+    cs.leftGauntlet.x = boss.x - CUSTODIAN_ARM_SPACING;
+    cs.leftGauntlet.y = boss.y + CUSTODIAN_ARM_HEIGHT;
+    cs.rightGauntlet.x = boss.x + CUSTODIAN_ARM_SPACING;
+    cs.rightGauntlet.y = boss.y + CUSTODIAN_ARM_HEIGHT;
 
     // 2 Zonas seguras (runas protectoras en el suelo)
     cs.judgmentTelegraph = {
