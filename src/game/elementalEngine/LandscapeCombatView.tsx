@@ -111,6 +111,7 @@ import { createThresholdCustodian } from './BossCustodian';
 import { ENEMY_PHYSICS_CONFIG } from './EnemyStats';
 import { calculateElementalDamage, getSpellElement, applyDamageToEnemy } from './elementalMatrix';
 import { IsometricRenderer } from './renderer';
+import { emitProjectileImpact } from './projectileVfx';
 import type { CampaignRoute, ExpeditionRun } from '../expedition/types';
 import { RotateCw, X, Volume2, VolumeX, ShieldAlert, Award, Sparkles, Compass } from 'lucide-react';
 
@@ -252,8 +253,8 @@ function generateLightningBolt(
     points,
     branches,
     chainLines: [],
-    life: 7,
-    maxLife: 7,
+    life: 13,
+    maxLife: 13,
   };
 }
 
@@ -311,8 +312,8 @@ function generateCelestialLightningBolt(targetX: number, targetY: number): Light
     points,
     branches,
     chainLines: [],
-    life: 12,
-    maxLife: 12,
+    life: 18,
+    maxLife: 18,
     isCelestial: true,
     widthMultiplier: 2.0,
   };
@@ -8064,6 +8065,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
 
         // Comprobar colisión con muros ancestrales o portón cerrado del Tilemap
         if (g.tilemap && g.tilemap.blocksProjectilesAt(p.x, p.y)) {
+          emitProjectileImpact(g.particlePool, p);
           if (p.areaOfEffect) {
             triggerAoEExplosion(
               p,
@@ -8109,6 +8111,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
           g.projectiles
         );
         if (hitObstacle) {
+          emitProjectileImpact(g.particlePool, p);
           if (p.areaOfEffect) {
             triggerAoEExplosion(
               p,
@@ -8198,6 +8201,7 @@ export const LandscapeCombatView: React.FC<LandscapeCombatViewProps> = ({
             if (p.piercedIds.includes(enemy.id)) continue;
 
             if (checkCircleCollision(p.x, p.y, p.radius, enemy.x, enemy.y, enemy.radius)) {
+              emitProjectileImpact(g.particlePool, p);
               p.piercedIds.push(enemy.id);
               p.pierce--;
 

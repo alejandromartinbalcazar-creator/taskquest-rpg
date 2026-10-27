@@ -82,6 +82,7 @@ import {
   MagneticTelluricSpireEntity,
 } from './types';
 import { PooledParticle } from '../combat/ParticlePool';
+import { drawElementalProjectile, drawProjectileGroundLight } from './projectileVfx';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
 import {
@@ -274,6 +275,7 @@ export class IsometricRenderer {
     }
 
     // 3. Dibujar Zonas de Terreno (Magma, Hielo, Charcos de Agua, Vapor)
+    drawProjectileGroundLight(ctx, projectiles);
     this.drawTerrainZones(ctx, terrainZones);
 
     // 3.5 Dibujar Suelo y Grietas de Corona Infernal (Fuego + Fuego)
@@ -3003,7 +3005,9 @@ export class IsometricRenderer {
 
     bolts.forEach((bolt) => {
       ctx.save();
-      const alpha = Math.min(1, bolt.life / 2.5);
+      const remaining = bolt.life / bolt.maxLife;
+      const progress = 1 - remaining;
+      const alpha = Math.min(1, remaining * 2.5);
       const widthMult = bolt.isCelestial ? (bolt.widthMultiplier || 1.85) : 1.0;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -3058,7 +3062,7 @@ export class IsometricRenderer {
         ctx.beginPath();
         ctx.moveTo(bolt.points[0].x, bolt.points[0].y);
         for (let i = 1; i < bolt.points.length; i++) {
-          const jitter = (Math.random() - 0.5) * (bolt.isCelestial ? 5 : 3);
+          const jitter = i === bolt.points.length - 1 ? 0 : Math.sin(i * 2.3 + Math.floor(progress * 6)) * (bolt.isCelestial ? 2.5 : 1.5);
           ctx.lineTo(bolt.points[i].x + jitter, bolt.points[i].y + jitter);
         }
         ctx.stroke();
@@ -3086,8 +3090,8 @@ export class IsometricRenderer {
       bolt.chainLines.forEach((chain) => {
         ctx.beginPath();
         ctx.moveTo(chain.x1, chain.y1);
-        const midX = (chain.x1 + chain.x2) / 2 + (Math.random() - 0.5) * 16;
-        const midY = (chain.y1 + chain.y2) / 2 + (Math.random() - 0.5) * 16;
+        const midX = (chain.x1 + chain.x2) / 2 + Math.sin(progress * 18 + chain.x1) * 7;
+        const midY = (chain.y1 + chain.y2) / 2 + Math.cos(progress * 18 + chain.y1) * 7;
         ctx.lineTo(midX, midY);
         ctx.lineTo(chain.x2, chain.y2);
         ctx.stroke();
@@ -3110,13 +3114,32 @@ export class IsometricRenderer {
       ctx.arc(bolt.targetX, bolt.targetY, 5, 0, Math.PI * 2);
       ctx.fill();
 
+      // Impact corona grows while the branching bolt fades; keeping its
+      // endpoints fixed makes the discharge read as one coherent strike.
+      const corona = 13 + progress * 26;
+      ctx.globalAlpha = alpha * (1 - progress);
+      ctx.strokeStyle = bolt.glowColor || '#a855f7';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(bolt.targetX, bolt.targetY + 5, corona, corona * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#fef08a';
+      for (let ray = 0; ray < 5; ray++) {
+        const angle = ray * Math.PI * 2 / 5 + 0.4;
+        ctx.beginPath();
+        ctx.moveTo(bolt.targetX + Math.cos(angle) * 8, bolt.targetY + Math.sin(angle) * 8);
+        ctx.lineTo(bolt.targetX + Math.cos(angle + 0.18) * corona * 0.65, bolt.targetY + Math.sin(angle + 0.18) * corona * 0.65);
+        ctx.lineTo(bolt.targetX + Math.cos(angle) * corona, bolt.targetY + Math.sin(angle) * corona);
+        ctx.stroke();
+      }
+
       ctx.restore();
     });
 
     ctx.restore();
   }
 
-  // DIBUJO DE PROYECTILES EN PIXEL ART 16-BIT (Bloques geométricos, estelas en dientes de sierra y cero arcos suaves)
+  // Proyectiles: siluetas elementales detalladas y efectos de combinaciones.
   private static drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[], visualScale = 1) {
     projectiles.forEach((p) => {
       // Ignorar proyectiles inactivos de la piscina de memoria
@@ -3126,8 +3149,14 @@ export class IsometricRenderer {
       ctx.translate((p.x) | 0, (p.y) | 0);
 
       const angle = Math.atan2(p.vy, p.vx);
-      ctx.rotate(p.rotation !== undefined ? p.rotation : angle);
+      ctx.rotate(angle);
       if (visualScale !== 1) ctx.scale(visualScale, visualScale);
+
+      if (drawElementalProjectile(ctx, p, performance.now())) {
+        ctx.restore();
+        return;
+      }
+      if (p.rotation !== undefined) ctx.rotate(p.rotation - angle);
 
       const OUTLINE = '#0f172a';
       const spellName = String(p.spellType);
@@ -3170,73 +3199,8 @@ export class IsometricRenderer {
         }
       }
 
-      // A. FUEGO: Cometa de llamas en bloques rectangulares escalonados
-      if (p.spellType === 'fire_shot' || p.spellType === 'fire_inferno') {
-        const scale = p.spellType === 'fire_inferno' ? 1.4 : 1.1;
-        const timeStep = Math.floor(Date.now() * 0.015) % 2;
-
-        // Estela dentada de fuego exterior (#EA580C)
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(-18 * scale, -10 * scale, 30 * scale, 20 * scale);
-
-        ctx.fillStyle = '#ea580c';
-        ctx.fillRect(-16 * scale, -8 * scale, 26 * scale, 16 * scale);
-        // Dientes de sierra en la estela
-        ctx.fillRect(-22 * scale, (-6 + timeStep * 2) * scale, 8 * scale, 4 * scale);
-        ctx.fillRect(-20 * scale, (2 - timeStep * 2) * scale, 6 * scale, 4 * scale);
-
-        // Bloque central naranja (#F97316)
-        ctx.fillStyle = '#f97316';
-        ctx.fillRect(-8 * scale, -6 * scale, 18 * scale, 12 * scale);
-
-        // Núcleo caliente amarillo/blanco (#FEF08A)
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(0 * scale, -3 * scale, 10 * scale, 6 * scale);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(4 * scale, -1 * scale, 4 * scale, 2 * scale);
-      }
-      // B. HIELO: Lanza / Cristal puntiagudo con quiebres a 45 grados en píxeles
-      else if (p.spellType === 'ice_shard' || p.spellType === 'ice_lance') {
-        const scale = p.spellType === 'ice_lance' ? 1.3 : 1.0;
-
-        // Contorno
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(-18 * scale, -7 * scale, 36 * scale, 14 * scale);
-        ctx.fillRect(16 * scale, -3 * scale, 6 * scale, 6 * scale); // Punta
-
-        // Cristal ártico (#7DD3FC)
-        ctx.fillStyle = '#7dd3fc';
-        ctx.fillRect(-16 * scale, -5 * scale, 32 * scale, 10 * scale);
-        ctx.fillRect(14 * scale, -2 * scale, 6 * scale, 4 * scale);
-
-        // Faceta frontal blanco nieve (#F8FAFC)
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(-8 * scale, -3 * scale, 24 * scale, 3 * scale);
-        ctx.fillRect(6 * scale, -1 * scale, 12 * scale, 2 * scale);
-
-        // Faceta inferior azul profundo (#0284C7)
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(-14 * scale, 1 * scale, 26 * scale, 3 * scale);
-      }
-      // C. TIERRA: Megalito de piedra maciza en bloques rectangulares
-      else if (p.spellType === 'earth_toss' || p.spellType === 'earth_megalith') {
-        const scale = p.spellType === 'earth_megalith' ? 1.4 : 1.1;
-
-        ctx.fillStyle = OUTLINE;
-        ctx.fillRect(-15 * scale, -13 * scale, 30 * scale, 26 * scale);
-
-        ctx.fillStyle = '#78716c';
-        ctx.fillRect(-13 * scale, -11 * scale, 26 * scale, 22 * scale);
-
-        // Bloques de relieve y fracturas
-        ctx.fillStyle = '#a8a29e';
-        ctx.fillRect(-11 * scale, -9 * scale, 10 * scale, 8 * scale);
-        ctx.fillStyle = '#44403c';
-        ctx.fillRect(-2 * scale, -3 * scale, 12 * scale, 10 * scale);
-        ctx.fillRect(-8 * scale, 1 * scale, 6 * scale, 6 * scale);
-      }
       // D. CHOQUE TÉRMICO (FUEGO + HIELO): Bloque dual mitad fuego / mitad hielo
-      else if (p.spellType === 'thermal_shock') {
+      if (p.spellType === 'thermal_shock') {
         ctx.fillStyle = OUTLINE;
         ctx.fillRect(-14, -14, 28, 28);
 
@@ -3423,6 +3387,34 @@ export class IsometricRenderer {
       if (pt.active === false || pt.life <= 0) continue;
 
       if (pt.type === 'ring') {
+        if (pt.secondaryColor) {
+          // Elemental contact: a short flash followed by a fading ground wave.
+          // The pooled particle already supplies lifetime and expansion.
+          const progress = 1 - pt.life / pt.maxLife;
+          const radius = pt.radius;
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, 1 - progress);
+          ctx.strokeStyle = pt.color;
+          ctx.lineWidth = 3 * (1 - progress) + 0.5;
+          ctx.beginPath();
+          ctx.ellipse(pt.x, pt.y + 6, radius, radius * 0.48, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = pt.secondaryColor;
+          ctx.lineWidth = 2;
+          for (let ray = 0; ray < 6; ray++) {
+            const angle = ray * Math.PI / 3;
+            ctx.beginPath();
+            ctx.moveTo(pt.x + Math.cos(angle) * radius * 0.5, pt.y + Math.sin(angle) * radius * 0.6);
+            ctx.lineTo(pt.x + Math.cos(angle) * radius, pt.y + Math.sin(angle) * radius * 0.6);
+            ctx.stroke();
+          }
+          if (progress < 0.25) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(pt.x, pt.y, 8 * (1 - progress * 4), 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.restore();
+          continue;
+        }
         ctx.strokeStyle = pt.color || '#38bdf8';
         ctx.lineWidth = 2;
         const r = pt.radius | 0;
