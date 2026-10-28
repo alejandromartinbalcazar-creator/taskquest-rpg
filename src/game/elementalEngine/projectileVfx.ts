@@ -60,7 +60,7 @@ export function drawElementalProjectile(ctx: CanvasRenderingContext2D, p: Projec
 
   ctx.save();
   const large = p.spellType === 'fire_inferno' || p.spellType === 'ice_lance' || p.spellType === 'earth_megalith';
-  const scale = large ? 1.35 : 1.05;
+  const scale = ice ? (large ? 1.9 : 1.6) : (large ? 1.35 : 1);
   ctx.scale(scale, scale);
   const phase = now * 0.012 + (p.maxLife - p.life) * 0.09;
 

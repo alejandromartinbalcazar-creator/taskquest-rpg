@@ -16,18 +16,32 @@ test('wizard and boss use integer pixel units with a clear size hierarchy', () =
   const wizardPixel = 2 * sizes.WIZARD_PANORAMA_SCALE;
   const bossPixel = sizes.CUSTODIAN_VISUAL_RADIUS / 16;
   assert.equal(wizardPixel, 5);
-  assert.equal(bossPixel, 7);
-  // The wizard spans at most 28 rows, and the Custodian torso spans 42 rows.
-  assert(42 * bossPixel >= 2 * 28 * wizardPixel);
+  assert.equal(bossPixel, 5);
+  const ratio = 42 * bossPixel / sizes.WIZARD_VISUAL_HEIGHT;
+  assert(ratio >= 1.5 && ratio <= 1.8);
+});
+
+test('each common enemy is 80–90 percent of the wizard height', () => {
+  for (const bestiaryType of ['pyre_golem', 'storm_stalker', 'frost_lurker']) {
+    const metrics = sizes.getCommonEnemyMetrics({ bestiaryType, radius: 20 });
+    assert(Number.isInteger(metrics.pixel));
+    const ratio = (metrics.feet - metrics.head) * metrics.pixel / sizes.WIZARD_VISUAL_HEIGHT;
+    assert(ratio >= 0.8 && ratio <= 0.9, bestiaryType);
+  }
+});
+
+test('the wind projectile has a readable diameter of 30–40 percent of player height', () => {
+  const ratio = 34 * sizes.PROJECTILE_VISUAL_SCALE / sizes.WIZARD_VISUAL_HEIGHT;
+  assert(ratio >= 0.3 && ratio <= 0.4);
 });
 
 test('projectiles hit the enlarged torso without enlarging ground contact', () => {
   const boss = { x: 200, y: 400, radius: sizes.CUSTODIAN_GROUND_RADIUS,
     damageRadius: sizes.CUSTODIAN_DAMAGE_RADIUS, damageOffsetY: sizes.CUSTODIAN_DAMAGE_OFFSET_Y };
-  assert(sizes.spellHitsEnemy(310, 260, 14, boss));
-  assert(!sizes.spellHitsEnemy(380, 260, 14, boss));
+  assert(sizes.spellHitsEnemy(285, 300, 14, boss));
+  assert(!sizes.spellHitsEnemy(350, 300, 14, boss));
   assert.equal(boss.radius, 32);
-  assert.equal(sizes.getEnemyHurtbox(boss).y, 260);
+  assert.equal(sizes.getEnemyHurtbox(boss).y, 300);
 });
 
 test('common enemies keep their existing contact dimensions', () => {

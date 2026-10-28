@@ -83,7 +83,8 @@ import {
 } from './types';
 import { PooledParticle } from '../combat/ParticlePool';
 import { drawElementalProjectile, drawProjectileGroundLight } from './projectileVfx';
-import { WIZARD_PANORAMA_SCALE, WIZARD_ROOM_SCALE } from './entityScale';
+import { WIZARD_PANORAMA_SCALE, WIZARD_ROOM_SCALE, getCommonEnemyMetrics, PROJECTILE_VISUAL_SCALE } from './entityScale';
+import { layoutCombatLabels } from './combatLabels';
 import { getCameraFrustum, isInFrustum, FrustumBounds } from './level1ForestMap';
 import { drawWizardSprite } from '../renderWizard';
 import {
@@ -866,7 +867,7 @@ export class IsometricRenderer {
         draw: () => this.drawEnemy(
           ctx,
           enemy,
-          tilemap?.backgroundKey && enemy.archetype !== 'boss' ? 1.42 : 1,
+          1,
         ),
       });
     });
@@ -892,7 +893,7 @@ export class IsometricRenderer {
     this.drawInfernalCrownFlames(ctx, infernalCrowns);
 
     // 6. Dibujar Proyectiles con SILUETAS FÍSICAS DIFERENCIADAS (Fuego, Rayo, Hielo, Tierra, etc.)
-    this.drawProjectiles(ctx, projectiles, tilemap?.backgroundKey ? 1.34 : 1);
+    this.drawProjectiles(ctx, projectiles, tilemap?.backgroundKey ? PROJECTILE_VISUAL_SCALE : 1);
 
     // Dibujar Rayos Eléctricos Instantáneos y Ramificados con Chispas
     this.drawLightningBolts(ctx, lightningBolts);
@@ -922,7 +923,10 @@ export class IsometricRenderer {
     this.drawParticles(ctx, particles);
 
     // 8. Dibujar Textos Flotantes
-    this.drawFloatingTexts(ctx, floatingTexts);
+    this.drawFloatingTexts(ctx, floatingTexts, wizard, {
+      left: camera.x - width / (2 * zoom), right: camera.x + width / (2 * zoom),
+      top: camera.y - height / (2 * zoom) + 90 / zoom, bottom: camera.y + height / (2 * zoom),
+    }, tilemap?.backgroundKey ? 120 : 72);
 
     // 8.5 Capa Superior: Canopy de Árboles (Oclusión suave al pasar por debajo) y Hojas Ambientales
     if (forestLevel) {
@@ -2902,6 +2906,12 @@ export class IsometricRenderer {
       ctx.restore();
     }
 
+    // Align the visible feet of common enemies with their unchanged physical anchor.
+    if (enemy.bestiaryType) {
+      const metrics = getCommonEnemyMetrics(enemy);
+      ctx.translate(0, -metrics.feet * metrics.pixel);
+    }
+
     // 2. Renderizado Vectorial Procedural según afinidad y tipo del Bestiario
     if (enemy.bossType === 'threshold_custodian') {
       ctx.restore();
@@ -3430,23 +3440,27 @@ export class IsometricRenderer {
   }
 
   // Dibuja Textos Flotantes (Tipografía Bitmap 'Press Start 2P' y Sombra de Bloque Sólido)
-  private static drawFloatingTexts(ctx: CanvasRenderingContext2D, texts: FloatingText[]) {
-    texts.forEach((t) => {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, t.opacity);
-      const pixelSize = Math.max(8, Math.round(t.fontSize * 0.8));
-      ctx.font = `bold ${pixelSize}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-
-      // Sombra sólida de bloque pixelado (sin difuminar)
+  private static drawFloatingTexts(ctx: CanvasRenderingContext2D, texts: FloatingText[],
+    wizard: { x: number; y: number },
+    viewport: { left: number; right: number; top: number; bottom: number }, playerHeight: number) {
+    ctx.save();
+    const labels = layoutCombatLabels(texts,
+      { left: wizard.x - 42, right: wizard.x + 65, top: wizard.y - playerHeight - 12, bottom: wizard.y + 10 },
+      viewport, (text, size) => {
+        ctx.font = `bold ${size}px "Press Start 2P", monospace`;
+        return ctx.measureText(text).width;
+      });
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    for (const label of labels) {
+      ctx.globalAlpha = label.alpha;
+      ctx.font = `bold ${label.size}px "Press Start 2P", monospace`;
       ctx.fillStyle = '#000000';
-      ctx.fillText(t.text, Math.round(t.x + 1.5), Math.round(t.y + 1.5));
-
-      // Texto de color principal
-      ctx.fillStyle = t.color;
-      ctx.fillText(t.text, Math.round(t.x), Math.round(t.y));
-      ctx.restore();
-    });
+      ctx.fillText(label.text, Math.round(label.x + 1), Math.round(label.y + 1));
+      ctx.fillStyle = label.color;
+      ctx.fillText(label.text, Math.round(label.x), Math.round(label.y));
+    }
+    ctx.restore();
   }
 
   // DIBUJO DE FLUJO CONTINUO CANALIZADO (FUEGO Y HIELO)

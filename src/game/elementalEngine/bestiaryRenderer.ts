@@ -1,4 +1,5 @@
 import { GameEnemy } from './types';
+import { getCommonEnemyMetrics } from './entityScale';
 
 /**
  * Renderizado Procedural en Pixel Art de 16 Bits para el Bestiario Elemental (Canvas 2D).
@@ -9,7 +10,7 @@ import { GameEnemy } from './types';
 // 1. GÓLEM DE ESCORIA ÍGNEA (Pyre Golem) — Melé Pesado / Tanque en Pixel Art 16-Bit
 export function drawPyreGolem(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
-  const P = Math.max(1, Math.round(r / 10)); // Píxel virtual escalado
+  const P = getCommonEnemyMetrics(enemy).pixel;
   const isCooled = (enemy.cooledDownTimer ?? 0) > 0;
   const isFrenzy = (enemy.frenzyTimer ?? 0) > 0;
   const isTelegraph = enemy.isTelegraphing;
@@ -128,7 +129,7 @@ export function drawPyreGolem(ctx: CanvasRenderingContext2D, enemy: GameEnemy, n
 // 2. ESPECTRO DE TORMENTA (Storm Stalker) — Hostigador Rápido / Flanqueador en Pixel Art 16-Bit
 export function drawStormStalker(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
-  const P = Math.max(1, Math.round(r / 10));
+  const P = getCommonEnemyMetrics(enemy).pixel;
   const isChargingSpark = (enemy.sparkTimer ?? 0) > 170;
 
   ctx.save();
@@ -237,7 +238,7 @@ export function drawStormStalker(ctx: CanvasRenderingContext2D, enemy: GameEnemy
 // 3. ACECHADOR DE ESCARCHA (Frost Lurker) — Francotirador / Escudo Frontal en Pixel Art 16-Bit
 export function drawFrostLurker(ctx: CanvasRenderingContext2D, enemy: GameEnemy, now: number) {
   const r = enemy.radius;
-  const P = Math.max(1, Math.round(r / 10));
+  const P = getCommonEnemyMetrics(enemy).pixel;
   const isBroken = (enemy.shieldBrokenTimer ?? 0) > 0;
   const isSniping = !!enemy.isSniping;
   const facing = enemy.facingAngle ?? 0;
@@ -363,13 +364,14 @@ export function drawFrostLurker(ctx: CanvasRenderingContext2D, enemy: GameEnemy,
 // 4. BARRA DE SALUD SEGMENTADA EN PIXEL ART 16-BIT
 export function drawEnemyHealthBar(ctx: CanvasRenderingContext2D, enemy: GameEnemy) {
   const r = enemy.radius;
-  const barW = Math.max(36, Math.round(r * 2.2));
+  const metrics = getCommonEnemyMetrics(enemy);
+  const barW = Math.min(76, Math.max(46, Math.round(metrics.width * metrics.pixel * 0.65)));
   const barH = 5;
   const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
   const iconSize = 12;
 
   const barX = Math.round(-barW / 2 + iconSize * 0.5);
-  const barY = Math.round(-r * 1.8 - 14);
+  const barY = metrics.head * metrics.pixel - 14;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;

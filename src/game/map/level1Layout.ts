@@ -21,8 +21,9 @@ function createForestTrailLevel(): string[] {
   grid[9][48] = 'C';
   // Guardián y portón se ubican sobre las zonas verde/amarilla de la máscara.
   // Antes estaban detrás del borde rojo del arte, por eso podían quedar atrapados.
-  grid[8][45] = 'B';
-  grid[9][45] = 'B';
+  // Ground anchor lower in the lane: leaves room above for the 210px torso.
+  grid[10][45] = 'B';
+  grid[11][45] = 'B';
   grid[8][50] = 'D';
   grid[9][50] = 'D';
 

@@ -512,7 +512,15 @@ function createLevel1TilemapEnemies(enemyManager: EnemyManager, tilemap: Tilemap
   });
 
   if (tilemap.bossSpawn) {
-    enemies.push(createThresholdCustodian(tilemap.bossSpawn.x, tilemap.bossSpawn.y));
+    const boss = createThresholdCustodian(tilemap.bossSpawn.x, tilemap.bossSpawn.y);
+    if (tilemap.backgroundKey === 'level1-trail' && boss.custodianState) {
+      // Keep the full silhouette inside this handcrafted stretch of the road.
+      boss.custodianState.arenaBounds = {
+        minX: boss.x - 280, maxX: boss.x + 120,
+        minY: boss.y - 36, maxY: boss.y + 36,
+      };
+    }
+    enemies.push(boss);
   }
 
   // Los modificadores se aplican sobre la composición generada, no sobre datos fijos del nivel.
