@@ -6,6 +6,7 @@ export type TaskDifficulty = 'facil' | 'media' | 'dificil' | 'epica';
 
 export type ReminderType =
   | 'none'
+  | 'absolute'
   | 'at_due'
   | '5_minutes_before'
   | '30_minutes_before'
@@ -37,6 +38,8 @@ export interface Task {
   dueDate: string; // ISO string
   reminderType?: ReminderType;
   reminderCustomMinutes?: number;
+  /** Independent local reminder time in ISO format. */
+  reminderAt?: string;
   recurrence?: TaskRecurrence;
   recurrenceDays?: number[]; // [1, 2, 3, 4, 5, 6, 0] donde 1=Lunes, 2=Martes... 0=Domingo
   completed: boolean;

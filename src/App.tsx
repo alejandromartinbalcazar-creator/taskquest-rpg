@@ -15,7 +15,10 @@ import { HeroProgressModal } from './components/HeroProgressModal';
 import { checkAndUnlockMilestones } from './data/heroMilestones';
 import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
-import { syncTaskReminderNotifications } from './services/taskReminders';
+import { syncTaskReminderNotifications, type ReminderSyncStatus } from './services/taskReminders';
+import { taskIdFromReminderExtra } from './services/reminderPlan';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 import { getNextTaskDueDate } from './services/taskRecurrence';
 import { App as CapacitorApp } from '@capacitor/app';
 import confetti from 'canvas-confetti';
@@ -32,6 +35,8 @@ export function App() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
+  const [reminderStatus, setReminderStatus] = useState<ReminderSyncStatus>({ permission: 'unsupported', exact: false, scheduledTaskIds: [] });
+  const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
 
   // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
   useEffect(() => {
@@ -105,7 +110,29 @@ export function App() {
   }, [tasks]);
 
   useEffect(() => {
-    void syncTaskReminderNotifications(tasks);
+    let active = true;
+    void syncTaskReminderNotifications(tasks).then((status) => { if (active) setReminderStatus(status); });
+    return () => { active = false; };
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+      const taskId = taskIdFromReminderExtra(notification.extra);
+      if (!taskId) return;
+      setCurrentTab('tasks');
+      setReminderTaskId(taskId);
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) void syncTaskReminderNotifications(tasks).then((status) => { if (active) setReminderStatus(status); });
+    });
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
   }, [tasks]);
 
   useEffect(() => {
@@ -270,7 +297,11 @@ export function App() {
         if (t.id === taskId) {
           const nextDueDate = getNextTaskDueDate(t);
           if (nextDueDate) {
-            return { ...t, completed: false, dueDate: nextDueDate, penalizedCount: 0 };
+            // A one-off alarm belongs to the occurrence just completed; relative
+            // due-date reminders continue to follow the recurring mission.
+            return { ...t, completed: false, dueDate: nextDueDate, penalizedCount: 0,
+              reminderType: t.reminderType === 'absolute' ? 'none' : t.reminderType,
+              reminderAt: t.reminderType === 'absolute' ? undefined : t.reminderAt };
           }
           return { ...t, completed: true, completedAt: new Date().toISOString() };
         }
@@ -453,6 +484,9 @@ export function App() {
         {currentTab === 'tasks' && (
           <TaskView
             tasks={tasks}
+            reminderStatus={reminderStatus}
+            externalTaskId={reminderTaskId}
+            onExternalTaskHandled={() => setReminderTaskId(null)}
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}
             onDeleteTask={handleDeleteTask}
