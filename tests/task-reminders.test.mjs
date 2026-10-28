@@ -113,6 +113,17 @@ test('denied exact permission schedules an approximate alarm and upgrades after 
   assert.equal(state.pending.length, 1);
 });
 
+test('a new launch can restore alarms removed by Android while retaining their chosen time', async () => {
+  const { state, api } = harness();
+  await api.syncTaskReminderNotifications([task()]);
+  const previousId = state.pending[0].id;
+  await api.syncTaskReminderNotifications([task()], { refreshExisting: true });
+  assert.equal(state.pending.length, 1);
+  assert.equal(state.pending[0].id, previousId);
+  assert.equal(state.pending[0].schedule.at.toISOString(), future);
+  assert.equal(state.scheduleCalls.length, 2);
+});
+
 test('denied notifications do not claim an alarm was scheduled', async () => {
   const { state, api } = harness();
   state.permission = 'denied';

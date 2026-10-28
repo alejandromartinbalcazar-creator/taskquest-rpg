@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Player, Task, DungeonFloor, StatType, DelevelEvent, HeroMilestone } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
@@ -37,6 +37,7 @@ export function App() {
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderSyncStatus>({ permission: 'unsupported', exact: false, scheduledTaskIds: [] });
   const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
+  const refreshAlarmsOnLaunch = useRef(true);
 
   // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
   useEffect(() => {
@@ -111,7 +112,9 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    void syncTaskReminderNotifications(tasks).then((status) => { if (active) setReminderStatus(status); });
+    const refreshExisting = refreshAlarmsOnLaunch.current;
+    refreshAlarmsOnLaunch.current = false;
+    void syncTaskReminderNotifications(tasks, { refreshExisting }).then((status) => { if (active) setReminderStatus(status); });
     return () => { active = false; };
   }, [tasks]);
 

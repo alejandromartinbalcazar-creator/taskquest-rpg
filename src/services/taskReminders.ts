@@ -29,7 +29,7 @@ const isTaskReminder = (notification: LocalNotificationSchema) => extraOf(notifi
 let syncQueue: Promise<void> = Promise.resolve();
 
 /** Serialize changes so a rapid edit or completion cannot leave an old alarm behind. */
-export function syncTaskReminderNotifications(tasks: Task[]): Promise<ReminderSyncStatus> {
+export function syncTaskReminderNotifications(tasks: Task[], options: { refreshExisting?: boolean } = {}): Promise<ReminderSyncStatus> {
   if (!Capacitor.isNativePlatform()) return Promise.resolve(unsupported);
   const snapshot = tasks.map((task) => ({ ...task }));
   const result = syncQueue.then(async (): Promise<ReminderSyncStatus> => {
@@ -71,7 +71,7 @@ export function syncTaskReminderNotifications(tasks: Task[]): Promise<ReminderSy
         // One-shot reminders must never fire twice. A persistent reminder that
         // was never displayed retains its prior delayed-notice behavior.
         if (task.reminderType !== 'constant' || shownMatches) continue;
-        if (currentMatches) {
+        if (currentMatches && !options.refreshExisting) {
           keepPending.add(id);
           if (permission === 'granted') scheduledTaskIds.push(task.id);
           pendingCount++;
@@ -81,7 +81,7 @@ export function syncTaskReminderNotifications(tasks: Task[]): Promise<ReminderSy
       }
       if (pendingCount >= MAX_PENDING_REMINDERS) continue;
       pendingCount++;
-      if (currentMatches) {
+      if (currentMatches && !options.refreshExisting) {
         keepPending.add(id);
         if (permission === 'granted') scheduledTaskIds.push(task.id);
         continue;
