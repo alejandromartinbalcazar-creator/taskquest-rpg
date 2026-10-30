@@ -21,6 +21,8 @@ El recordatorio debe llamar la atención en el momento programado aunque el usua
 
 El aviso presenta título de la misión, descripción breve y dos acciones: «Realizado» y «Cerrar». Cerrar no completa la misión. Realizado utiliza las reglas existentes de completado/redención y debe proteger la ocurrencia de las tareas recurrentes. Si Android exige desbloqueo para confirmar la acción, se solicita; no se elimina ni se evita el bloqueo de seguridad.
 
+Ampliación puntual solicitada por el usuario: tocar el título, descripción o zona informativa abre directamente el detalle/editor de esa misión en FocusMission. Este toque cierra/detiene el aviso actual sin completar la tarea ni conceder recompensas. Los botones conservan sus acciones independientes. Desde el bloqueo se solicita desbloquear antes de abrir el detalle; cancelar el desbloqueo conserva la misión pendiente. El panel interno ofrece el mismo acceso con teclado y lector de pantalla. La prueba de recordatorio abre Misiones, sin intentar editar una tarea ficticia.
+
 ## Decisiones incluidas en la revisión
 - El aspecto en el bloqueo puede ser una pantalla de alarma, no necesariamente la misma tarjeta inferior de la app.
 - Preferencias del usuario en la app: sonido activado/desactivado, vibración activada/desactivada y duración de la señal/aviso de 15, 30 o 60 segundos. Por defecto se proponen 30 segundos, sonido y vibración activados al habilitar expresamente el modo de alarma. Los ajustes se conservan localmente por teléfono y se aplican a los avisos futuros. Android y No molestar pueden restringir la señal; no se altera su volumen ni se fuerza sonido en modo silencio.

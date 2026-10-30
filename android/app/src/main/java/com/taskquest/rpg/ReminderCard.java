@@ -17,13 +17,18 @@ final class ReminderCard {
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         view.setPadding(0, dp(c, 5), 0, dp(c, 5)); return view;
     }
-    static LinearLayout build(Context c, JSONObject row, Runnable done, Runnable close) {
+    static LinearLayout build(Context c, JSONObject row, Runnable done, Runnable close, Runnable open) {
         LinearLayout layout = new LinearLayout(c); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(dp(c, 20), dp(c, 16), dp(c, 20), dp(c, 20));
         GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.rgb(23, 19, 53)); bg.setCornerRadius(dp(c, 22)); bg.setStroke(dp(c, 1), Color.rgb(167, 139, 250));
         layout.setBackground(bg); layout.setElevation(dp(c, 12));
-        layout.addView(text(c, row.optBoolean("test") ? "Prueba de recordatorio" : "Es hora de tu misión", 14, Color.rgb(196, 181, 253), true));
-        TextView title = text(c, row.optString("title"), 23, Color.WHITE, true); title.setMaxLines(3); layout.addView(title);
-        TextView body = text(c, row.optString("body"), 16, Color.rgb(203, 213, 225), false); body.setMaxLines(4); layout.addView(body);
+        LinearLayout content = new LinearLayout(c); content.setOrientation(LinearLayout.VERTICAL);
+        content.setFocusable(true); content.setContentDescription("Ver detalle de " + row.optString("title"));
+        content.setOnClickListener(view -> open.run());
+        layout.setOnClickListener(view -> open.run()); layout.setFocusable(false);
+        content.addView(text(c, row.optBoolean("test") ? "Prueba de recordatorio" : "Es hora de tu misión", 14, Color.rgb(196, 181, 253), true));
+        TextView title = text(c, row.optString("title"), 23, Color.WHITE, true); title.setMaxLines(3); content.addView(title);
+        TextView body = text(c, row.optString("body"), 16, Color.rgb(203, 213, 225), false); body.setMaxLines(4); content.addView(body);
+        layout.addView(content);
         LinearLayout actions = new LinearLayout(c);
         Button complete = new Button(c); complete.setText("Realizado"); complete.setTextColor(Color.rgb(15, 23, 42)); complete.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(251, 191, 36)));
         Button dismiss = new Button(c); dismiss.setText("Cerrar"); dismiss.setTextColor(Color.WHITE); dismiss.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(71, 55, 112)));

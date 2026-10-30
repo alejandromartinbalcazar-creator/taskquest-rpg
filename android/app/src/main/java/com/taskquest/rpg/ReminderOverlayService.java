@@ -116,7 +116,12 @@ public class ReminderOverlayService extends Service {
             signal.stop();
             try { startActivity(ReminderAlarmNotice.openIntent(this, row, true)); }
             catch (Exception e) { ReminderOverlayStore.event(this, "screen_error", e.getClass().getSimpleName()); }
-        }, () -> ReminderOverlayStore.dismiss(this, row.optInt("id")));
+        }, () -> ReminderOverlayStore.dismiss(this, row.optInt("id")), () -> {
+            if (!valid(row)) return;
+            signal.stop();
+            try { startActivity(ReminderAlarmNotice.openIntent(this, row, false).putExtra("openDetail", true)); }
+            catch (Exception e) { ReminderOverlayStore.event(this, "screen_error", e.getClass().getSimpleName()); }
+        });
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(Math.min(getResources().getDisplayMetrics().widthPixels - ReminderCard.dp(this, 24), ReminderCard.dp(this, 480)), WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL; params.y = ReminderCard.dp(this, 32);

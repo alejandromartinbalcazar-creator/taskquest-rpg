@@ -42,38 +42,45 @@ public class ReminderAlarmActivity extends Activity {
         JSONObject row = ReminderOverlayStore.find(this, reminderId);
         if (row == null || row.optBoolean("dismissed") || !ReminderOverlayStore.key(row).equals(getIntent().getStringExtra("key"))) { finish(); return; }
         FrameLayout container = new FrameLayout(this); container.setBackgroundColor(Color.rgb(8, 11, 32));
-        LinearLayout card = ReminderCard.build(this, row, () -> complete(row), () -> { ReminderOverlayStore.dismiss(this, reminderId); finish(); });
+        LinearLayout card = ReminderCard.build(this, row, () -> navigate(row, true), () -> { ReminderOverlayStore.dismiss(this, reminderId); finish(); }, () -> navigate(row, false));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Math.min(getResources().getDisplayMetrics().widthPixels - ReminderCard.dp(this, 32), ReminderCard.dp(this, 500)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         container.addView(card, params); setContentView(container);
         // Service owns the signal when running; notification taps after it stops
         // may show the task, but must not start a fresh round of alarm sound.
         if (!ReminderOverlayService.isRunning() && System.currentTimeMillis() - row.optLong("at") < ReminderOverlayStore.duration(this) * 1000L) signal.start(this);
         handler.postDelayed(() -> { signal.stop(); finish(); }, ReminderOverlayStore.duration(this) * 1000L);
-        if (getIntent().getBooleanExtra("done", false)) { getIntent().putExtra("done", false); complete(row); }
+        if (getIntent().getBooleanExtra("done", false)) { getIntent().putExtra("done", false); navigate(row, true); }
+        else if (getIntent().getBooleanExtra("openDetail", false)) { getIntent().putExtra("openDetail", false); navigate(row, false); }
     }
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if (focused) ReminderOverlayStore.event(this, "alarm_shown", "");
     }
-    private void complete(JSONObject row) {
+    private void navigate(JSONObject row, boolean complete) {
         if (completing) return;
         completing = true; signal.stop(); ReminderOverlayService.stopSignals();
-        if (row.optBoolean("test")) { ReminderOverlayStore.dismiss(this, reminderId); finish(); return; }
+        if (row.optBoolean("test")) {
+            ReminderOverlayStore.dismiss(this, reminderId);
+            if (!complete) startActivity(WidgetRenderer.link(this, "tasks", null, null));
+            finish(); return;
+        }
         KeyguardManager keyguard = (KeyguardManager)getSystemService(KEYGUARD_SERVICE);
         if (keyguard.isKeyguardLocked() && Build.VERSION.SDK_INT >= 26) {
             keyguard.requestDismissKeyguard(this, new KeyguardManager.KeyguardDismissCallback() {
-                @Override public void onDismissSucceeded() { saveAndOpen(row); }
+                @Override public void onDismissSucceeded() { saveAndOpen(row, complete); }
                 @Override public void onDismissCancelled() { completing = false; showReminder(); }
-                @Override public void onDismissError() { completing = false; showReminder(); Toast.makeText(ReminderAlarmActivity.this, "Desbloquea el teléfono para guardar la misión realizada", Toast.LENGTH_LONG).show(); }
+                @Override public void onDismissError() { completing = false; showReminder(); Toast.makeText(ReminderAlarmActivity.this, complete ? "Desbloquea el teléfono para guardar la misión realizada" : "Desbloquea el teléfono para ver la misión", Toast.LENGTH_LONG).show(); }
             });
-        } else saveAndOpen(row);
+        } else saveAndOpen(row, complete);
     }
-    private void saveAndOpen(JSONObject row) {
+    private void saveAndOpen(JSONObject row, boolean complete) {
         JSONObject current = ReminderOverlayStore.find(this, reminderId);
-        if (current != null && !current.optBoolean("dismissed") && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row))) ReminderOverlayStore.enqueue(this, row);
+        boolean valid = current != null && !current.optBoolean("dismissed") && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row));
+        if (complete && valid) ReminderOverlayStore.enqueue(this, row);
         ReminderOverlayStore.dismiss(this, reminderId);
-        try { startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)); }
-        catch (RuntimeException e) { Toast.makeText(this, "Abre FocusMission para guardar la misión realizada", Toast.LENGTH_LONG).show(); }
+        try { startActivity(!complete && valid ? WidgetRenderer.link(this, "edit-task", row.optString("taskId"), null)
+            : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)); }
+        catch (RuntimeException e) { Toast.makeText(this, complete ? "Abre FocusMission para guardar la misión realizada" : "Abre FocusMission para ver la misión", Toast.LENGTH_LONG).show(); }
         finish();
     }
     @Override protected void onDestroy() {

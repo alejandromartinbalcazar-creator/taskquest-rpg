@@ -578,7 +578,9 @@ export function App() {
           setReminderPrompts((previous) => previous.filter((prompt) => prompt.taskId !== task.id || prompt.dueDate !== task.dueDate));
         };
         return (
-          <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} />
+          <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} onOpen={() => {
+            dismiss(); setWidgetFilter(null); setCurrentTab('tasks'); setReminderTaskId(task.id);
+          }} />
         );
       })()}
 
