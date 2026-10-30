@@ -32,6 +32,8 @@ interface TaskViewProps {
   onRedeemHonorDebt?: (taskId: string) => void;
   reminderStatus: ReminderSyncStatus;
   externalTaskId?: string | null;
+  externalNewTask?: boolean;
+  onExternalNewTaskHandled?: () => void;
   onExternalTaskHandled?: () => void;
 }
 
@@ -50,6 +52,8 @@ export const TaskView: React.FC<TaskViewProps> = ({
   onRedeemHonorDebt,
   reminderStatus,
   externalTaskId,
+  externalNewTask,
+  onExternalNewTaskHandled,
   onExternalTaskHandled,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
@@ -93,6 +97,11 @@ export const TaskView: React.FC<TaskViewProps> = ({
     setReminderFormError('');
     setNewRecurrence(task.recurrence || 'none'); setSelectedDays(task.recurrenceDays || []); setShowAddModal(true);
   };
+  useEffect(() => {
+    if (!externalNewTask) return;
+    setShowAddModal(true);
+    onExternalNewTaskHandled?.();
+  }, [externalNewTask, onExternalNewTaskHandled]);
   useEffect(() => {
     if (!externalTaskId) return;
     const task = tasks.find((item) => item.id === externalTaskId);

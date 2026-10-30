@@ -115,5 +115,6 @@ public class WidgetConfigurationActivity extends Activity {
             for (JSONObject task : rows) preview.addView(WidgetRenderer.row(this, task, draft).apply(this, preview));
             if (total > rows.size()) { TextView more = label("+" + (total - rows.size()) + " más", 12); more.setTextColor(WidgetRenderer.muted(this, draft)); preview.addView(more); }
         }
+        if (preview.getChildCount() == 1) { TextView message = label("Sin tareas en las secciones seleccionadas. Tus otras misiones siguen en la app.", 13); message.setTextColor(WidgetRenderer.muted(this, draft)); preview.addView(message); }
     }
 }

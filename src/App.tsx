@@ -45,6 +45,7 @@ export function App() {
   const refreshAlarmsOnLaunch = useRef(true);
   const [reminderSettingsVersion, setReminderSettingsVersion] = useState(0);
   const [widgetFilter, setWidgetFilter] = useState<string | null>(null);
+  const [widgetCreateRequested, setWidgetCreateRequested] = useState(false);
   const [widgetActions, setWidgetActions] = useState<WidgetCommand[]>([]);
   const [widgetRefresh, setWidgetRefresh] = useState(0);
   const [widgetReconciling, setWidgetReconciling] = useState(Capacitor.getPlatform() === 'android');
@@ -70,7 +71,7 @@ export function App() {
       const params = new URL(url).searchParams;
       if (params.get('action') === 'section' && ['today', 'overdue', 'tomorrow'].includes(params.get('section') || '')) setWidgetFilter(params.get('section'));
       if (params.get('action') === 'add-task') {
-        window.setTimeout(() => window.dispatchEvent(new Event('focusmission:new-task')), 100);
+        setWidgetCreateRequested(true);
       }
       if (params.get('action') === 'edit-task' && params.get('taskId')) {
         setReminderTaskId(params.get('taskId')!);
@@ -524,7 +525,9 @@ export function App() {
           <TaskView
             tasks={widgetFilter ? tasks.filter((task) => !task.completed && widgetSectionForTask(task) === widgetFilter) : tasks}
             reminderStatus={reminderStatus}
-            externalTaskId={reminderTaskId}
+            externalTaskId={cloudSync.widgetSourceReady ? reminderTaskId : null}
+            externalNewTask={cloudSync.widgetSourceReady && widgetCreateRequested}
+            onExternalNewTaskHandled={() => setWidgetCreateRequested(false)}
             onExternalTaskHandled={() => setReminderTaskId(null)}
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}

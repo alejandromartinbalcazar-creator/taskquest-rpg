@@ -35,7 +35,11 @@ final class WidgetRepository {
         } catch (Exception ignored) { }
     }
     static synchronized void sync(Context c, String source, JSONArray tasks) {
-        prefs(c).edit().putString("source", source).putString(WidgetDataPlugin.TASKS_KEY, tasks.toString()).commit();
+        String oldSource = source(c), oldTasks = prefs(c).getString(WidgetDataPlugin.TASKS_KEY, "[]");
+        if (!prefs(c).edit().putString("source", source).putString(WidgetDataPlugin.TASKS_KEY, tasks.toString()).commit()) {
+            prefs(c).edit().putString("source", oldSource).putString(WidgetDataPlugin.TASKS_KEY, oldTasks).commit();
+            throw new IllegalStateException("No se pudo guardar la copia local del widget");
+        }
     }
     static synchronized ArrayList<JSONObject> projected(Context c) {
         JSONArray base = array(c, WidgetDataPlugin.TASKS_KEY), actions = array(c, "actions");
@@ -65,8 +69,11 @@ final class WidgetRepository {
         JSONObject task = null;
         for (JSONObject item : projected(c)) if (matches(item, id, due)) { task = item; break; }
         if (task == null) return false;
-        JSONArray actions = array(c, "actions"); int pending = 0;
-        for (int i = 0; i < actions.length(); i++) if (!actions.optJSONObject(i).optBoolean("settled")) pending++;
+        JSONArray actions = array(c, "actions"); String original = actions.toString(); int pending = 0;
+        for (int i = 0; i < actions.length(); i++) {
+            JSONObject action = actions.optJSONObject(i);
+            if (action != null && source.equals(action.optString("source")) && !action.optBoolean("settled")) pending++;
+        }
         if (pending >= 500) return false; // Keep existing actions; never silently drop offline work.
         try {
             Instant now = Instant.now(); JSONArray days = task.optJSONArray("recurrenceDays"); int[] selected = new int[days == null ? 0 : days.length()];
@@ -75,7 +82,7 @@ final class WidgetRepository {
             JSONObject action = new JSONObject().put("key", source + ":" + UUID.randomUUID()).put("source", source).put("taskId", id).put("dueDate", due)
                 .put("completedAt", WidgetRules.iso(now)).put("nextDueDate", next == null ? JSONObject.NULL : next).put("settled", false);
             actions.put(action);
-            if (!prefs(c).edit().putString("actions", actions.toString()).commit()) return false;
+            if (!prefs(c).edit().putString("actions", actions.toString()).commit()) { prefs(c).edit().putString("actions", original).commit(); return false; }
             WidgetReminderBridge.cancel(c, id, due);
             return true;
         } catch (Exception e) { return false; }
@@ -87,12 +94,16 @@ final class WidgetRepository {
     }
     static synchronized void acknowledge(Context c, String source, JSONArray keys, JSONArray tasks) {
         if (!source(c).equals(source)) return;
+        String originalActions = prefs(c).getString("actions", "[]"), originalTasks = prefs(c).getString(WidgetDataPlugin.TASKS_KEY, "[]");
         JSONArray actions = array(c, "actions");
         for (int i = 0; i < actions.length(); i++) {
             JSONObject action = actions.optJSONObject(i); if (action == null || !source.equals(action.optString("source"))) continue;
             for (int j = 0; j < keys.length(); j++) if (keys.optString(j).equals(action.optString("key"))) try { action.put("settled", true); } catch (Exception ignored) { }
         }
-        prefs(c).edit().putString("actions", actions.toString()).putString(WidgetDataPlugin.TASKS_KEY, tasks.toString()).commit();
+        if (!prefs(c).edit().putString("actions", actions.toString()).putString(WidgetDataPlugin.TASKS_KEY, tasks.toString()).commit()) {
+            prefs(c).edit().putString("actions", originalActions).putString(WidgetDataPlugin.TASKS_KEY, originalTasks).commit();
+            throw new IllegalStateException("La acción sigue pendiente de confirmar");
+        }
     }
     static int pendingCount(Context c) {
         int count = 0; JSONArray actions = actions(c, source(c));
