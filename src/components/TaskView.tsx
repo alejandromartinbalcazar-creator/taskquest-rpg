@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
 import { openExactReminderSettings, requestTaskReminderPermission, type ReminderSyncStatus } from '../services/taskReminders';
 import { reminderDateForTask } from '../services/reminderPlan';
+import { ReminderOverlaySettings } from './ReminderOverlaySettings';
 import {
   CheckCircle2,
   Clock,
@@ -304,6 +305,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         </p>
       )}
       {reminderStatus.error && <p role="status" className="retro-box-danger p-2 text-sm text-rose-100">{reminderStatus.error}</p>}
+      <ReminderOverlaySettings />
       {reminderStatus.permission === 'granted' && !reminderStatus.exact && tasks.some((task) => !task.completed && task.reminderType && task.reminderType !== 'none') && (
         <div className="retro-box-stone p-2 text-sm text-amber-200">
           Android puede retrasar los avisos. Activa «Alarmas y recordatorios» para mayor precisión.

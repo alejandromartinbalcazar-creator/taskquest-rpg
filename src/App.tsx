@@ -16,7 +16,9 @@ import { checkAndUnlockMilestones } from './data/heroMilestones';
 import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
 import { syncTaskReminderNotifications, type ReminderSyncStatus } from './services/taskReminders';
-import { taskIdFromReminderExtra } from './services/reminderPlan';
+import { taskIdFromReminderExtra, reminderOccurrenceTask } from './services/reminderPlan';
+import { pendingOverlayActions, acknowledgeOverlayActions, type OverlayAction } from './services/reminderOverlay';
+import { MissionReminderSheet } from './components/MissionReminderSheet';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { getNextTaskDueDate } from './services/taskRecurrence';
@@ -37,6 +39,9 @@ export function App() {
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderSyncStatus>({ permission: 'unsupported', exact: false, scheduledTaskIds: [] });
   const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
+  const [reminderPrompts, setReminderPrompts] = useState<{ taskId: string; dueDate: string }[]>([]);
+  const [nativeOverlayActions, setNativeOverlayActions] = useState<OverlayAction[]>([]);
+  const completedReminderOccurrences = useRef(new Set<string>());
   const refreshAlarmsOnLaunch = useRef(true);
 
   // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
@@ -124,9 +129,34 @@ export function App() {
       const taskId = taskIdFromReminderExtra(notification.extra);
       if (!taskId) return;
       setCurrentTab('tasks');
-      setReminderTaskId(taskId);
+      const dueDate = (notification.extra as { dueDate?: unknown })?.dueDate;
+      if (typeof dueDate === 'string') {
+        setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
+      } else setReminderTaskId(taskId);
     });
     return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = LocalNotifications.addListener('localNotificationReceived', (notification) => {
+      const taskId = taskIdFromReminderExtra(notification.extra);
+      const extra = notification.extra as { dueDate?: unknown } | undefined;
+      if (taskId && typeof extra?.dueDate === 'string' && document.visibilityState === 'visible') {
+        const dueDate = extra.dueDate;
+        setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
+      }
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    const read = () => { void pendingOverlayActions().then((actions) => { if (active) setNativeOverlayActions(actions); }).catch(console.warn); };
+    read();
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => { if (isActive) read(); });
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
   }, []);
 
   useEffect(() => {
@@ -218,6 +248,9 @@ export function App() {
   const handleCompleteTask = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.completed) return;
+    const occurrence = JSON.stringify([task.id, task.dueDate]);
+    if (completedReminderOccurrences.current.has(occurrence)) return;
+    completedReminderOccurrences.current.add(occurrence);
 
     sound.playTaskComplete();
     confetti({ particleCount: 50, spread: 60 });
@@ -312,6 +345,23 @@ export function App() {
       })
     );
   };
+
+  useEffect(() => {
+    if (['checking', 'syncing', 'needs_choice'].includes(cloudSync.status)) return;
+    // Persisted native commands are acknowledged only after React has saved the
+    // completed occurrence (or it is already stale). A crash can safely retry.
+    const first = nativeOverlayActions[0];
+    if (!first) return;
+    const task = reminderOccurrenceTask(tasks, first);
+    if (task) {
+      setCurrentTab('tasks');
+      handleCompleteTask(task.id);
+    } else {
+      void acknowledgeOverlayActions([first.key]).then(() => {
+        setNativeOverlayActions((previous) => previous.filter((action) => action.key !== first.key));
+      }).catch(console.warn);
+    }
+  }, [nativeOverlayActions, tasks, cloudSync.status]);
 
   // Añadir Tarea (Limpio, con recurrencia)
   const handleAddTask = (newTaskData: Omit<Task, 'id' | 'completed'>) => {
@@ -530,6 +580,15 @@ export function App() {
         onSelectTab={setCurrentTab}
         pendingTasksCount={pendingTasksCount}
       />
+
+      {reminderPrompts.length > 0 && (() => {
+        const task = reminderPrompts.map((prompt) => reminderOccurrenceTask(tasks, prompt)).find(Boolean);
+        if (!task) return null;
+        const dismiss = () => setReminderPrompts((previous) => previous.filter((prompt) => prompt.taskId !== task.id || prompt.dueDate !== task.dueDate));
+        return (
+          <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} />
+        );
+      })()}
 
       {/* Modal para Obtener APK y Modo PWA para Android */}
       <ApkExportModal

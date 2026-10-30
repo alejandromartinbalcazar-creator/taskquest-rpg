@@ -24,7 +24,7 @@ const task = (id = 'mission-1') => ({ id, title: 'Estudiar', description: 'Repas
   statAffinity: 'knowledge', difficulty: 'media', expReward: 10, goldReward: 2 });
 
 function harness() {
-  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [] };
+  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [] };
   const plugin = {
     checkPermissions: async () => ({ display: state.permission }),
     requestPermissions: async () => ({ display: state.permission }),
@@ -51,6 +51,7 @@ function harness() {
     '@capacitor/core': { Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } },
     '@capacitor/local-notifications': { LocalNotifications: plugin },
     './reminderPlan': plan,
+    './reminderOverlay': { syncReminderOverlays: async (items) => { state.overlays = items; } },
   });
   return { state, api };
 }
@@ -75,6 +76,10 @@ test('create and edit replace just the mission alarm with complete action data',
   assert.equal(notice.schedule.at.toISOString(), future);
   assert.equal(notice.schedule.allowWhileIdle, true);
   assert.equal(plan.taskIdFromReminderExtra(notice.extra), original.id);
+  assert.equal(notice.extra.dueDate, original.dueDate);
+  assert.equal(state.overlays.length, 1);
+  assert.equal(state.overlays[0].at, new Date(future).getTime());
+  assert.equal(state.overlays[0].dueDate, original.dueDate);
   assert.equal(plan.taskIdFromReminderExtra({ source: 'other', taskId: original.id }), null);
   await api.syncTaskReminderNotifications([original]);
   assert.equal(state.scheduleCalls.length, 1);
@@ -98,6 +103,17 @@ test('complete or delete removes only that task, including delivered notices', a
   assert.equal(state.pending[0].extra.taskId, 'b');
   await api.syncTaskReminderNotifications([]);
   assert.equal(state.pending.length, 0);
+  assert.deepEqual(state.overlays, []);
+});
+
+test('an old reminder cannot complete a later recurring occurrence, a deleted or a finished mission', () => {
+  const current = task();
+  const action = { taskId: current.id, dueDate: current.dueDate };
+  assert.equal(plan.reminderOccurrenceTask([current], action), current);
+  assert.equal(plan.reminderOccurrenceTask([{ ...current, dueDate: '2027-01-01T12:00:00Z' }], action), undefined);
+  assert.equal(plan.reminderOccurrenceTask([{ ...current, completed: true }], action), undefined);
+  assert.equal(plan.reminderOccurrenceTask([{ ...current, isFailed: true }], action), undefined);
+  assert.equal(plan.reminderOccurrenceTask([], action), undefined);
 });
 
 test('denied exact permission schedules an approximate alarm and upgrades after permission changes', async () => {

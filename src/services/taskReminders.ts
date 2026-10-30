@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import type { Task } from '../types';
+import { syncReminderOverlays, type OverlayReminder } from './reminderOverlay';
 import { MAX_PENDING_REMINDERS, REMINDER_TAG, notificationIdForTask, reminderDateForTask, taskReminderSignature } from './reminderPlan';
 
 export type ReminderPermission = 'granted' | 'denied' | 'unsupported';
@@ -95,7 +96,7 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
         isExactNotification: exact,
         ongoing: task.reminderType === 'constant',
         autoCancel: task.reminderType !== 'constant',
-        extra: { source: REMINDER_TAG, taskId: task.id, signature },
+        extra: { source: REMINDER_TAG, taskId: task.id, dueDate: task.dueDate, signature },
       });
       scheduledTaskIds.push(task.id);
     }
@@ -105,6 +106,21 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     if (cancelIds.length) await LocalNotifications.cancel({ notifications: cancelIds });
     if (removeIds.length) await LocalNotifications.removeDeliveredNotificationsById({ ids: removeIds });
     if (desired.length) await LocalNotifications.schedule({ notifications: desired });
+    // Mirror only alarms that were actually scheduled. Native overlays have their
+    // own explicit opt-in; failure must not disable the ordinary notification.
+    try {
+      const scheduled = (await LocalNotifications.getAll({ state: 'SCHEDULED' })).notifications;
+      const overlays: OverlayReminder[] = [];
+      for (const notice of scheduled.filter(isTaskReminder)) {
+        const extra = notice.extra as { taskId?: string; dueDate?: string; signature?: string };
+        const at = notice.schedule?.at ? new Date(notice.schedule.at).getTime() : NaN;
+        if (permission === 'granted' && extra.taskId && extra.dueDate && extra.signature && at > Date.now()) {
+          overlays.push({ id: notice.id, taskId: extra.taskId, dueDate: extra.dueDate, signature: extra.signature,
+            title: notice.title, body: notice.body, at });
+        }
+      }
+      await syncReminderOverlays(overlays);
+    } catch (error) { console.warn('No se pudieron sincronizar los avisos superpuestos:', error); }
     return { permission, exact, scheduledTaskIds };
   });
   syncQueue = result.then(() => undefined, () => undefined);
