@@ -1,6 +1,6 @@
 # Recordatorios visibles sin abrir FocusMission
 
-Estado: alcance aprobado por el usuario con personalización de sonido y vibración. Implementación y pruebas pendientes.
+Estado: alcance aprobado; implementación y compilación realizadas. Aceptación física pendiente en Redmi.
 
 ## Necesidad
 El recordatorio debe llamar la atención en el momento programado aunque el usuario esté en la pantalla de inicio del teléfono, usando otra aplicación o con el teléfono bloqueado. Abrir FocusMission no puede ser el requisito para que el aviso se vea.
@@ -47,3 +47,12 @@ El usuario respondió «Sí» al alcance y pidió que sonido y vibración fueran
 - [Android: avisos urgentes y comportamiento en pantalla bloqueada](https://developer.android.com/develop/ui/compose/notifications/create-notification).
 - [Android 14: autorización de avisos a pantalla completa](https://developer.android.com/about/versions/14/behavior-changes-14).
 - [Android: ventanas de superposición](https://developer.android.com/reference/android/view/WindowManager.LayoutParams).
+
+## Resultado de implementación y evidencia
+Implementados ajustes locales de sonido, vibración y duración (15/30/60 segundos), controles de permisos separados, prueba externa a 10 segundos y diagnóstico local. El modo de alarma tiene un solo planificador nativo; se cancelan los avisos duplicados de Capacitor al activarlo. El bloqueo y la pantalla apagada solicitan una actividad nativa de alarma; ya no se descartan expresamente como en 002.
+
+Compilación web y 34 pruebas Node correctas. Compilación Android y tarea de pruebas unitarias nativas correctas en [Actions 40995806350](https://github.com/alejandromartinbalcazar-creator/taskquest-rpg/actions/runs/40995806350), commit `7778b2b`. Estas pruebas verifican lógica y compilación, no la entrega visual en un dispositivo. No se ha realizado la prueba en Redmi ni se ha confirmado el cumplimiento de los cuatro casos externos.
+
+Los ajustes ordinarios usan un conjunto acotado de canales de Android (con/sin sonido y con/sin vibración). Los cambios que el usuario haga directamente en Android prevalecen sobre los valores iniciales de esos canales. La señal nativa respeta silencio y No molestar; en Android 8 el tono puede sonar una sola vez porque la repetición de Ringtone requiere Android 9+. La señal se detiene al cerrar/completar o al alcanzar su duración. El panel interno puede permanecer disponible hasta que se responda.
+
+Si la pantalla completa no está autorizada, se solicita el aviso urgente disponible y la configuración indica que falta permiso. Esto no satisface por sí mismo el criterio de pantalla de alarma en bloqueo. La función permanece pendiente de aceptación física aunque el APK esté disponible.

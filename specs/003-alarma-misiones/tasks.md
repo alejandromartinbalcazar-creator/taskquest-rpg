@@ -5,6 +5,6 @@
 - [x] Implementar planificador nativo independiente, con cancelación del plan de Capacitor al migrar al modo de alarma.
 - [x] Implementar pantalla nativa de alarma en bloqueo/pantalla apagada y señal configurable; no aceptada aún en dispositivo.
 - [x] Implementar prueba externa a 10 segundos, diagnóstico y acciones con validación de ocurrencia.
-- [ ] Compilación web y pruebas automáticas.
-- [ ] Compilación APK.
+- [x] `npm run build`: correcto. `node --test tests/*.test.mjs`: 34 pruebas correctas, incluyendo migración de planificador, canales de preferencias, cancelación y fallos de entrega.
+- [x] Compilación APK y tarea `testDebugUnitTest` correctas en [GitHub Actions 40995806350](https://github.com/alejandromartinbalcazar-creator/taskquest-rpg/actions/runs/40995806350), commit `7778b2b`. Se añadieron 6 pruebas JUnit de selección de superficie y duración. Artefacto `FocusMission-APK` disponible.
 - [ ] Validación física: inicio, otra app, bloqueo y pantalla apagada en Redmi. Pendiente del dispositivo; no declarar satisfecha por una compilación.
