@@ -137,6 +137,8 @@ export interface Player {
   graceShieldCharges?: number;
   highPriorityTasksCompleted?: number;
   lastCompletedDate?: string;
+  /** Recent durable widget commands already applied to this save. */
+  processedWidgetActions?: string[];
   tutorialCompleted?: boolean;
 }
 

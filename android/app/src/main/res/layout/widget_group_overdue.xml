@@ -1,0 +1,5 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical">
+  <TextView android:id="@+id/widget_overdue_header" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="22dp" android:gravity="center_vertical" android:textSize="12sp" android:textStyle="bold" />
+  <ListView android:id="@+id/widget_overdue_list" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:divider="@null" android:scrollbars="vertical" />
+  <TextView android:id="@+id/widget_overdue_more" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="24dp" android:gravity="center_vertical" android:textSize="12sp" />
+</LinearLayout>

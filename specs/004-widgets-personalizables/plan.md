@@ -1,0 +1,14 @@
+# Plan de implementación
+
+1. Configuración nativa por `appWidgetId`, con migración de las tres apariencias existentes, dos presets, límites, orden, densidad, tema y preview con datos locales. Actividad reconfigurable accesible desde el launcher y «⋮». Tamaño objetivo inicial 4×3, mínimo orientativo 4×2 y sin máximos arbitrarios.
+2. Separar selección temporal, reparto de filas y recurrencia en reglas comprobables. Dos paneles de igual peso para Hoy/Vencidas; Mañana compacto. En tamaños pequeños usar resúmenes equilibrados y colección compartida; Lista compacta desplaza todas las pendientes. Colecciones con intenciones explícitas y mutables solo donde Android necesita completar la identidad de la fila.
+3. Guardar copia nativa ampliada con los datos de recurrencia existentes, identidad de origen y cola durable por ocurrencia. Checkbox proyecta la siguiente recurrencia sin abrir la app, cancela la alarma anterior y actualiza todas las instancias. Proteger acciones obsoletas y repeticiones. No eliminar archivos o recursos del usuario.
+4. Reutilizar las reglas actuales de recompensas en un servicio de completado compartido. Reconciliar después de que se conozca el perfil y termine la carga de nube; persistir jugador/tareas/recibo mediante diario local recuperable antes de confirmar el comando nativo. Conservar comandos por origen para poder reconciliar una restauración de nube anterior sin mezclar cuentas.
+5. Actualizar widgets por eventos, cambio de fecha/zona y actualización periódica permitida. No consultar Supabase desde cada renderizado. Mostrar acciones pendientes de reconciliar, sin afirmar sincronización remota.
+6. Pruebas Node de recompensas/recibos/recurrencia; pruebas JVM de fechas, distribución y configuración; build web y APK con pruebas nativas. Validación de launcher, checkbox, scroll, configuración, tamaños y accesibilidad en Redmi queda pendiente si no hay acceso al dispositivo.
+
+Riesgos: Android controla el menú y las celdas; `java.time` requiere desugaring para Android 7; el widget no ejecuta el WebView en segundo plano; el guardado previo utiliza claves separadas. Se introduce un diario recuperable y un recibo por acción para impedir repetición de premios en la reconciliación. Los estilos visuales requieren prueba física, no solo compilación.
+
+Dependencia añadida: biblioteca gratuita de Google `desugar_jdk_libs:2.0.3`, para mantener `java.time` en Android 7 sin elevar la versión mínima de toda la app. No añade servicio externo ni coste de uso.
+
+La cola nativa conserva acciones por identidad de perfil. Las confirmadas se archivan localmente para reconciliar restauraciones de nube anteriores; el guardado del jugador conserva hasta 512 recibos recientes. El widget aplica solo acciones aún pendientes a su copia; la app reutiliza el mismo completado que Misiones, con fecha y siguiente ocurrencia capturadas en el teléfono.

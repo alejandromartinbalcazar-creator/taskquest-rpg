@@ -12,7 +12,6 @@ import { ApkExportModal } from './components/ApkExportModal';
 import { DelevelModal } from './components/DelevelModal';
 import { ChangelogModal } from './components/ChangelogModal';
 import { HeroProgressModal } from './components/HeroProgressModal';
-import { checkAndUnlockMilestones } from './data/heroMilestones';
 import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
 import { syncTaskReminderNotifications, type ReminderSyncStatus } from './services/taskReminders';
@@ -21,9 +20,10 @@ import { pendingOverlayActions, acknowledgeOverlayActions, listenForReminderAlar
 import { MissionReminderSheet } from './components/MissionReminderSheet';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
-import { getNextTaskDueDate } from './services/taskRecurrence';
 import { App as CapacitorApp } from '@capacitor/app';
 import confetti from 'canvas-confetti';
+import { completeTaskState } from './services/taskCompletion';
+import { syncTasksToAndroidWidget, acknowledgeWidgetActions, actionableWidgetCommands, widgetSectionForTask, type WidgetCommand } from './services/androidWidget';
 
 export function App() {
   const [player, setPlayer] = useState<Player>(() => StorageService.getPlayer());
@@ -44,6 +44,12 @@ export function App() {
   const completedReminderOccurrences = useRef(new Set<string>());
   const refreshAlarmsOnLaunch = useRef(true);
   const [reminderSettingsVersion, setReminderSettingsVersion] = useState(0);
+  const [widgetFilter, setWidgetFilter] = useState<string | null>(null);
+  const [widgetActions, setWidgetActions] = useState<WidgetCommand[]>([]);
+  const [widgetRefresh, setWidgetRefresh] = useState(0);
+  const [widgetReconciling, setWidgetReconciling] = useState(Capacitor.getPlatform() === 'android');
+  const [widgetError, setWidgetError] = useState('');
+  const widgetProcessing = useRef(false);
 
   // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
   useEffect(() => {
@@ -60,13 +66,14 @@ export function App() {
     const handleWidgetUrl = (url: string) => {
       if (!url.startsWith('com.taskquest.rpg://widget')) return;
       setCurrentTab('tasks');
+      setWidgetFilter(null);
       const params = new URL(url).searchParams;
+      if (params.get('action') === 'section' && ['today', 'overdue', 'tomorrow'].includes(params.get('section') || '')) setWidgetFilter(params.get('section'));
       if (params.get('action') === 'add-task') {
         window.setTimeout(() => window.dispatchEvent(new Event('focusmission:new-task')), 100);
       }
       if (params.get('action') === 'edit-task' && params.get('taskId')) {
-        const taskId = params.get('taskId')!;
-        window.setTimeout(() => window.dispatchEvent(new CustomEvent('focusmission:edit-task', { detail: { taskId } })), 100);
+        setReminderTaskId(params.get('taskId')!);
       }
     };
     void CapacitorApp.getLaunchUrl().then((launch) => launch?.url && handleWidgetUrl(launch.url));
@@ -91,6 +98,25 @@ export function App() {
     snapshot: localSnapshot,
     onApplyCloudSave: applyCloudSnapshot,
   });
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android' || !cloudSync.widgetSourceReady) return;
+    let active = true;
+    const source = cloudSync.userId || 'device';
+    void syncTasksToAndroidWidget(tasks, source).then((commands) => {
+      if (!active) return;
+      const actions = actionableWidgetCommands(commands, player, tasks, source);
+      setWidgetActions((previous) => JSON.stringify(previous) === JSON.stringify(actions) ? previous : actions);
+      setWidgetReconciling(actions.length > 0); setWidgetError('');
+    }).catch(() => { if (active) { setWidgetError('El widget conserva sus cambios pendientes. Vuelve a abrir la app para intentar sincronizarlos.'); setWidgetReconciling(false); } });
+    return () => { active = false; };
+  }, [tasks, player.processedWidgetActions, cloudSync.userId, cloudSync.widgetSourceReady, widgetRefresh]);
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => { if (isActive) { setWidgetReconciling(true); setWidgetRefresh((version) => version + 1); } });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
 
   // Auto-cerrar alertas emergentes
   useEffect(() => {
@@ -204,10 +230,11 @@ export function App() {
   }, [player, tasks]);
 
   useEffect(() => {
+    if (widgetReconciling || !cloudSync.widgetSourceReady) return;
     checkTaskPenalties();
     const interval = setInterval(checkTaskPenalties, 15000); // Chequeo cada 15 segundos
     return () => clearInterval(interval);
-  }, [checkTaskPenalties]);
+  }, [checkTaskPenalties, widgetReconciling, cloudSync.widgetSourceReady]);
 
   // Manejador de Ganancia de EXP y Level Up
   const grantExp = (amount: number, goldAmount: number = 0) => {
@@ -261,110 +288,47 @@ export function App() {
 
   // Completar Tarea
   const handleCompleteTask = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.completed) return;
+    const task = tasks.find((item) => item.id === taskId && !item.completed);
+    if (!task) return;
     const occurrence = JSON.stringify([task.id, task.dueDate]);
     if (completedReminderOccurrences.current.has(occurrence)) return;
+    const result = completeTaskState(player, tasks, taskId);
+    if (!result) return;
+    try { StorageService.saveCompletion(result.player, result.tasks); }
+    catch { setWidgetError('No se pudo guardar el completado. Inténtalo otra vez.'); return; }
     completedReminderOccurrences.current.add(occurrence);
-    // Match the mission card's existing completion rule for overdue honor debts.
-    if (task.isHonorDebt) { handleRedeemHonorDebt(taskId); return; }
-
-    sound.playTaskComplete();
-    confetti({ particleCount: 50, spread: 60 });
-
-    // Actualizar racha y contadores de progreso
-    const todayStr = new Date().toISOString().slice(0, 10);
-    let streak = player.cleanStreakDays || 1;
-    if (!player.lastCompletedDate) {
-      streak = 1;
-    } else {
-      const lastDateStr = player.lastCompletedDate.slice(0, 10);
-      if (lastDateStr !== todayStr) {
-        const diffDays = Math.round(
-          (new Date(todayStr).getTime() - new Date(lastDateStr).getTime()) / (24 * 3600 * 1000)
-        );
-        if (diffDays === 1) {
-          streak += 1;
-        } else if (diffDays > 1) {
-          streak = 1;
-        }
-      }
-    }
-
-    const isHighPriority = task.difficulty === 'dificil' || task.difficulty === 'epica';
-    const nextTotalTasks = (player.totalTasksCompleted || 0) + 1;
-    const nextHighPriorityTasks = (player.highPriorityTasksCompleted || 0) + (isHighPriority ? 1 : 0);
-
-    // Evaluar Hitos del Héroe
-    const milestoneEval = checkAndUnlockMilestones({
-      ...player,
-      cleanStreakDays: streak,
-      totalTasksCompleted: nextTotalTasks,
-      highPriorityTasksCompleted: nextHighPriorityTasks,
-      lastCompletedDate: new Date().toISOString(),
-    });
-
-    if (milestoneEval.newlyUnlocked.length > 0) {
-      sound.playMilestoneUnlock();
-      confetti({
-        particleCount: 80,
-        spread: 100,
-        origin: { y: 0.4 },
-      });
-      setMilestoneToast(milestoneEval.newlyUnlocked[0]);
-    }
-
-    // Actualizar jugador con hitos y progreso
-    setPlayer((prev) => {
-      const stats = { ...prev.stats };
-      const chosen = task.statAffinity;
-
-      (['attack', 'speed', 'defense', 'knowledge'] as StatType[]).forEach((s) => {
-        if (s === chosen) {
-          stats[s] = (stats[s] || 10) + 3;
-        } else {
-          stats[s] = (stats[s] || 10) + 1;
-        }
-      });
-
-      // Bono de Conocimiento -> Skill Points
-      const extraSP = chosen === 'knowledge' && stats.knowledge % 5 === 0 ? 1 : 0;
-      // Bono de Resistencia -> Max HP
-      const extraMaxHp = chosen === 'defense' ? 2 : 0;
-
-      return {
-        ...milestoneEval.updatedPlayer,
-        dungeonKeys: prev.dungeonKeys + 1,
-        skillPoints: milestoneEval.updatedPlayer.skillPoints + extraSP,
-        maxHp: milestoneEval.updatedPlayer.maxHp + extraMaxHp,
-        currentHp: Math.min(milestoneEval.updatedPlayer.maxHp + extraMaxHp, milestoneEval.updatedPlayer.currentHp + 10),
-        stats,
-      };
-    });
-
-    // Otorgar EXP y Oro
-    grantExp(task.expReward, task.goldReward);
-
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === taskId) {
-          const nextDueDate = getNextTaskDueDate(t);
-          if (nextDueDate) {
-            // A one-off alarm belongs to the occurrence just completed; relative
-            // due-date reminders continue to follow the recurring mission.
-            return { ...t, completed: false, dueDate: nextDueDate, penalizedCount: 0,
-              reminderType: t.reminderType === 'absolute' ? 'none' : t.reminderType,
-              reminderAt: t.reminderType === 'absolute' ? undefined : t.reminderAt };
-          }
-          return { ...t, completed: true, completedAt: new Date().toISOString() };
-        }
-        return t;
-      })
-    );
+    setPlayer(result.player); setTasks(result.tasks);
+    sound.playTaskComplete(); confetti({ particleCount: 50, spread: 60 });
+    if (result.milestones.length) { sound.playMilestoneUnlock(); setMilestoneToast(result.milestones[0]); }
+    if (result.levelUp) { sound.playLevelUp(); setLevelUpToast({ level: result.player.level, hpGain: 15, dmgGain: 4 }); }
   };
 
   useEffect(() => {
-    if (['checking', 'syncing', 'needs_choice'].includes(cloudSync.status)) return;
+    if (!cloudSync.widgetSourceReady || widgetProcessing.current || widgetActions.length === 0) return;
+    const action = widgetActions[0], source = cloudSync.userId || 'device';
+    if (action.source !== source) { setWidgetActions([]); return; }
+    widgetProcessing.current = true;
+    const result = completeTaskState(player, tasks, action.taskId, { action });
+    const nextTasks = result?.tasks || tasks;
+    let confirmed = false;
+    try {
+      if (result) {
+        StorageService.saveCompletion(result.player, result.tasks);
+        setPlayer(result.player); setTasks(result.tasks);
+      }
+      void acknowledgeWidgetActions([action.key], nextTasks, source).then(() => {
+        confirmed = true;
+        setWidgetActions((previous) => previous.filter((item) => item.key !== action.key));
+        setWidgetError('');
+      }).catch(() => setWidgetError('La misión está guardada. Queda pendiente confirmar el widget.'))
+        .finally(() => { widgetProcessing.current = false; if (confirmed) setWidgetRefresh((value) => value + 1); });
+    } catch {
+      widgetProcessing.current = false;
+      setWidgetError('No se pudieron guardar los cambios del widget. Sus acciones siguen pendientes.');
+    }
+  }, [widgetActions, tasks, player, cloudSync.userId, cloudSync.widgetSourceReady, widgetRefresh]);
+  useEffect(() => {
+    if (widgetReconciling || ['checking', 'syncing', 'needs_choice'].includes(cloudSync.status)) return;
     // Persisted native commands are acknowledged only after React has saved the
     // completed occurrence (or it is already stale). A crash can safely retry.
     const first = nativeOverlayActions[0];
@@ -378,7 +342,7 @@ export function App() {
         setNativeOverlayActions((previous) => previous.filter((action) => action.key !== first.key));
       }).catch(console.warn);
     }
-  }, [nativeOverlayActions, tasks, cloudSync.status]);
+  }, [nativeOverlayActions, tasks, cloudSync.status, widgetReconciling]);
 
   // Añadir Tarea (Limpio, con recurrencia)
   const handleAddTask = (newTaskData: Omit<Task, 'id' | 'completed'>) => {
@@ -551,9 +515,14 @@ export function App() {
 
       {/* Vistas Principales */}
       <main className="pb-24">
+        {widgetError && <p role="status" className="mx-auto max-w-xl px-4 py-2 text-sm text-amber-200">{widgetError}</p>}
+        {currentTab === 'tasks' && widgetFilter && <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2 text-sm text-violet-200">
+          <span>{widgetFilter === 'today' ? 'Hoy' : widgetFilter === 'overdue' ? 'Vencidas' : 'Mañana'}</span>
+          <button type="button" className="underline" onClick={() => setWidgetFilter(null)}>Ver todas las misiones</button>
+        </div>}
         {currentTab === 'tasks' && (
           <TaskView
-            tasks={tasks}
+            tasks={widgetFilter ? tasks.filter((task) => !task.completed && widgetSectionForTask(task) === widgetFilter) : tasks}
             reminderStatus={reminderStatus}
             externalTaskId={reminderTaskId}
             onExternalTaskHandled={() => setReminderTaskId(null)}
