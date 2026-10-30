@@ -251,6 +251,8 @@ export function App() {
     const occurrence = JSON.stringify([task.id, task.dueDate]);
     if (completedReminderOccurrences.current.has(occurrence)) return;
     completedReminderOccurrences.current.add(occurrence);
+    // Match the mission card's existing completion rule for overdue honor debts.
+    if (task.isHonorDebt) { handleRedeemHonorDebt(taskId); return; }
 
     sound.playTaskComplete();
     confetti({ particleCount: 50, spread: 60 });

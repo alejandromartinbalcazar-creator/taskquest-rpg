@@ -112,7 +112,8 @@ test('an old reminder cannot complete a later recurring occurrence, a deleted or
   assert.equal(plan.reminderOccurrenceTask([current], action), current);
   assert.equal(plan.reminderOccurrenceTask([{ ...current, dueDate: '2027-01-01T12:00:00Z' }], action), undefined);
   assert.equal(plan.reminderOccurrenceTask([{ ...current, completed: true }], action), undefined);
-  assert.equal(plan.reminderOccurrenceTask([{ ...current, isFailed: true }], action), undefined);
+  const overdue = { ...current, isFailed: true, isHonorDebt: true };
+  assert.equal(plan.reminderOccurrenceTask([overdue], action), overdue);
   assert.equal(plan.reminderOccurrenceTask([], action), undefined);
 });
 

@@ -4,7 +4,7 @@ export const REMINDER_TAG = 'focusmission-task-reminder';
 export const MAX_PENDING_REMINDERS = 450;
 
 export function reminderOccurrenceTask(tasks: Task[], action: { taskId: string; dueDate: string }): Task | undefined {
-  return tasks.find((task) => task.id === action.taskId && task.dueDate === action.dueDate && !task.completed && !task.isFailed);
+  return tasks.find((task) => task.id === action.taskId && task.dueDate === action.dueDate && !task.completed);
 }
 
 export function taskIdFromReminderExtra(extra: unknown): string | null {
