@@ -1,6 +1,6 @@
 # Widgets personalizables de misiones
 
-- Estado: aprobado por el usuario el 30 de octubre de 2026 («sí implementemoslo»). En implementación; aceptación física pendiente.
+- Estado: aprobado por el usuario el 30 de octubre de 2026 («sí implementemoslo»). Implementado y compilado; aceptación física pendiente.
 - Referencias: requerimiento funcional aportado por el usuario e imagen de TickTick con lista oscura, casillas a la izquierda y fechas a la derecha.
 - Plataforma de la primera entrega: Android. Dispositivo de aceptación: Redmi Note 14 Pro.
 - Alcance de la aprobación solicitada: primera entrega descrita abajo. Las etapas posteriores son una hoja de ruta, no funciones comprometidas en este incremento.
@@ -153,7 +153,7 @@ El usuario aprobó esta versión revisada. Se implementa ese alcance sin añadir
 
 Implementación realizada: dos presets, editor nativo por instancia, vista previa local, tres apariencias, configuración de tema/densidad, acciones rápidas, cola de completados por origen, recurrencia nativa y reconciliación con el completado compartido. Las casillas de aceptación física permanecen pendientes.
 
-En tamaños muy reducidos, el resumen de Hoy/Vencidas y el contador de Mañana sustituyen las filas si no cabe una zona táctil legible; al ampliar aparecen las filas. Las celdas concretas, el menú y el redimensionado necesitan comprobarse en el launcher del Redmi. La primera compilación nativa pasó en Actions `41009143554` (commit `e5b9c95`); las revisiones posteriores deben tener su propia compilación.
+En tamaños muy reducidos, el resumen de Hoy/Vencidas y el contador de Mañana sustituyen las filas si no cabe una zona táctil legible; al ampliar aparecen las filas. Las celdas concretas, el menú y el redimensionado necesitan comprobarse en el launcher del Redmi. La compilación final de código y las pruebas JVM pasaron en [Actions 41009855672](https://github.com/alejandromartinbalcazar-creator/taskquest-rpg/actions/runs/41009855672), commit `3cb39b4`. Artefacto `FocusMission-APK` disponible.
 
 Se ejecutaron `npm run build` y 41 pruebas Node correctamente. Las pruebas cubren igualdad de recompensas app/widget, repetición de comandos, ocurrencias viejas, restauración del diario tras escritura interrumpida, aislamiento por origen y nueve casos de recurrencia compartidos con las pruebas JVM (incluidos DST, fin de mes y año bisiesto).
 
