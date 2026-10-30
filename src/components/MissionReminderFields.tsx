@@ -36,7 +36,8 @@ export function MissionReminderFields({ value, dueDate, onChange }: { value: Rem
   const selected = legacy ? 'legacy' : kind === 'absolute' ? 'custom' : kind;
   const summary = kind === 'none' ? 'Sin avisos.' : hasRepeatingReminder(previewTask) && !stopped
     ? `Cada ${repeatIntervalMinutes(previewTask)} min, hasta completar o detener.`
-    : rows.length > 1 ? 'Antes del límite y al vencer.' : rows.length ? `Te avisaremos: ${timeLabel(rows[0].at)}.` : 'Sin avisos futuros.';
+    : rows.length > 1 ? (kind === 'absolute' && Date.parse(value.reminderAt || '') > due ? 'Aviso personalizado y hora límite.' : 'Antes del límite y al vencer.')
+    : rows.length ? `Te avisaremos: ${timeLabel(rows[0].at)}` : 'Sin avisos futuros.';
   const localValue = value.reminderAt && Number.isFinite(Date.parse(value.reminderAt))
     ? new Date(Date.parse(value.reminderAt) - new Date(value.reminderAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
   return <section className="space-y-2 rounded-xl border border-slate-600 bg-slate-950/40 p-3">
@@ -68,7 +69,7 @@ export function MissionReminderFields({ value, dueDate, onChange }: { value: Rem
     </div>}
     <p aria-live="polite" className="text-sm text-violet-200">{summary}</p>
     {kind !== 'none' && <details className="text-sm text-stone-300"><summary className="cursor-pointer py-1 text-violet-200">Ver horarios</summary>
-      <ul className="space-y-1 py-2">{rows.map((row) => <li key={row.kind}>{timeLabel(row.at)} · {row.kind === 'due' ? 'Hora límite' : row.kind === 'repeat' ? 'Próximo aviso; continuará repitiéndose' : 'Aviso anticipado'}</li>)}</ul>
+      <ul className="space-y-1 py-2">{rows.map((row) => <li key={row.kind}>{timeLabel(row.at)} · {row.kind === 'due' ? 'Hora límite' : row.kind === 'repeat' ? 'Próximo aviso; continuará repitiéndose' : kind === 'absolute' ? 'Aviso personalizado' : 'Aviso anticipado'}</li>)}</ul>
       {due <= now && <p>La fecha límite ya pasó.{!hasRepeatingReminder(previewTask) || stopped ? ' Reprograma la misión para recibir un nuevo aviso.' : ' Los avisos constantes continúan.'}</p>}
       {rows.length === 1 && rows[0].kind === 'due' && kind !== 'at_due' && kind !== 'constant' && <p>El aviso anticipado ya pasó; se conserva el de la hora límite.</p>}
       {legacy && <p>Esta configuración anterior no repite avisos. Elige Constante para activar intervalos.</p>}
