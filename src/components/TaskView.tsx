@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Task, TaskDifficulty, TaskRecurrence, ReminderType, StatType } from '../types';
+import { Task, TaskDifficulty, TaskRecurrence, StatType } from '../types';
 import { openExactReminderSettings, requestTaskReminderPermission, type ReminderSyncStatus } from '../services/taskReminders';
-import { reminderDateForTask } from '../services/reminderPlan';
+import { hasRepeatingReminder, reminderEventsForTask, repeatIsStopped, repeatIntervalMinutes } from '../services/reminderPlan';
+import { MissionReminderFields, type ReminderSettings } from './MissionReminderFields';
 import { ReminderOverlaySettings } from './ReminderOverlaySettings';
 import {
   CheckCircle2,
@@ -12,7 +13,6 @@ import {
   X,
   Award,
   Trash2,
-  Bell,
   Swords,
   Zap,
   Shield,
@@ -73,10 +73,8 @@ export const TaskView: React.FC<TaskViewProps> = ({
   });
 
   // Recordatorios detallados
-  const [newReminderType, setNewReminderType] = useState<ReminderType>('none');
-  const [newCustomReminderMinutes, setNewCustomReminderMinutes] = useState<number>(30);
-  const [newReminderAt, setNewReminderAt] = useState(() => toLocalDateTimeValue(new Date(Date.now() + 60 * 60_000)));
-  const [quickReminderHours, setQuickReminderHours] = useState<number | null>(null);
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>({ reminderType: 'none', reminderVersion: 2, reminderCustomMinutes: 30 });
+  const newReminderType = reminderSettings.reminderType || 'none';
   const [reminderFormError, setReminderFormError] = useState('');
 
   // Repetición detallada
@@ -85,21 +83,37 @@ export const TaskView: React.FC<TaskViewProps> = ({
   const [reminderPermissionNotice, setReminderPermissionNotice] = useState('');
 
   useEffect(() => {
+    if (!tasks.some((task) => !task.completed && task.reminderType && !['none', 'at_due'].includes(task.reminderType))) return;
+    try {
+      if (!localStorage.getItem('focusmission-reminders-v2-explained')) {
+        setReminderPermissionNotice('Tus avisos anticipados ahora incluyen también un aviso a la hora límite.');
+        localStorage.setItem('focusmission-reminders-v2-explained', '1');
+      }
+    } catch { /* A storage restriction must not prevent editing a mission. */ }
+  }, [tasks]);
+
+  useEffect(() => {
     if (showAddModal) titleInputRef.current?.focus();
   }, [showAddModal]);
 
   const openEditor = (task: Task) => {
     setEditingTask(task); setNewTitle(task.title); setNewDescription(task.description || '');
     setNewStatAffinity(task.statAffinity); setNewDifficulty(task.difficulty); setNewDueDate(toLocalDateTimeValue(new Date(task.dueDate)));
-    setNewReminderType(task.reminderType || 'none'); setNewCustomReminderMinutes(task.reminderCustomMinutes || 30);
-    if (task.reminderAt && Number.isFinite(new Date(task.reminderAt).getTime())) setNewReminderAt(toLocalDateTimeValue(new Date(task.reminderAt)));
-    setQuickReminderHours(null);
+    setReminderSettings({ reminderType: task.reminderType || 'none', reminderVersion: task.reminderVersion, reminderAt: task.reminderAt,
+      reminderCustomMinutes: task.reminderCustomMinutes ?? 30, reminderStartMinutes: task.reminderStartMinutes,
+      reminderIntervalMinutes: task.reminderIntervalMinutes, reminderStoppedDueDate: task.reminderStoppedDueDate });
     setReminderFormError('');
     setNewRecurrence(task.recurrence || 'none'); setSelectedDays(task.recurrenceDays || []); setShowAddModal(true);
   };
+  const openNewMission = () => {
+    setEditingTask(null); setNewTitle(''); setNewDescription(''); setNewStatAffinity('attack'); setNewDifficulty('media');
+    setNewDueDate(toLocalDateTimeValue(new Date(Date.now() + 4 * 3600000)));
+    setReminderSettings({ reminderType: 'none', reminderVersion: 2, reminderCustomMinutes: 30 });
+    setReminderFormError(''); setNewRecurrence('none'); setSelectedDays([]); setShowAddModal(true);
+  };
   useEffect(() => {
     if (!externalNewTask) return;
-    setShowAddModal(true);
+    openNewMission();
     onExternalNewTaskHandled?.();
   }, [externalNewTask, onExternalNewTaskHandled]);
   useEffect(() => {
@@ -116,7 +130,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   }, [tasks]);
 
   useEffect(() => {
-    const openFromWidget = () => setShowAddModal(true);
+    const openFromWidget = () => openNewMission();
     window.addEventListener('focusmission:new-task', openFromWidget);
     return () => window.removeEventListener('focusmission:new-task', openFromWidget);
   }, []);
@@ -142,16 +156,18 @@ export const TaskView: React.FC<TaskViewProps> = ({
     if (!newTitle.trim()) return;
     if (Number.isNaN(new Date(newDueDate).getTime())) return;
     if (newRecurrence === 'custom_days' && selectedDays.length === 0) return;
-    const originalReminder = editingTask?.reminderType === 'absolute' && editingTask.reminderAt &&
-      Number.isFinite(new Date(editingTask.reminderAt).getTime()) &&
-      toLocalDateTimeValue(new Date(editingTask.reminderAt)) === newReminderAt && !quickReminderHours
-      ? editingTask.reminderAt : undefined;
+    const originalReminder = editingTask?.reminderType === 'absolute' && editingTask.reminderAt === reminderSettings.reminderAt && toLocalDateTimeValue(new Date(editingTask.dueDate)) === newDueDate;
     if (newReminderType === 'absolute') {
-      const reminderAt = new Date(newReminderAt).getTime();
-      if (!Number.isFinite(reminderAt) || (reminderAt <= Date.now() && !originalReminder)) {
-        setReminderFormError('Elige una fecha y hora futuras para el recordatorio.');
+      const reminderAt = Date.parse(reminderSettings.reminderAt || '');
+      if (!Number.isFinite(reminderAt) || (!originalReminder && (reminderAt <= Date.now() || reminderAt > Date.parse(newDueDate)))) {
+        setReminderFormError('Elige un aviso futuro, antes de la hora límite o a esa misma hora.');
         return;
       }
+    }
+    const minutes = newReminderType === 'custom' ? reminderSettings.reminderCustomMinutes : reminderSettings.reminderStartMinutes;
+    if ((newReminderType === 'custom' || (newReminderType === 'constant' && reminderSettings.reminderVersion === 2)) &&
+      (!Number.isInteger(minutes) || minutes! <= 0 || minutes! > 525600)) {
+      setReminderFormError('Elige un tiempo válido entre 1 minuto y 365 días.'); return;
     }
     setReminderFormError('');
 
@@ -183,11 +199,9 @@ export const TaskView: React.FC<TaskViewProps> = ({
       expReward,
       goldReward,
       dueDate: new Date(newDueDate).toISOString(),
+      ...reminderSettings,
       reminderType: newReminderType,
-      reminderCustomMinutes: newReminderType === 'custom' ? newCustomReminderMinutes : undefined,
-      reminderAt: newReminderType === 'absolute'
-        ? originalReminder || new Date(quickReminderHours ? Date.now() + quickReminderHours * 60 * 60_000 : new Date(newReminderAt).getTime()).toISOString()
-        : undefined,
+      reminderAt: newReminderType === 'absolute' ? reminderSettings.reminderAt : undefined,
       recurrence: newRecurrence,
       recurrenceDays: newRecurrence === 'custom_days' ? selectedDays : undefined,
       penalizedCount: 0,
@@ -198,8 +212,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
     setNewTitle('');
     setNewDescription('');
     setNewRecurrence('none');
-    setNewReminderType('none');
-    setQuickReminderHours(null);
+    setReminderSettings({ reminderType: 'none', reminderVersion: 2, reminderCustomMinutes: 30 });
     setSelectedDays([]);
     setShowAddModal(false);
     setEditingTask(null);
@@ -244,23 +257,25 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
   const formatReminderBadge = (task: Task) => {
     if (!task.reminderType || task.reminderType === 'none') return null;
-    const at = reminderDateForTask(task);
-    if (!at) return '🔔 Aviso sin fecha';
+    const events = reminderEventsForTask(task, reminderStatus.exact, nowTime).filter((row) => row.at > nowTime);
+    if (hasRepeatingReminder(task) && repeatIsStopped(task)) return '🔔 Repetición detenida';
     if (reminderStatus.permission !== 'granted') return '🔔 Aviso sin activar';
-    if (at.getTime() <= nowTime) return task.reminderType === 'constant' && reminderStatus.scheduledTaskIds.includes(task.id)
-      ? '🔔 Aviso persistente programado' : '🔔 Aviso pasado';
+    if (!events.length) return '🔔 Aviso pasado';
     if (!reminderStatus.scheduledTaskIds.includes(task.id)) return '🔔 Aviso pendiente de programar';
+    if (hasRepeatingReminder(task)) return `🔔 Cada ${repeatIntervalMinutes(task)} min`;
+    const at = new Date(Math.min(...events.map((row) => row.at)));
     const time = at.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     if (task.reminderType === 'absolute') return `🔔 ${time}${reminderStatus.exact ? '' : ' · aprox.'}`;
     if (task.reminderType === 'at_due') return '🔔 Al vencer';
     if (task.reminderType === '5_minutes_before') return '🔔 5 min antes';
+    if (task.reminderType === '10_minutes_before') return '🔔 10 min antes';
     if (task.reminderType === '30_minutes_before') return '🔔 30 min antes';
     if (task.reminderType === '1_hour_before') return '🔔 1 h antes';
     if (task.reminderType === '1_day_before') return '🔔 1d antes';
     if (task.reminderType === '2_days_before') return '🔔 2d antes';
     if (task.reminderType === '3_days_before') return '🔔 3d antes';
     if (task.reminderType === '1_week_before') return '🔔 1sem antes';
-    if (task.reminderType === 'constant') return '🔔 Constante';
+    if (task.reminderType === 'constant') return '🔔 Aviso anterior';
     if (task.reminderType === 'custom') return `🔔 ${task.reminderCustomMinutes || 30}m antes`;
     return null;
   };
@@ -300,7 +315,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
 
       <div className="cute-panel p-2">
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={openNewMission}
           className="cute-primary-button w-full min-h-12 px-4 py-2 flex items-center justify-center gap-2 text-base active:translate-y-0.5"
         >
           <Plus className="w-5 h-5" />
@@ -566,7 +581,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
               {/* Fecha y Hora Límite */}
               <div>
                 <label htmlFor="mission-due-date" className="block font-pixel-title text-[9px] text-stone-200 mb-1.5 flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-amber-400" /> Fecha y hora
+                  <Calendar className="w-4 h-4 text-amber-400" /> Fecha y hora límite
                 </label>
                 <input
                   id="mission-due-date"
@@ -578,71 +593,20 @@ export const TaskView: React.FC<TaskViewProps> = ({
                 />
                 <p className="font-pixel-text text-sm text-stone-400 mt-1.5 flex items-start gap-1.5 leading-relaxed">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  Elige el día y la hora local. Si vence sin completarse, tu personaje sufrirá consecuencias.
+                  Recuerda que, si no completas la misión, tu personaje sufrirá consecuencias.
                 </p>
               </div>
 
-              {/* SECCIÓN RECORDATORIO (¿CUÁNDO AVISAR?) */}
-              <div>
-                <label className="block font-pixel-title text-[9px] text-stone-200 mb-1.5 flex items-center gap-1.5">
-                  <Bell className="w-4 h-4 text-amber-400" />
-                  Recordatorio
-                </label>
-                <select
-                  value={newReminderType}
-                  onChange={(e) => { setNewReminderType(e.target.value as ReminderType); setQuickReminderHours(null); setReminderFormError(''); }}
-                  className="w-full min-h-11 bg-[#090a10] border-2 border-slate-600 p-2.5 text-white font-pixel-text text-base focus:border-amber-400 focus:outline-none"
-                >
-                  <option value="none">Sin recordatorio</option>
-                  <option value="absolute">Fecha y hora del aviso</option>
-                  <option value="at_due">A la hora elegida</option>
-                  <option value="5_minutes_before">5 minutos antes</option>
-                  <option value="30_minutes_before">30 minutos antes</option>
-                  <option value="1_hour_before">1 hora antes</option>
-                  <option value="1_day_before">1 día antes</option>
-                  <option value="constant">Persistente hasta completar</option>
-                  <option value="custom">Personalizado</option>
-                </select>
-
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="Recordatorios rápidos">
-                  {[1, 2, 4].map((hours) => (
-                    <button key={hours} type="button" aria-pressed={quickReminderHours === hours} className="retro-btn-stone min-h-10 px-3 text-sm"
-                      onClick={() => {
-                        setNewReminderAt(toLocalDateTimeValue(new Date(Date.now() + hours * 60 * 60_000)));
-                        setQuickReminderHours(hours);
-                        setNewReminderType('absolute');
-                        setReminderFormError('');
-                      }}>En {hours} {hours === 1 ? 'hora' : 'horas'}</button>
-                  ))}
-                </div>
-                {quickReminderHours && <p className="mt-1 text-sm text-stone-300">El tiempo empieza al guardar la misión.</p>}
-                {newReminderType === 'absolute' && (
-                  <label className="block mt-2 text-sm text-stone-200">
-                    Fecha y hora del aviso
-                    <input type="datetime-local" required value={newReminderAt}
-                      onChange={(e) => { setNewReminderAt(e.target.value); setQuickReminderHours(null); setReminderFormError(''); }}
-                      className="mt-1 w-full min-h-11 bg-[#090a10] border-2 border-slate-600 p-2.5 text-white [color-scheme:dark]" />
-                  </label>
-                )}
-                {reminderFormError && <p role="alert" className="mt-2 text-sm text-rose-300">{reminderFormError}</p>}
-
-                {newReminderType === 'custom' && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="5"
-                      max="1440"
-                      value={newCustomReminderMinutes}
-                      onChange={(e) => setNewCustomReminderMinutes(Number(e.target.value))}
-                      className="w-24 bg-[#090a10] border-2 border-[#18181b] p-1.5 text-white font-pixel-text text-base"
-                    />
-                    <span className="font-pixel-text text-sm text-stone-300">minutos antes de vencer</span>
-                  </div>
-                )}
-                <p className="font-pixel-text text-sm text-stone-400 mt-1.5 leading-relaxed">
-                  En Android, el aviso puede llegar con la app cerrada. La precisión depende de los permisos y del ahorro de batería.
-                </p>
-              </div>
+              <MissionReminderFields value={reminderSettings} dueDate={newDueDate}
+                onChange={(value) => { setReminderSettings(value); setReminderFormError(''); }} />
+              {reminderFormError && <p role="alert" className="text-sm text-rose-300">{reminderFormError}</p>}
+              {editingTask && newReminderType === 'constant' && hasRepeatingReminder(editingTask) && onUpdateTask && <button type="button" className="min-h-11 text-sm text-violet-200 underline"
+                onClick={() => {
+                  const stop = !repeatIsStopped(editingTask);
+                  const updated = { ...editingTask, reminderStoppedDueDate: stop ? editingTask.dueDate : undefined };
+                  onUpdateTask(editingTask.id, updated); setEditingTask(updated);
+                  setReminderSettings((value) => ({ ...value, reminderStoppedDueDate: updated.reminderStoppedDueDate }));
+                }}>{repeatIsStopped(editingTask) ? 'Reactivar repetición' : 'Detener repetición'}</button>}
 
               {/* SECCIÓN REPETICIÓN (AVANZADO) */}
               <div>

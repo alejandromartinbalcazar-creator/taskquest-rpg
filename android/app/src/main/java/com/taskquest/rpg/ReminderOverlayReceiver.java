@@ -16,6 +16,11 @@ public class ReminderOverlayReceiver extends BroadcastReceiver {
         if (row == null) return;
         ReminderOverlayStore.event(context, "alarm_received", "");
         if (!ReminderOverlayStore.permitted(context)) { ReminderOverlayStore.event(context, "notifications_missing", ""); return; }
+        if (!ReminderOverlayStore.enabled(context)) {
+            ReminderAlarmNotice.post(context, row, false, true);
+            if (MainActivity.isVisible) ReminderOverlayPlugin.received(row);
+            return;
+        }
         try {
             ContextCompat.startForegroundService(context, new Intent(context, ReminderOverlayService.class).putExtra("id", row.optInt("id")));
         } catch (RuntimeException e) {

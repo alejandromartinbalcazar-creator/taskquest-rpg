@@ -50,7 +50,8 @@ export function completeTaskState(player: Player, tasks: Task[], taskId: string,
     const next = action && 'nextDueDate' in action ? action.nextDueDate : getNextTaskDueDate(task, now);
     updatedTasks = tasks.map((item) => item.id !== taskId ? item : next
       ? { ...item, completed: false, dueDate: next, penalizedCount: 0,
-        reminderType: item.reminderType === 'absolute' ? 'none' : item.reminderType,
+        reminderType: item.reminderType === 'absolute' ? 'at_due' : item.reminderType,
+        reminderStoppedDueDate: undefined,
         reminderAt: item.reminderType === 'absolute' ? undefined : item.reminderAt }
       : { ...item, completed: true, completedAt: now.toISOString() });
   }

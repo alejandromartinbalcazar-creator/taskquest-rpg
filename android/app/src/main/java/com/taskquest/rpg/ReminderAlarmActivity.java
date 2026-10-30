@@ -40,14 +40,14 @@ public class ReminderAlarmActivity extends Activity {
         handler.removeCallbacksAndMessages(null); signal.stop();
         reminderId = getIntent().getIntExtra("id", 0);
         JSONObject row = ReminderOverlayStore.find(this, reminderId);
-        if (row == null || row.optBoolean("dismissed") || !ReminderOverlayStore.key(row).equals(getIntent().getStringExtra("key"))) { finish(); return; }
+        if (row == null || row.optBoolean("completed") || row.optBoolean("dismissed") || !ReminderOverlayStore.key(row).equals(getIntent().getStringExtra("key"))) { finish(); return; }
         FrameLayout container = new FrameLayout(this); container.setBackgroundColor(Color.rgb(8, 11, 32));
         LinearLayout card = ReminderCard.build(this, row, () -> navigate(row, true), () -> { ReminderOverlayStore.dismiss(this, row.optInt("id")); finish(); }, () -> navigate(row, false));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Math.min(getResources().getDisplayMetrics().widthPixels - ReminderCard.dp(this, 32), ReminderCard.dp(this, 500)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         container.addView(card, params); setContentView(container);
         // Service owns the signal when running; notification taps after it stops
         // may show the task, but must not start a fresh round of alarm sound.
-        if (!ReminderOverlayService.isRunning() && System.currentTimeMillis() - row.optLong("at") < ReminderOverlayStore.duration(this) * 1000L) signal.start(this);
+        if (ReminderOverlayStore.enabled(this) && !ReminderOverlayService.isRunning() && System.currentTimeMillis() - row.optLong("lastDeliveredAt", row.optLong("at")) < ReminderOverlayStore.duration(this) * 1000L) signal.start(this);
         handler.postDelayed(() -> { signal.stop(); finish(); }, ReminderOverlayStore.duration(this) * 1000L);
         if (getIntent().getBooleanExtra("done", false)) { getIntent().putExtra("done", false); navigate(row, true); }
         else if (getIntent().getBooleanExtra("openDetail", false)) { getIntent().putExtra("openDetail", false); navigate(row, false); }
@@ -76,7 +76,7 @@ public class ReminderAlarmActivity extends Activity {
     private void saveAndOpen(JSONObject row, boolean complete) {
         int selectedId = row.optInt("id");
         JSONObject current = ReminderOverlayStore.find(this, selectedId);
-        boolean valid = current != null && !current.optBoolean("dismissed") && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row));
+        boolean valid = current != null && !current.optBoolean("completed") && !current.optBoolean("dismissed") && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row));
         if (complete && valid) ReminderOverlayStore.enqueue(this, row);
         ReminderOverlayStore.dismiss(this, selectedId);
         try { startActivity(!complete && valid ? WidgetRenderer.link(this, "edit-task", row.optString("taskId"), null)

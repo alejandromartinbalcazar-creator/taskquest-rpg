@@ -44,6 +44,7 @@ final class ReminderAlarmNotice {
     static Intent openIntent(Context c, JSONObject row, boolean done) {
         Intent intent = new Intent(c, ReminderAlarmActivity.class).setData(Uri.parse("focusmission-reminder://" + (done ? "done/" : "view/") + row.optInt("id")))
             .putExtra("id", row.optInt("id")).putExtra("key", ReminderOverlayStore.key(row)).putExtra("done", done)
+            .putExtra("openDetail", !done && !ReminderOverlayStore.enabled(c))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         return intent;
     }
@@ -58,7 +59,7 @@ final class ReminderAlarmNotice {
         Notification.Builder builder = new Notification.Builder(c, systemSignal ? ordinaryChannel(c) : ALARM_CHANNEL)
             .setSmallIcon(R.drawable.ic_mission_reminder).setContentTitle(row.optString("title")).setContentText(row.optString("body"))
             .setStyle(new Notification.BigTextStyle().bigText(row.optString("body"))).setCategory(Notification.CATEGORY_ALARM)
-            .setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(open(c, row, false)).setDeleteIntent(close).setAutoCancel(false).setOnlyAlertOnce(!fullScreen)
+            .setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(open(c, row, false)).setDeleteIntent(close).setAutoCancel(false).setOnlyAlertOnce(false)
             .addAction(new Notification.Action.Builder(null, "Realizado", open(c, row, true)).build())
             .addAction(new Notification.Action.Builder(null, "Cerrar", close).build());
         if (fullScreen) builder.setFullScreenIntent(open(c, row, false), true);

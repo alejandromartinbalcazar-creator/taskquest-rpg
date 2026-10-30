@@ -60,7 +60,8 @@ final class WidgetRepository {
             if (next.isEmpty()) task.put("completed", true).put("completedAt", action.optString("completedAt"));
             else {
                 task.put("dueDate", next).put("completed", false);
-                if (task.optString("reminderType").equals("absolute")) task.put("reminderType", "none").remove("reminderAt");
+                task.remove("reminderStoppedDueDate");
+                if (task.optString("reminderType").equals("absolute")) task.put("reminderType", "at_due").remove("reminderAt");
             }
         } catch (Exception ignored) { }
     }

@@ -41,13 +41,13 @@ public class ReminderOverlayService extends Service {
     static void refresh() {
         ReminderOverlayService service = running;
         if (service != null) service.handler.post(() -> {
-            if (!ReminderOverlayStore.permitted(service)) service.stopSelf();
+            if (!ReminderOverlayStore.permitted(service) || !ReminderOverlayStore.enabled(service)) service.stopSelf();
             else if (service.current != null && !service.valid(service.current)) service.next();
         });
     }
     private boolean valid(JSONObject row) {
         JSONObject saved = ReminderOverlayStore.find(this, row.optInt("id"));
-        return saved != null && !saved.optBoolean("dismissed") && ReminderOverlayStore.key(saved).equals(ReminderOverlayStore.key(row));
+        return saved != null && !saved.optBoolean("completed") && !saved.optBoolean("dismissed") && ReminderOverlayStore.key(saved).equals(ReminderOverlayStore.key(row));
     }
     @Override public void onCreate() {
         super.onCreate(); running = this;
@@ -69,7 +69,7 @@ public class ReminderOverlayService extends Service {
             if (row != null) ReminderAlarmNotice.post(this, row, true, true);
             ReminderOverlayStore.event(this, "service_blocked", e.getClass().getSimpleName()); stopSelf(); return START_NOT_STICKY;
         }
-        if (intent == null || !ReminderOverlayStore.permitted(this)) { stopSelf(); return START_NOT_STICKY; }
+        if (intent == null || !ReminderOverlayStore.permitted(this) || !ReminderOverlayStore.enabled(this)) { stopSelf(); return START_NOT_STICKY; }
         JSONObject row = ReminderOverlayStore.find(this, intent.getIntExtra("id", 0));
         if (row != null && valid(row)) {
             boolean duplicate = current != null && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row));
@@ -91,7 +91,7 @@ public class ReminderOverlayService extends Service {
     }
     private void next() {
         removeCard();
-        if (!ReminderOverlayStore.permitted(this)) { stopSelf(); return; }
+        if (!ReminderOverlayStore.permitted(this) || !ReminderOverlayStore.enabled(this)) { stopSelf(); return; }
         JSONObject row;
         do { row = queue.poll(); } while (row != null && !valid(row));
         if (row == null) { stopSelf(); return; }
@@ -135,7 +135,7 @@ public class ReminderOverlayService extends Service {
     @Override public void onTimeout(int startId) { stopSelf(); }
     @Override public void onDestroy() {
         // Alerts still queued remain actionable through their notifications.
-        if (ReminderOverlayStore.permitted(this)) for (JSONObject row : queue) if (valid(row)) ReminderAlarmNotice.post(this, row, false, false);
+        if (ReminderOverlayStore.enabled(this) && ReminderOverlayStore.permitted(this)) for (JSONObject row : queue) if (valid(row)) ReminderAlarmNotice.post(this, row, false, false);
         handler.removeCallbacksAndMessages(null); removeCard(); running = null;
         stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy();
     }

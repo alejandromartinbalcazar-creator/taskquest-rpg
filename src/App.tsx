@@ -39,7 +39,7 @@ export function App() {
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderSyncStatus>({ permission: 'unsupported', exact: false, scheduledTaskIds: [] });
   const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
-  const [reminderPrompts, setReminderPrompts] = useState<{ taskId: string; dueDate: string }[]>([]);
+  const [reminderPrompts, setReminderPrompts] = useState<{ taskId: string; dueDate: string; eventId?: number }[]>([]);
   const [nativeOverlayActions, setNativeOverlayActions] = useState<OverlayAction[]>([]);
   const completedReminderOccurrences = useRef(new Set<string>());
   const refreshAlarmsOnLaunch = useRef(true);
@@ -165,7 +165,7 @@ export function App() {
       setCurrentTab('tasks');
       const dueDate = (notification.extra as { dueDate?: unknown })?.dueDate;
       if (typeof dueDate === 'string') {
-        setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
+        setReminderPrompts((previous) => previous.some((item) => item.eventId === notification.id) ? previous : [...previous, { taskId, dueDate, eventId: notification.id }]);
       } else setReminderTaskId(taskId);
     });
     return () => { void listener.then((handle) => handle.remove()); };
@@ -178,7 +178,7 @@ export function App() {
       const extra = notification.extra as { dueDate?: unknown } | undefined;
       if (taskId && typeof extra?.dueDate === 'string' && document.visibilityState === 'visible') {
         const dueDate = extra.dueDate;
-        setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
+        setReminderPrompts((previous) => previous.some((item) => item.eventId === notification.id) ? previous : [...previous, { taskId, dueDate, eventId: notification.id }]);
       }
     });
     return () => { void listener.then((handle) => handle.remove()); };
@@ -186,8 +186,8 @@ export function App() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    const listener = listenForReminderAlarm(({ taskId, dueDate }) => {
-      setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
+    const listener = listenForReminderAlarm(({ taskId, dueDate, eventId }) => {
+      setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate && item.eventId === eventId) ? previous : [...previous, { taskId, dueDate, eventId }]);
     });
     return () => { void listener.then((handle) => handle.remove()); };
   }, []);
@@ -571,11 +571,12 @@ export function App() {
       />
 
       {reminderPrompts.length > 0 && (() => {
-        const task = reminderPrompts.map((prompt) => reminderOccurrenceTask(tasks, prompt)).find(Boolean);
+        const prompt = reminderPrompts.find((item) => reminderOccurrenceTask(tasks, item));
+        const task = prompt && reminderOccurrenceTask(tasks, prompt);
         if (!task) return null;
         const dismiss = () => {
-          void dismissReminderAlarm(task.id, task.dueDate).catch(console.warn);
-          setReminderPrompts((previous) => previous.filter((prompt) => prompt.taskId !== task.id || prompt.dueDate !== task.dueDate));
+          void dismissReminderAlarm(task.id, task.dueDate, prompt?.eventId).catch(console.warn);
+          setReminderPrompts((previous) => previous.filter((item) => item !== prompt));
         };
         return (
           <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} onOpen={() => {

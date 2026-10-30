@@ -12,8 +12,8 @@ interface WidgetDataPlugin {
 
 const WidgetData = registerPlugin<WidgetDataPlugin>('WidgetData');
 
-const payload = (tasks: Task[]) => JSON.stringify(tasks.map(({ id, title, description, dueDate, completed, isFailed, isHonorDebt, recurrence, recurrenceDays, reminderType, reminderAt, reminderCustomMinutes }) => ({
-  id, title, description, dueDate, completed, isFailed, isHonorDebt, recurrence, recurrenceDays, reminderType, reminderAt, reminderCustomMinutes,
+const payload = (tasks: Task[]) => JSON.stringify(tasks.map(({ id, title, description, dueDate, completed, isFailed, isHonorDebt, recurrence, recurrenceDays, reminderType, reminderAt, reminderCustomMinutes, reminderVersion, reminderStartMinutes, reminderIntervalMinutes, reminderStoppedDueDate }) => ({
+  id, title, description, dueDate, completed, isFailed, isHonorDebt, recurrence, recurrenceDays, reminderType, reminderAt, reminderCustomMinutes, reminderVersion, reminderStartMinutes, reminderIntervalMinutes, reminderStoppedDueDate,
 })));
 let queue: Promise<unknown> = Promise.resolve();
 function serial<T>(work: () => Promise<T>): Promise<T> {

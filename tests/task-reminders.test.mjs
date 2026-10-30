@@ -24,7 +24,7 @@ const task = (id = 'mission-1') => ({ id, title: 'Estudiar', description: 'Repas
   statAffinity: 'knowledge', difficulty: 'media', expReward: 10, goldReward: 2 });
 
 function harness() {
-  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false, nativeEnabled: false, channelId: undefined };
+  const state = { platform: 'ios', permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false, nativeEnabled: false, channelId: undefined };
   const plugin = {
     checkPermissions: async () => ({ display: state.permission }),
     requestPermissions: async () => ({ display: state.permission }),
@@ -48,7 +48,7 @@ function harness() {
     },
   };
   const api = load(serviceCode, {
-    '@capacitor/core': { Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } },
+    '@capacitor/core': { Capacitor: { isNativePlatform: () => true, getPlatform: () => state.platform } },
     '@capacitor/local-notifications': { LocalNotifications: plugin },
     './reminderPlan': plan,
     './reminderOverlay': {
@@ -56,7 +56,7 @@ function harness() {
       syncReminderOverlays: async (items) => {
         if (state.overlayError) throw new Error('overlay unavailable');
         state.overlays = items;
-        return { scheduledTaskIds: state.nativeEnabled ? items.filter((item) => item.at > Date.now()).map((item) => item.taskId) : [] };
+        return { scheduledTaskIds: items.filter((item) => item.at > Date.now()).map((item) => item.taskId), scheduledEventIds: items.filter((item) => item.at > Date.now()).map((item) => item.id) };
       },
     },
   });
@@ -84,9 +84,7 @@ test('create and edit replace just the mission alarm with complete action data',
   assert.equal(notice.schedule.allowWhileIdle, true);
   assert.equal(plan.taskIdFromReminderExtra(notice.extra), original.id);
   assert.equal(notice.extra.dueDate, original.dueDate);
-  assert.equal(state.overlays.length, 1);
-  assert.equal(state.overlays[0].at, new Date(future).getTime());
-  assert.equal(state.overlays[0].dueDate, original.dueDate);
+  assert.equal(state.overlays.length, 0);
   assert.equal(plan.taskIdFromReminderExtra({ source: 'other', taskId: original.id }), null);
   await api.syncTaskReminderNotifications([original]);
   assert.equal(state.scheduleCalls.length, 1);
@@ -126,15 +124,16 @@ test('an old reminder cannot complete a later recurring occurrence, a deleted or
 
 test('denied exact permission schedules an approximate alarm and upgrades after permission changes', async () => {
   const { state, api } = harness();
+  state.platform = 'android';
   state.exact = 'denied';
   let status = await api.syncTaskReminderNotifications([task()]);
   assert.equal(status.exact, false);
-  assert.equal(state.pending[0].isExactNotification, false);
+  assert.equal(state.overlays.length, 1);
   state.exact = 'granted';
   status = await api.syncTaskReminderNotifications([task()]);
   assert.equal(status.exact, true);
-  assert.equal(state.pending[0].isExactNotification, true);
-  assert.equal(state.pending.length, 1);
+  assert.equal(state.pending.length, 0);
+  assert.equal(state.overlays.length, 1);
 });
 
 test('a new launch can restore alarms removed by Android while retaining their chosen time', async () => {
@@ -182,7 +181,8 @@ test('past one-shot notifications are not rescheduled and other app alerts are p
   const { state, api } = harness();
   const other = { id: plan.notificationIdForTask('other'), extra: { source: 'not-a-task' } };
   state.pending.push(other);
-  const past = { ...task('expired'), reminderAt: new Date(Date.now() - 60_000).toISOString() };
+  const pastAt = new Date(Date.now() - 60_000).toISOString();
+  const past = { ...task('expired'), reminderAt: pastAt, dueDate: pastAt };
   const status = await api.syncTaskReminderNotifications([past]);
   assert.deepEqual(status.scheduledTaskIds, []);
   assert.deepEqual(state.pending, [other]);
@@ -202,7 +202,7 @@ test('an identifier collision with a different feature never cancels its alert',
 test('the capacity limit keeps the nearest reminders instead of the first identifiers', async () => {
   const { state, api } = harness();
   const tasks = Array.from({ length: 451 }, (_, index) => ({ ...task(`task-${index}`),
-    reminderAt: new Date(Date.now() + (451 - index) * 60_000).toISOString() }));
+    reminderType: 'at_due', dueDate: new Date(Date.now() + (451 - index) * 60_000).toISOString() }));
   const result = await api.syncTaskReminderNotifications(tasks);
   assert.equal(state.pending.length, 450);
   assert(result.scheduledTaskIds.includes('task-450'));
@@ -214,6 +214,7 @@ test('native alarm mode migrates scheduled tasks without leaving a duplicate Cap
   await api.syncTaskReminderNotifications([task()]);
   assert.equal(state.pending.length, 1);
   state.nativeEnabled = true;
+  state.platform = 'android';
   const result = await api.syncTaskReminderNotifications([task()]);
   assert.equal(state.pending.length, 0);
   assert.equal(state.overlays.length, 1);
@@ -223,23 +224,23 @@ test('native alarm mode migrates scheduled tasks without leaving a duplicate Cap
   assert.deepEqual(state.overlays, []);
 });
 
-test('disabling alarm mode restores the ordinary notification with the chosen channel', async () => {
-  const { state, api } = harness(); state.nativeEnabled = true;
+test('both Android presentations share one native plan without racing Capacitor alarms', async () => {
+  const { state, api } = harness(); state.nativeEnabled = true; state.platform = 'android';
   await api.syncTaskReminderNotifications([task()]);
   assert.equal(state.pending.length, 0);
   state.nativeEnabled = false; state.channelId = 'silent-vibrate';
   await api.syncTaskReminderNotifications([task()]);
-  assert.equal(state.pending.length, 1);
-  assert.equal(state.pending[0].channelId, 'silent-vibrate');
+  assert.equal(state.pending.length, 0);
+  assert.equal(state.overlays.length, 1);
   state.channelId = 'sound-still';
   await api.syncTaskReminderNotifications([task()]);
-  assert.equal(state.pending.length, 1);
-  assert.equal(state.pending[0].channelId, 'sound-still');
-  assert.equal(state.scheduleCalls.length, 2);
+  assert.equal(state.pending.length, 0);
+  assert.equal(state.overlays.length, 1);
+  assert.equal(state.scheduleCalls.length, 0);
 });
 
 test('native planning uses task dates without any delivered callback and keeps future missions first', () => {
-  const tasks = Array.from({ length: 450 }, (_, index) => ({ ...task(`past-${index}`), reminderAt: new Date(Date.now() - 60000).toISOString() }));
+  const tasks = Array.from({ length: 450 }, (_, index) => ({ ...task(`past-${index}`), reminderType: 'at_due', dueDate: new Date(Date.now() - 60000).toISOString() }));
   tasks.push(task('next'));
   const rows = plan.nativeReminderPlan(tasks, true);
   assert.equal(rows.length, 450);
@@ -251,12 +252,85 @@ test('native planning uses task dates without any delivered callback and keeps f
 });
 
 test('alarm mode failure reports the limitation while retaining the ordinary fallback', async () => {
-  const { state, api } = harness(); state.nativeEnabled = true; state.overlayError = true;
+  const { state, api } = harness(); state.nativeEnabled = true; state.overlayError = true; state.platform = 'android';
   const warning = console.warn; console.warn = () => {};
   try {
     const result = await api.syncTaskReminderNotifications([task()]);
-    assert.match(result.error, /modo de alarma/i);
+    assert.match(result.error, /planificador de Android/i);
     assert.equal(state.pending.length, 1);
     assert.equal(result.permission, 'granted');
   } finally { console.warn = warning; }
+});
+
+test('every advance retains an independent deadline, deduplicating equal instants', () => {
+  const now = Date.parse('2026-10-30T12:00:00Z');
+  const due = '2026-11-02T20:00:00Z';
+  for (const reminderType of ['5_minutes_before', '10_minutes_before', '30_minutes_before', '1_hour_before', '1_day_before', '2_days_before', 'custom', 'absolute']) {
+    const rows = plan.reminderEventsForTask({ ...task(), dueDate: due, reminderType, reminderAt: '2026-11-01T20:00:00Z', reminderCustomMinutes: 10 }, true, now);
+    assert.equal(rows.length, 2, reminderType);
+    assert.equal(rows.find((row) => row.kind === 'due').at, Date.parse(due));
+    assert.notEqual(rows[0].id, rows[1].id);
+  }
+  assert.equal(plan.reminderEventsForTask(task(), true, now).length, 1);
+});
+
+test('past advances do not suppress a future deadline or become catch-up alarms', () => {
+  const now = Date.parse(future) - 60000;
+  const rows = plan.nativeReminderPlan([{ ...task(), reminderType: '1_day_before' }], true, now);
+  assert.equal(rows.filter((row) => row.at > now).length, 1);
+  assert.equal(rows[0].kind, 'due');
+  assert.equal(rows[0].at, Date.parse(future));
+});
+
+test('constant is opt-in and holds only one next interval plus its deadline', () => {
+  const t = { ...task(), reminderType: 'constant', reminderVersion: 2, reminderStartMinutes: 60, reminderIntervalMinutes: 30 };
+  const due = Date.parse(t.dueDate), before = due - 7200000;
+  const rows = plan.reminderEventsForTask(t, true, before);
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find((row) => row.kind === 'repeat').at, due - 3600000);
+  assert.equal(rows.find((row) => row.kind === 'repeat').intervalMs, 1800000);
+  const after = plan.reminderEventsForTask(t, true, due + 1).find((row) => row.kind === 'repeat');
+  assert.equal(after.at, due + 1800000);
+  assert.equal(plan.reminderEventsForTask({ ...t, reminderVersion: undefined }, true, before).length, 1);
+  const stopped = { ...t, reminderStoppedDueDate: t.dueDate };
+  assert.deepEqual(plan.reminderEventsForTask(stopped, true, before).map((row) => row.kind), ['due']);
+  assert.equal(plan.reminderEventsForTask({ ...stopped, dueDate: '2026-11-09T20:00:00Z' }, true, before).length, 2);
+});
+
+test('repeat intervals match native fixtures, never replay missed ticks or duplicate the deadline', () => {
+  const rows = readFileSync(new URL('../android/app/src/test/resources/reminder-intervals.tsv', import.meta.url), 'utf8').trim().split(/\r?\n/);
+  for (const line of rows) {
+    const [start, interval, due, now, expected] = line.split('\t').map(Number);
+    assert.equal(plan.nextRepeatAt(start, interval, due, now), expected, line);
+  }
+});
+
+test('capacity prioritizes deadlines over advances and reports missing slots', async () => {
+  const { state, api } = harness(); state.platform = 'android';
+  const tasks = Array.from({ length: 300 }, (_, index) => ({ ...task(`t-${index}`), reminderType: '1_hour_before' }));
+  const result = await api.syncTaskReminderNotifications(tasks);
+  assert.equal(state.overlays.length, 450);
+  assert.equal(state.overlays.filter((row) => row.kind === 'due').length, 300);
+  assert.match(result.error, /demasiados avisos/);
+});
+
+test('Android serializes create/edit/delete across both events without a duplicate legacy alarm', async () => {
+  const { state, api } = harness(); state.platform = 'android';
+  state.pending.push({ id: 19, extra: { source: plan.REMINDER_TAG, taskId: task().id } });
+  const t = { ...task(), reminderType: '1_hour_before' };
+  await api.syncTaskReminderNotifications([t]);
+  assert.equal(state.overlays.length, 2);
+  assert.equal(state.pending.length, 0);
+  assert.equal(state.scheduleCalls.length, 0);
+  await api.syncTaskReminderNotifications([{ ...t, completed: true }]);
+  assert.deepEqual(state.overlays, []);
+  await Promise.all([api.syncTaskReminderNotifications([t]), api.syncTaskReminderNotifications([])]);
+  assert.deepEqual(state.overlays, []);
+});
+
+test('occurrence identity prevents old actions reaching a new task deadline', () => {
+  const t = { ...task(), reminderType: '1_hour_before' };
+  const old = plan.reminderEventsForTask(t, true);
+  const next = plan.reminderEventsForTask({ ...t, dueDate: '2027-01-01T15:00:00Z' }, true);
+  for (const row of old) assert(!next.some((event) => event.id === row.id));
 });

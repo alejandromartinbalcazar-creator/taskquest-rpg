@@ -25,7 +25,8 @@ final class ReminderCard {
         content.setFocusable(true); content.setContentDescription("Ver detalle de " + row.optString("title"));
         content.setOnClickListener(view -> open.run());
         layout.setOnClickListener(view -> open.run()); layout.setFocusable(false);
-        content.addView(text(c, row.optBoolean("test") ? "Prueba de recordatorio" : "Es hora de tu misión", 14, Color.rgb(196, 181, 253), true));
+        String heading = "due".equals(row.optString("kind")) ? "Llegó la hora límite" : row.optLong("dueAt", Long.MAX_VALUE) < System.currentTimeMillis() ? "Tu misión sigue pendiente" : "Tu misión se acerca";
+        content.addView(text(c, row.optBoolean("test") ? "Prueba de recordatorio" : heading, 14, Color.rgb(196, 181, 253), true));
         TextView title = text(c, row.optString("title"), 23, Color.WHITE, true); title.setMaxLines(3); content.addView(title);
         TextView body = text(c, row.optString("body"), 16, Color.rgb(203, 213, 225), false); body.setMaxLines(4); content.addView(body);
         layout.addView(content);

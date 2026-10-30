@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import type { Task } from '../types';
 import { getReminderOverlayStatus, syncReminderOverlays } from './reminderOverlay';
-import { MAX_PENDING_REMINDERS, REMINDER_TAG, nativeReminderPlan, notificationIdForTask, reminderDateForTask, taskReminderSignature } from './reminderPlan';
+import { REMINDER_TAG, nativeReminderPlan, reminderEventsForTask } from './reminderPlan';
 
 export type ReminderPermission = 'granted' | 'denied' | 'unsupported';
 export interface ReminderSyncStatus {
@@ -46,18 +46,26 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     const delivered = deliveredResult.notifications.filter(isTaskReminder);
     const presentation = await getReminderOverlayStatus().catch(() => null);
     let deliveryError: string | undefined;
-    if (presentation?.enabled) {
+    const now = Date.now();
+    const plan = nativeReminderPlan(snapshot, exact, now);
+    const futureEvents = snapshot.flatMap((task) => reminderEventsForTask(task, exact, now)).filter((row) => row.at > now);
+    const capacityError = futureEvents.length > plan.filter((row) => row.at > now).length
+      ? 'Hay demasiados avisos. Se priorizaron los de la hora límite; algunos anticipos no se programaron.' : undefined;
+    if (Capacitor.getPlatform() === 'android') {
       try {
         // Native delivery owns the alarm, notification and presentation together.
         // No second Capacitor alarm is left racing the same reminder.
-        const native = await syncReminderOverlays(permission === 'granted' ? nativeReminderPlan(snapshot, exact) : []);
+        const native = await syncReminderOverlays(permission === 'granted' ? plan : []);
         if (pending.length) await LocalNotifications.cancel({ notifications: pending.map(({ id }) => ({ id })) });
         const obsolete = delivered.filter((notice) => !snapshot.some((task) => !task.completed && task.id === extraOf(notice).taskId));
         if (obsolete.length) await LocalNotifications.removeDeliveredNotificationsById({ ids: obsolete.map(({ id }) => id) });
-        return { permission, exact, scheduledTaskIds: native.scheduledTaskIds };
+        const armed = new Set(native.scheduledTaskIds);
+        const eventIds = native.scheduledEventIds && new Set(native.scheduledEventIds);
+        const failed = permission === 'granted' && plan.some((row) => row.at > now && (eventIds ? !eventIds.has(row.id) : !armed.has(row.taskId)));
+        return { permission, exact, scheduledTaskIds: [...armed], error: failed ? 'Algunos avisos no se pudieron programar. Revisa los permisos de Android.' : capacityError };
       } catch (error) {
         console.warn('No se pudo programar el modo de alarma:', error);
-        deliveryError = 'El modo de alarma no se pudo programar. Revisa la configuración; se intentará la notificación habitual.';
+        deliveryError = 'El planificador de Android falló. Se usarán avisos únicos; la repetición requiere reintentar la programación.';
       }
     }
     const usedIds = new Set([...pendingResult.notifications, ...deliveredResult.notifications]
@@ -68,54 +76,37 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     const keepDelivered = new Set<number>();
     const scheduledTaskIds: string[] = [];
     const desired: LocalNotificationSchema[] = [];
-    const active = snapshot.filter((task) => !task.completed && task.reminderType && task.reminderType !== 'none')
-      .sort((a, b) => (reminderDateForTask(a)?.getTime() ?? Infinity) - (reminderDateForTask(b)?.getTime() ?? Infinity) || a.id.localeCompare(b.id));
-    let pendingCount = 0;
-
-    for (const task of active) {
-      let id = notificationIdForTask(task.id);
+    // One-shot fallback only; Android periodic delivery belongs to its native receiver.
+    for (const event of plan.filter((row) => row.kind !== 'repeat')) {
+      let id = event.id;
       while (usedIds.has(id)) id = id === 2_147_483_646 ? 1 : id + 1;
       usedIds.add(id);
-      let at = reminderDateForTask(task);
-      if (!at) continue;
-      const signature = taskReminderSignature(task, exact) + (presentation?.channelId || '');
+      const at = new Date(event.at);
+      const signature = event.signature + (presentation?.channelId || '');
       const current = pendingById.get(id);
       const shown = deliveredById.get(id);
-      const currentMatches = current && extraOf(current).taskId === task.id && extraOf(current).signature === signature;
-      const shownMatches = shown && extraOf(shown).taskId === task.id && extraOf(shown).signature === signature;
+      const currentMatches = current && extraOf(current).taskId === event.taskId && extraOf(current).signature === signature;
+      const shownMatches = shown && extraOf(shown).taskId === event.taskId && extraOf(shown).signature === signature;
       if (shownMatches) keepDelivered.add(id);
-      if (at.getTime() <= Date.now()) {
-        // One-shot reminders must never fire twice. A persistent reminder that
-        // was never displayed retains its prior delayed-notice behavior.
-        if (task.reminderType !== 'constant' || shownMatches) continue;
-        if (currentMatches && !options.refreshExisting) {
-          keepPending.add(id);
-          if (permission === 'granted') scheduledTaskIds.push(task.id);
-          pendingCount++;
-          continue;
-        }
-        at = new Date(Date.now() + 60_000);
-      }
-      if (pendingCount >= MAX_PENDING_REMINDERS) continue;
-      pendingCount++;
+      if (at.getTime() <= now) continue;
       if (currentMatches && !options.refreshExisting) {
         keepPending.add(id);
-        if (permission === 'granted') scheduledTaskIds.push(task.id);
+        if (permission === 'granted') scheduledTaskIds.push(event.taskId);
         continue;
       }
       if (permission !== 'granted') continue;
       desired.push({
         id,
-        title: `¡Misión pendiente: ${task.title}!`,
-        body: task.description?.trim() || 'Tu misión te espera. ¡Completa la tarea para ganar tu recompensa!',
+        title: `¡Misión pendiente: ${event.title}!`,
+        body: event.body,
         channelId: presentation?.channelId,
         schedule: { at, allowWhileIdle: true },
         isExactNotification: exact,
-        ongoing: task.reminderType === 'constant',
-        autoCancel: task.reminderType !== 'constant',
-        extra: { source: REMINDER_TAG, taskId: task.id, dueDate: task.dueDate, signature },
+        ongoing: false,
+        autoCancel: true,
+        extra: { source: REMINDER_TAG, taskId: event.taskId, dueDate: event.dueDate, signature },
       });
-      scheduledTaskIds.push(task.id);
+      scheduledTaskIds.push(event.taskId);
     }
 
     const cancelIds = pending.filter((item) => !keepPending.has(item.id)).map(({ id }) => ({ id }));
@@ -123,11 +114,7 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     if (cancelIds.length) await LocalNotifications.cancel({ notifications: cancelIds });
     if (removeIds.length) await LocalNotifications.removeDeliveredNotificationsById({ ids: removeIds });
     if (desired.length) await LocalNotifications.schedule({ notifications: desired });
-    if (!deliveryError) {
-      try { await syncReminderOverlays(permission === 'granted' ? nativeReminderPlan(snapshot, exact) : []); }
-      catch (error) { console.warn('No se pudo actualizar la copia nativa de recordatorios:', error); }
-    }
-    return { permission, exact, scheduledTaskIds, ...(deliveryError ? { error: deliveryError } : {}) };
+    return { permission, exact, scheduledTaskIds: [...new Set(scheduledTaskIds)], error: deliveryError || capacityError };
   });
   syncQueue = result.then(() => undefined, () => undefined);
   return result.catch((error) => {

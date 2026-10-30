@@ -19,7 +19,7 @@ final class ReminderOverlayStore {
     }
     static boolean exact(Context c) { return Build.VERSION.SDK_INT < 31 || ((AlarmManager)c.getSystemService(Context.ALARM_SERVICE)).canScheduleExactAlarms(); }
     static boolean enabled(Context c) { return prefs(c).getBoolean("enabled", false); }
-    static boolean permitted(Context c) { return Build.VERSION.SDK_INT >= 26 && enabled(c) && NotificationManagerCompat.from(c).areNotificationsEnabled(); }
+    static boolean permitted(Context c) { return Build.VERSION.SDK_INT >= 26 && NotificationManagerCompat.from(c).areNotificationsEnabled(); }
     static boolean sound(Context c) { return prefs(c).getBoolean("sound", true); }
     static boolean vibration(Context c) { return prefs(c).getBoolean("vibration", true); }
     static int duration(Context c) { return ReminderDeliveryPolicy.duration(prefs(c).getInt("duration", 30)); }
@@ -33,25 +33,36 @@ final class ReminderOverlayStore {
     }
     private static boolean sameOccurrence(JSONObject a, JSONObject b) {
         return a.optString("taskId").equals(b.optString("taskId")) && a.optString("dueDate").equals(b.optString("dueDate"))
-            && a.optLong("requestedAt", a.optLong("at")) == b.optLong("requestedAt", b.optLong("at"));
+            && a.optString("kind").equals(b.optString("kind"))
+            && ("repeat".equals(a.optString("kind")) ? a.optLong("startAt") == b.optLong("startAt") && a.optLong("intervalMs") == b.optLong("intervalMs")
+                : a.optLong("requestedAt", a.optLong("at")) == b.optLong("requestedAt", b.optLong("at")));
     }
     static synchronized void sync(Context c, JSONArray desired) {
         AlarmManager manager = (AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
         JSONArray previous = read(c, "reminders"), next = new JSONArray();
-        for (int i = 0; i < desired.length() && i < 450; i++) {
-            JSONObject row = desired.optJSONObject(i);
+        java.util.ArrayList<JSONObject> ordered = new java.util.ArrayList<>();
+        for (int i = 0; i < desired.length(); i++) if (desired.optJSONObject(i) != null) ordered.add(desired.optJSONObject(i));
+        final long now = System.currentTimeMillis();
+        ordered.sort(java.util.Comparator.comparingInt((JSONObject item) -> item.optLong("at") <= now ? 2 : "due".equals(item.optString("kind")) ? 0 : 1).thenComparingLong(item -> item.optLong("at")));
+        for (int i = 0; i < ordered.size() && i < 450; i++) {
+            JSONObject row = ordered.get(i);
             if (row == null || row.optInt("id") <= 0 || row.optString("taskId").isEmpty() || row.optString("dueDate").isEmpty()) continue;
             try {
                 row.put("requestedAt", row.optLong("requestedAt", row.optLong("at")));
                 for (int j = 0; j < previous.length(); j++) {
                     JSONObject old = previous.optJSONObject(j);
                     if (old != null && sameOccurrence(old, row)) {
-                        row.put("fired", old.optBoolean("fired")).put("dismissed", old.optBoolean("dismissed"));
+                        row.put("fired", old.optBoolean("fired")).put("dismissed", old.optBoolean("dismissed"))
+                            .put("lastDeliveredAt", old.optLong("lastDeliveredAt")).put("completed", old.optBoolean("completed"));
                         if (old.optLong("at") > System.currentTimeMillis()) row.put("at", old.optLong("at"));
                         break;
                     }
                 }
-                if (row.optBoolean("constant") && !row.optBoolean("fired") && row.optLong("at") <= System.currentTimeMillis()) row.put("at", System.currentTimeMillis() + 60000);
+                JSONArray actions = read(c, "actions");
+                for (int j = 0; j < actions.length(); j++) {
+                    JSONObject action = actions.optJSONObject(j);
+                    if (action != null && row.optString("taskId").equals(action.optString("taskId")) && row.optString("dueDate").equals(action.optString("dueDate"))) row.put("completed", true);
+                }
             } catch (Exception ignored) { }
             next.put(row);
         }
@@ -61,7 +72,7 @@ final class ReminderOverlayStore {
             if (enabled(c) && old.optInt("id") == TEST_ID && !old.optBoolean("dismissed") && old.optLong("at") > System.currentTimeMillis() - 120000) { next.put(old); continue; }
             boolean keep = false;
             for (int j = 0; j < next.length(); j++) if (key(old).equals(key(next.optJSONObject(j)))) keep = true;
-            if (!keep || !enabled(c)) { ReminderAlarmNotice.cancel(c, old.optInt("id")); ReminderAlarmActivity.close(old.optInt("id")); }
+            if (!keep) { ReminderAlarmNotice.cancel(c, old.optInt("id")); ReminderAlarmActivity.close(old.optInt("id")); }
         }
         prefs(c).edit().putString("reminders", next.toString()).commit();
         restore(c); ReminderOverlayService.refresh();
@@ -74,14 +85,18 @@ final class ReminderOverlayStore {
         JSONArray rows = read(c, "reminders");
         for (int i = 0; i < rows.length(); i++) {
             JSONObject row = rows.optJSONObject(i);
-            if (row == null || row.optBoolean("fired") || row.optLong("at") <= System.currentTimeMillis()) continue;
+            if (row == null || row.optBoolean("completed")) continue;
+            if ("repeat".equals(row.optString("kind")) && row.optLong("at") <= System.currentTimeMillis()) try {
+                row.put("at", ReminderRules.next(row.optLong("startAt"), row.optLong("intervalMs"), row.optLong("dueAt"), System.currentTimeMillis()));
+            } catch (Exception e) { event(c, "schedule_error", "invalid_interval"); continue; }
+            if (row.optBoolean("fired") || row.optLong("at") <= System.currentTimeMillis()) continue;
             try {
                 if (exact(c)) manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, row.optLong("at"), alarm(c, row.optInt("id")));
                 else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, row.optLong("at"), alarm(c, row.optInt("id")));
                 armed.put(row.optInt("id"));
             } catch (RuntimeException e) { event(c, "schedule_error", e.getClass().getSimpleName()); }
         }
-        prefs(c).edit().putString("armed", armed.toString()).commit();
+        prefs(c).edit().putString("armed", armed.toString()).putString("reminders", rows.toString()).commit();
     }
     private static boolean armed(Context c, int id) {
         JSONArray armed = read(c, "armed");
@@ -96,7 +111,7 @@ final class ReminderOverlayStore {
         for (int i = 0; i < armed.length(); i++) armedIds.add(armed.optInt(i));
         for (int i = 0; i < rows.length(); i++) {
             JSONObject row = rows.optJSONObject(i);
-            if (row != null && !row.optBoolean("test") && !row.optBoolean("fired") && row.optLong("at") > System.currentTimeMillis() && armedIds.contains(row.optInt("id"))) ids.put(row.optString("taskId"));
+            if (row != null && !row.optBoolean("test") && !row.optBoolean("completed") && !row.optBoolean("fired") && row.optLong("at") > System.currentTimeMillis() && armedIds.contains(row.optInt("id"))) ids.put(row.optString("taskId"));
         }
         return ids;
     }
@@ -109,11 +124,17 @@ final class ReminderOverlayStore {
         JSONArray rows = read(c, "reminders"); JSONObject result = null;
         for (int i = 0; i < rows.length(); i++) {
             JSONObject row = rows.optJSONObject(i);
-            if (row != null && row.optInt("id") == id && !row.optBoolean("fired") && row.optLong("at") <= System.currentTimeMillis() + 1000) {
-                result = row; try { row.put("fired", true); } catch (Exception ignored) { } break;
+            if (row != null && row.optInt("id") == id && !row.optBoolean("completed") && !row.optBoolean("fired") && row.optLong("at") <= System.currentTimeMillis() + 1000) {
+                try {
+                    row.put("lastDeliveredAt", System.currentTimeMillis()).put("dismissed", false);
+                    result = new JSONObject(row.toString());
+                    if ("repeat".equals(row.optString("kind"))) row.put("at", ReminderRules.next(row.optLong("startAt"), row.optLong("intervalMs"), row.optLong("dueAt"), System.currentTimeMillis()));
+                    else row.put("fired", true);
+                } catch (Exception ignored) { }
+                break;
             }
         }
-        prefs(c).edit().putString("reminders", rows.toString()).commit(); return result;
+        prefs(c).edit().putString("reminders", rows.toString()).commit(); restore(c); return result;
     }
     static synchronized void dismiss(Context c, int id) {
         JSONArray rows = read(c, "reminders");
@@ -142,6 +163,16 @@ final class ReminderOverlayStore {
         }
         try { actions.put(new JSONObject().put("key", key(row)).put("taskId", row.optString("taskId")).put("dueDate", row.optString("dueDate")));
             prefs(c).edit().putString("actions", actions.toString()).commit(); } catch (Exception ignored) { }
+        JSONArray rows = read(c, "reminders");
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject item = rows.optJSONObject(i);
+            if (item != null && row.optString("taskId").equals(item.optString("taskId")) && row.optString("dueDate").equals(item.optString("dueDate"))) try {
+                item.put("completed", true).put("dismissed", true);
+                ((AlarmManager)c.getSystemService(Context.ALARM_SERVICE)).cancel(alarm(c, item.optInt("id")));
+                ReminderAlarmNotice.cancel(c, item.optInt("id")); ReminderOverlayService.dismiss(item.optInt("id"));
+            } catch (Exception ignored) { }
+        }
+        prefs(c).edit().putString("reminders", rows.toString()).commit();
     }
     static synchronized void acknowledge(Context c, JSONArray keys) {
         JSONArray old = read(c, "actions"), next = new JSONArray();

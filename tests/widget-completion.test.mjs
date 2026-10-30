@@ -48,7 +48,7 @@ test('several offline recurring completions reconcile in occurrence order', () =
   const second = completeTaskState(first.player, first.tasks, t.id, { action: { ...a, key: 'account:second', dueDate: a.nextDueDate, completedAt: '2026-10-31T15:00:00.000Z', nextDueDate: '2026-11-01T14:00:00.000Z' } });
   assert.equal(second.player.totalTasksCompleted, player().totalTasksCompleted + 2);
   assert.equal(second.tasks[0].dueDate, '2026-11-01T14:00:00.000Z');
-  assert.equal(second.tasks[0].reminderType, 'none');
+  assert.equal(second.tasks[0].reminderType, 'at_due');
 });
 
 test('honor debt uses redemption instead of adding normal mission rewards', () => {
@@ -57,6 +57,16 @@ test('honor debt uses redemption instead of adding normal mission rewards', () =
   assert.equal(result.redeemed, true); assert.equal(result.player.gold, p.gold);
   assert.equal(result.player.dungeonKeys, p.dungeonKeys); assert.equal(result.tasks[0].isHonorDebt, false);
   assert.equal(result.tasks[0].completed, true);
+});
+
+test('stopping constant reminders belongs only to the completed occurrence', () => {
+  const t = { ...task(), recurrence: 'daily', reminderType: 'constant', reminderVersion: 2,
+    reminderStartMinutes: 60, reminderIntervalMinutes: 15, reminderStoppedDueDate: task().dueDate };
+  const result = completeTaskState(player(), [t], t.id, { now });
+  assert.notEqual(result.tasks[0].dueDate, t.dueDate);
+  assert.equal(result.tasks[0].reminderStoppedDueDate, undefined);
+  assert.equal(result.tasks[0].reminderIntervalMinutes, 15);
+  assert.equal(result.tasks[0].reminderType, 'constant');
 });
 
 test('completion journal recovers both state and receipt after a split write fails', () => {

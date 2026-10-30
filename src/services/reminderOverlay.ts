@@ -9,6 +9,10 @@ export interface OverlayReminder {
   body: string;
   at: number;
   constant?: boolean;
+  kind?: 'due' | 'advance' | 'repeat' | 'legacy';
+  intervalMs?: number;
+  startAt?: number;
+  dueAt?: number;
 }
 export interface OverlayAction { key: string; taskId: string; dueDate: string }
 export interface ReminderPreferences { sound: boolean; vibration: boolean; duration: 15 | 30 | 60 }
@@ -19,13 +23,13 @@ export interface OverlayStatus extends ReminderPreferences {
   lastEvent?: { code: string; at: number; detail?: string };
 }
 interface NativeOverlay {
-  addListener(event: 'reminderReceived', listener: (event: { taskId: string; dueDate: string }) => void): Promise<PluginListenerHandle>;
-  sync(options: { reminders: OverlayReminder[] }): Promise<{ scheduledTaskIds: string[] }>;
+  addListener(event: 'reminderReceived', listener: (event: { taskId: string; dueDate: string; eventId?: number }) => void): Promise<PluginListenerHandle>;
+  sync(options: { reminders: OverlayReminder[] }): Promise<{ scheduledTaskIds: string[]; scheduledEventIds?: number[] }>;
   status(): Promise<OverlayStatus>;
   configure(options: Partial<ReminderPreferences> & { enabled?: boolean }): Promise<OverlayStatus>;
   openSettings(options: { kind: 'overlay' | 'fullScreen' | 'channel' | 'application' }): Promise<void>;
   test(): Promise<void>;
-  dismiss(options: { taskId: string; dueDate: string }): Promise<void>;
+  dismiss(options: { taskId: string; dueDate: string; eventId?: number }): Promise<void>;
   pendingActions(): Promise<{ actions: OverlayAction[] }>;
   acknowledge(options: { keys: string[] }): Promise<void>;
 }
@@ -37,12 +41,12 @@ export const getReminderOverlayStatus = (): Promise<OverlayStatus> => supportsRe
 export const configureReminderOverlay = (settings: Partial<ReminderPreferences> & { enabled?: boolean }) => native.configure(settings);
 export const openReminderSettings = (kind: 'overlay' | 'fullScreen' | 'channel' | 'application') => native.openSettings({ kind });
 export const testReminderAlarm = () => native.test();
-export const listenForReminderAlarm = (listener: (event: { taskId: string; dueDate: string }) => void) => supportsReminderOverlay()
+export const listenForReminderAlarm = (listener: (event: { taskId: string; dueDate: string; eventId?: number }) => void) => supportsReminderOverlay()
   ? native.addListener('reminderReceived', listener) : Promise.resolve({ remove: async () => {} });
-export const dismissReminderAlarm = async (taskId: string, dueDate: string) => {
-  if (supportsReminderOverlay()) await native.dismiss({ taskId, dueDate });
+export const dismissReminderAlarm = async (taskId: string, dueDate: string, eventId?: number) => {
+  if (supportsReminderOverlay()) await native.dismiss({ taskId, dueDate, eventId });
 };
-export const syncReminderOverlays = async (reminders: OverlayReminder[]) => {
+export const syncReminderOverlays = async (reminders: OverlayReminder[]): Promise<{ scheduledTaskIds: string[]; scheduledEventIds?: number[] }> => {
   return supportsReminderOverlay() ? native.sync({ reminders }) : { scheduledTaskIds: [] };
 };
 export const pendingOverlayActions = async (): Promise<OverlayAction[]> => supportsReminderOverlay()

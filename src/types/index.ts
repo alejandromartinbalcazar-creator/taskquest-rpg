@@ -9,6 +9,7 @@ export type ReminderType =
   | 'absolute'
   | 'at_due'
   | '5_minutes_before'
+  | '10_minutes_before'
   | '30_minutes_before'
   | '1_hour_before'
   | '1_day_before'
@@ -40,6 +41,11 @@ export interface Task {
   reminderCustomMinutes?: number;
   /** Independent local reminder time in ISO format. */
   reminderAt?: string;
+  /** V2 enables real periodic reminders; missing version preserves legacy constant. */
+  reminderVersion?: 2;
+  reminderStartMinutes?: number;
+  reminderIntervalMinutes?: number;
+  reminderStoppedDueDate?: string;
   recurrence?: TaskRecurrence;
   recurrenceDays?: number[]; // [1, 2, 3, 4, 5, 6, 0] donde 1=Lunes, 2=Martes... 0=Domingo
   completed: boolean;

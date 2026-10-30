@@ -23,7 +23,7 @@ public class ReminderOverlayPlugin extends Plugin {
     @Override protected void handleOnDestroy() { if (instance.get() == this) instance.clear(); }
     static void received(JSONObject row) {
         ReminderOverlayPlugin plugin = instance.get(); if (plugin == null) return;
-        JSObject event = new JSObject(); event.put("taskId", row.optString("taskId")); event.put("dueDate", row.optString("dueDate"));
+        JSObject event = new JSObject(); event.put("taskId", row.optString("taskId")); event.put("dueDate", row.optString("dueDate")); event.put("eventId", row.optInt("id"));
         plugin.notifyListeners("reminderReceived", event, true);
     }
     private JSObject currentStatus() {
@@ -43,7 +43,8 @@ public class ReminderOverlayPlugin extends Plugin {
     @PluginMethod public void sync(PluginCall call) {
         JSArray rows = call.getArray("reminders"); if (rows == null) { call.reject("Faltan los recordatorios"); return; }
         ReminderOverlayStore.sync(getContext(), rows);
-        JSObject result = new JSObject(); result.put("scheduledTaskIds", ReminderOverlayStore.scheduledTaskIds(getContext())); call.resolve(result);
+        JSObject result = new JSObject(); result.put("scheduledTaskIds", ReminderOverlayStore.scheduledTaskIds(getContext()));
+        result.put("scheduledEventIds", ReminderOverlayStore.read(getContext(), "armed")); call.resolve(result);
     }
     @PluginMethod public void configure(PluginCall call) {
         if (Build.VERSION.SDK_INT < 26) { call.reject("El modo de alarma requiere Android 8 o posterior"); return; }
@@ -71,15 +72,16 @@ public class ReminderOverlayPlugin extends Plugin {
         catch (Exception e) { call.reject("No se pudieron abrir los ajustes de Android", e); }
     }
     @PluginMethod public void test(PluginCall call) {
-        if (!ReminderOverlayStore.permitted(getContext()) || !ReminderOverlayStore.exact(getContext())) { call.reject("Activa el modo de alarma, las notificaciones y las alarmas exactas para probar"); return; }
+        if (!ReminderOverlayStore.enabled(getContext()) || !ReminderOverlayStore.permitted(getContext()) || !ReminderOverlayStore.exact(getContext())) { call.reject("Activa el modo de alarma, las notificaciones y las alarmas exactas para probar"); return; }
         try { ReminderOverlayStore.test(getContext()); call.resolve(); } catch (Exception e) { call.reject("No se pudo programar la prueba", e); }
     }
     @PluginMethod public void dismiss(PluginCall call) {
         String taskId = call.getString("taskId", ""), dueDate = call.getString("dueDate", "");
+        Integer eventId = call.getInt("eventId");
         JSONArray rows = ReminderOverlayStore.read(getContext(), "reminders");
         for (int i = 0; i < rows.length(); i++) {
             JSONObject row = rows.optJSONObject(i);
-            if (row != null && taskId.equals(row.optString("taskId")) && dueDate.equals(row.optString("dueDate"))) ReminderOverlayStore.dismiss(getContext(), row.optInt("id"));
+            if (row != null && (eventId == null || eventId == row.optInt("id")) && row.optLong("lastDeliveredAt") > 0 && taskId.equals(row.optString("taskId")) && dueDate.equals(row.optString("dueDate"))) ReminderOverlayStore.dismiss(getContext(), row.optInt("id"));
         }
         call.resolve();
     }
