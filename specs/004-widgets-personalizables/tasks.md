@@ -7,6 +7,6 @@
 - [x] Implementar completado compartido y reconciliación con recibos y diario recuperable.
 - [x] Implementar navegación a título, nueva tarea y lista filtrada de sección.
 - [x] Implementar actualización por eventos y conservación de proveedores previos.
-- [ ] Pruebas automatizadas y build web.
+- [x] 41 pruebas Node y build web correctos. Fixtures de recurrencia comunes con JVM; diario recuperable y recibos probados.
 - [ ] Compilación APK y pruebas JVM.
 - [ ] Prueba física en Redmi: launcher, resize, scroll, checkbox, modo offline, reinicio, accesibilidad y dos widgets. No marcar como aprobada sin comprobarla.

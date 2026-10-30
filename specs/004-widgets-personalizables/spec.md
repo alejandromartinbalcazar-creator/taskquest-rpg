@@ -151,7 +151,13 @@ El usuario aprobó esta versión revisada. Se implementa ese alcance sin añadir
 
 ## 8. Evidencia
 
-Solo se revisaron el requerimiento, la referencia, los tipos de tareas, el puente de datos y los archivos nativos existentes. No hay implementación ni prueba manual de esta nueva versión. Las casillas de aceptación permanecen pendientes.
+Implementación realizada: dos presets, editor nativo por instancia, vista previa local, tres apariencias, configuración de tema/densidad, acciones rápidas, cola de completados por origen, recurrencia nativa y reconciliación con el completado compartido. Las casillas de aceptación física permanecen pendientes.
+
+En tamaños muy reducidos, el resumen de Hoy/Vencidas y el contador de Mañana sustituyen las filas si no cabe una zona táctil legible; al ampliar aparecen las filas. Las celdas concretas, el menú y el redimensionado necesitan comprobarse en el launcher del Redmi. La primera compilación nativa pasó en Actions `41009143554` (commit `e5b9c95`); las revisiones posteriores deben tener su propia compilación.
+
+Se ejecutaron `npm run build` y 41 pruebas Node correctamente. Las pruebas cubren igualdad de recompensas app/widget, repetición de comandos, ocurrencias viejas, restauración del diario tras escritura interrumpida, aislamiento por origen y nueve casos de recurrencia compartidos con las pruebas JVM (incluidos DST, fin de mes y año bisiesto).
+
+Al completar un hábito desde el widget, la siguiente ocurrencia se proyecta localmente. Si usa el modo de alarma nativa con recordatorio relativo, se prepara también su siguiente alarma. Los recordatorios de una sola fecha absoluta se cancelan; la programación de futuras notificaciones del modo habitual de Capacitor se reanudará al abrir la app y reconciliar los cambios. Esto no equivale a una conexión permanente con Supabase.
 
 Referencias oficiales consultadas:
 - [Configuración por instancia de widget](https://developer.android.com/develop/ui/compose/glance/configuration).

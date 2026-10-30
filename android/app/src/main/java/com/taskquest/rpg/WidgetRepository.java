@@ -83,7 +83,7 @@ final class WidgetRepository {
                 .put("completedAt", WidgetRules.iso(now)).put("nextDueDate", next == null ? JSONObject.NULL : next).put("settled", false);
             actions.put(action);
             if (!prefs(c).edit().putString("actions", actions.toString()).commit()) { prefs(c).edit().putString("actions", original).commit(); return false; }
-            WidgetReminderBridge.cancel(c, id, due);
+            WidgetReminderBridge.complete(c, task, next);
             return true;
         } catch (Exception e) { return false; }
     }

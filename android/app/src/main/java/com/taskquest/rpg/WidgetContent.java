@@ -35,7 +35,9 @@ final class WidgetContent {
         if (section.equals("compact")) return all;
         if (!section.equals("mixed")) return selected(section);
         ArrayList<JSONObject> result = new ArrayList<>();
-        String first = settings.order[0].equals("overdue") ? "overdue" : "today", second = first.equals("today") ? "overdue" : "today";
+        String first = "today";
+        for (String ordered : settings.order) if (!ordered.equals("tomorrow")) { first = ordered; break; }
+        String second = first.equals("today") ? "overdue" : "today";
         ArrayList<JSONObject> a = selected(first), b = selected(second);
         for (int i = 0; i < Math.max(a.size(), b.size()); i++) { if (i < a.size()) result.add(a.get(i)); if (i < b.size()) result.add(b.get(i)); }
         return result;

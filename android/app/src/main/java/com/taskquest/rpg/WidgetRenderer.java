@@ -47,7 +47,7 @@ final class WidgetRenderer {
         v.setOnClickPendingIntent(R.id.widget_menu, PendingIntent.getActivity(c, id, config, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         boolean compact = s.preset.equals("compact"), small = height < 320;
         v.setViewVisibility(R.id.widget_sections, !compact && !small ? View.VISIBLE : View.GONE);
-        v.setViewVisibility(R.id.widget_list, compact || small ? View.VISIBLE : View.GONE);
+        v.setViewVisibility(R.id.widget_list, compact || (small && height >= 150) ? View.VISIBLE : View.GONE);
         v.setViewVisibility(R.id.widget_summary_bar, !compact && small ? View.VISIBLE : View.GONE);
         v.removeAllViews(R.id.widget_sections);
         if (compact || small) {
@@ -57,7 +57,7 @@ final class WidgetRenderer {
                 int view = section.equals("today") ? R.id.widget_summary_today : R.id.widget_summary_overdue;
                 v.setTextViewText(view, WidgetContent.label(section) + " (" + count + ")" + (count > shown ? " · +" + (count - shown) : ""));
                 v.setOnClickPendingIntent(view, open(c, id, "section", section));
-                v.setViewVisibility(view, s.limits[WidgetContent.index(section)] > 0 ? View.VISIBLE : View.GONE);
+                v.setViewVisibility(view, s.limits[WidgetContent.index(section)] > 0 && (count > 0 || s.showEmpty) ? View.VISIBLE : View.GONE);
             }
         } else {
             for (String section : s.order) {
@@ -83,6 +83,7 @@ final class WidgetRenderer {
         v.setTextViewText(R.id.widget_tomorrow_summary, "Mañana · " + tomorrow + " tareas"); v.setOnClickPendingIntent(R.id.widget_tomorrow_summary, open(c, id, "section", "tomorrow"));
         int selected = compact ? content.all.size() : content.selected("today").size() + content.selected("overdue").size() + content.selected("tomorrow").size();
         v.setViewVisibility(R.id.widget_empty, selected == 0 ? View.VISIBLE : View.GONE);
+        if (!compact && small && content.groups.get("today").isEmpty() && content.groups.get("overdue").isEmpty() && !s.showEmpty) v.setViewVisibility(R.id.widget_summary_bar, View.GONE);
         v.setTextViewText(R.id.widget_empty, content.all.isEmpty() ? "Sin pendientes. Pulsa + para crear una misión." : "Sin tareas en estos grupos. Toca Misiones para ver todas.");
         v.setOnClickPendingIntent(R.id.widget_empty, open(c, id, "tasks", null));
         int pending = WidgetRepository.pendingCount(c); v.setViewVisibility(R.id.widget_pending, pending > 0 && height >= 190 ? View.VISIBLE : View.GONE);
