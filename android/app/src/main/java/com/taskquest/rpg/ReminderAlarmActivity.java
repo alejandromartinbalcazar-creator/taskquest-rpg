@@ -42,7 +42,7 @@ public class ReminderAlarmActivity extends Activity {
         JSONObject row = ReminderOverlayStore.find(this, reminderId);
         if (row == null || row.optBoolean("dismissed") || !ReminderOverlayStore.key(row).equals(getIntent().getStringExtra("key"))) { finish(); return; }
         FrameLayout container = new FrameLayout(this); container.setBackgroundColor(Color.rgb(8, 11, 32));
-        LinearLayout card = ReminderCard.build(this, row, () -> navigate(row, true), () -> { ReminderOverlayStore.dismiss(this, reminderId); finish(); }, () -> navigate(row, false));
+        LinearLayout card = ReminderCard.build(this, row, () -> navigate(row, true), () -> { ReminderOverlayStore.dismiss(this, row.optInt("id")); finish(); }, () -> navigate(row, false));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Math.min(getResources().getDisplayMetrics().widthPixels - ReminderCard.dp(this, 32), ReminderCard.dp(this, 500)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         container.addView(card, params); setContentView(container);
         // Service owns the signal when running; notification taps after it stops
@@ -60,7 +60,7 @@ public class ReminderAlarmActivity extends Activity {
         if (completing) return;
         completing = true; signal.stop(); ReminderOverlayService.stopSignals();
         if (row.optBoolean("test")) {
-            ReminderOverlayStore.dismiss(this, reminderId);
+            ReminderOverlayStore.dismiss(this, row.optInt("id"));
             if (!complete) startActivity(WidgetRenderer.link(this, "tasks", null, null));
             finish(); return;
         }
@@ -74,10 +74,11 @@ public class ReminderAlarmActivity extends Activity {
         } else saveAndOpen(row, complete);
     }
     private void saveAndOpen(JSONObject row, boolean complete) {
-        JSONObject current = ReminderOverlayStore.find(this, reminderId);
+        int selectedId = row.optInt("id");
+        JSONObject current = ReminderOverlayStore.find(this, selectedId);
         boolean valid = current != null && !current.optBoolean("dismissed") && ReminderOverlayStore.key(current).equals(ReminderOverlayStore.key(row));
         if (complete && valid) ReminderOverlayStore.enqueue(this, row);
-        ReminderOverlayStore.dismiss(this, reminderId);
+        ReminderOverlayStore.dismiss(this, selectedId);
         try { startActivity(!complete && valid ? WidgetRenderer.link(this, "edit-task", row.optString("taskId"), null)
             : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)); }
         catch (RuntimeException e) { Toast.makeText(this, complete ? "Abre FocusMission para guardar la misión realizada" : "Abre FocusMission para ver la misión", Toast.LENGTH_LONG).show(); }
