@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.provider.Settings;
+import androidx.core.app.NotificationManagerCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -20,7 +21,7 @@ final class ReminderOverlayStore {
         return Build.VERSION.SDK_INT < 31 || ((AlarmManager)c.getSystemService(Context.ALARM_SERVICE)).canScheduleExactAlarms();
     }
     static boolean enabled(Context c) { return prefs(c).getBoolean("enabled", false); }
-    static boolean permitted(Context c) { return Build.VERSION.SDK_INT >= 26 && enabled(c) && Settings.canDrawOverlays(c) && exact(c); }
+    static boolean permitted(Context c) { return Build.VERSION.SDK_INT >= 26 && enabled(c) && Settings.canDrawOverlays(c) && exact(c) && NotificationManagerCompat.from(c).areNotificationsEnabled(); }
     static String key(JSONObject row) { return row.optInt("id") + ":" + row.optString("signature"); }
     static PendingIntent alarm(Context c, int id) {
         return PendingIntent.getBroadcast(c, id, new Intent(c, ReminderOverlayReceiver.class).setAction("focusmission.reminder").putExtra("id", id), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -84,7 +85,10 @@ final class ReminderOverlayStore {
     }
     static synchronized void enqueue(Context c, JSONObject row) {
         JSONArray actions = read(c, "actions");
-        for (int i = 0; i < actions.length(); i++) if (key(row).equals(actions.optJSONObject(i).optString("key"))) return;
+        for (int i = 0; i < actions.length(); i++) {
+            JSONObject previous = actions.optJSONObject(i);
+            if (previous != null && key(row).equals(previous.optString("key"))) return;
+        }
         try {
             actions.put(new JSONObject().put("key", key(row)).put("taskId", row.optString("taskId")).put("dueDate", row.optString("dueDate")));
             prefs(c).edit().putString("actions", actions.toString()).commit();

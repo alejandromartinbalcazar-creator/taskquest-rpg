@@ -24,7 +24,7 @@ const task = (id = 'mission-1') => ({ id, title: 'Estudiar', description: 'Repas
   statAffinity: 'knowledge', difficulty: 'media', expReward: 10, goldReward: 2 });
 
 function harness() {
-  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [] };
+  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false };
   const plugin = {
     checkPermissions: async () => ({ display: state.permission }),
     requestPermissions: async () => ({ display: state.permission }),
@@ -51,7 +51,7 @@ function harness() {
     '@capacitor/core': { Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } },
     '@capacitor/local-notifications': { LocalNotifications: plugin },
     './reminderPlan': plan,
-    './reminderOverlay': { syncReminderOverlays: async (items) => { state.overlays = items; } },
+    './reminderOverlay': { syncReminderOverlays: async (items) => { if (state.overlayError) throw new Error('overlay unavailable'); state.overlays = items; } },
   });
   return { state, api };
 }
@@ -147,6 +147,21 @@ test('denied notifications do not claim an alarm was scheduled', async () => {
   assert.equal(status.permission, 'denied');
   assert.deepEqual(status.scheduledTaskIds, []);
   assert.equal(state.pending.length, 0);
+  assert.deepEqual(state.overlays, []);
+});
+
+test('a native overlay failure keeps the ordinary reminder and its scheduling status', async () => {
+  const { state, api } = harness();
+  state.overlayError = true;
+  const warning = console.warn;
+  console.warn = () => {};
+  try {
+    const result = await api.syncTaskReminderNotifications([task()]);
+    assert.equal(result.permission, 'granted');
+    assert.equal(result.error, undefined);
+    assert.equal(state.pending.length, 1);
+    assert.deepEqual(result.scheduledTaskIds, [task().id]);
+  } finally { console.warn = warning; }
 });
 
 test('rapid create then delete serializes operations and leaves no alarm', async () => {

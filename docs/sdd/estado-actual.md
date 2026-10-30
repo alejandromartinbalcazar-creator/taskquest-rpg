@@ -10,6 +10,7 @@ Revisión inicial: 29 de octubre de 2026. Es un mapa para localizar código, no 
 | Concentración | Existe una vista de concentración; no se asume completada toda la visión del Santuario. | `src/components/ConcentrationTreeView.tsx` |
 | Mazmorra | Tutorial, combate elemental y escenarios para niveles 1 y 2; hay estructuras para rutas y biomas. Comprobar la experiencia real antes de considerar listo un nivel. | `src/components/DungeonView.tsx`, `src/game/elementalEngine/`, `src/game/expedition/`, `src/game/levels/` |
 | Android | Widget, pantalla completa y notificaciones locales mediante Capacitor. La entrega real y los permisos requieren prueba en dispositivo. | `android/app/src/main/`, `src/services/androidWidget.ts`, `src/services/taskReminders.ts` |
+| Avisos destacados | Panel de recordatorio dentro de la app y superposición Android opcional con «Realizado»/«Cerrar». Implementación descrita en `specs/002-aviso-superpuesto/`; prueba en Redmi pendiente. | `src/services/reminderOverlay.ts`, `src/components/ReminderOverlaySettings.tsx`, `android/app/src/main/java/com/taskquest/rpg/ReminderOverlay*` |
 | iOS | Objetivo de producto; no se observa un proyecto nativo `ios/` en esta revisión. | `capacitor.config.ts` |
 | Calidad y APK | Hay pruebas Node y un flujo GitHub Actions que compila un APK de depuración. | `tests/`, `.github/workflows/build-apk.yml` |
 
