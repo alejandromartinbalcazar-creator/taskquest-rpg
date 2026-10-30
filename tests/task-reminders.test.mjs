@@ -24,7 +24,7 @@ const task = (id = 'mission-1') => ({ id, title: 'Estudiar', description: 'Repas
   statAffinity: 'knowledge', difficulty: 'media', expReward: 10, goldReward: 2 });
 
 function harness() {
-  const state = { platform: 'ios', permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false, nativeEnabled: false, channelId: undefined };
+  const state = { platform: 'ios', supported: true, permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false, nativeEnabled: false, channelId: undefined };
   const plugin = {
     checkPermissions: async () => ({ display: state.permission }),
     requestPermissions: async () => ({ display: state.permission }),
@@ -52,7 +52,7 @@ function harness() {
     '@capacitor/local-notifications': { LocalNotifications: plugin },
     './reminderPlan': plan,
     './reminderOverlay': {
-      getReminderOverlayStatus: async () => ({ enabled: state.nativeEnabled, channelId: state.channelId }),
+      getReminderOverlayStatus: async () => ({ supported: state.supported, enabled: state.nativeEnabled, channelId: state.channelId }),
       syncReminderOverlays: async (items) => {
         if (state.overlayError) throw new Error('overlay unavailable');
         state.overlays = items;
@@ -295,6 +295,7 @@ test('constant is opt-in and holds only one next interval plus its deadline', ()
   const stopped = { ...t, reminderStoppedDueDate: t.dueDate };
   assert.deepEqual(plan.reminderEventsForTask(stopped, true, before).map((row) => row.kind), ['due']);
   assert.equal(plan.reminderEventsForTask({ ...stopped, dueDate: '2026-11-09T20:00:00Z' }, true, before).length, 2);
+  assert.equal(plan.repeatIsStopped({ ...stopped, dueDate: '2026-11-02T20:00:00.000Z', reminderStoppedDueDate: '2026-11-02T15:00:00-05:00' }), true);
 });
 
 test('repeat intervals match native fixtures, never replay missed ticks or duplicate the deadline', () => {
@@ -333,4 +334,14 @@ test('occurrence identity prevents old actions reaching a new task deadline', ()
   const old = plan.reminderEventsForTask(t, true);
   const next = plan.reminderEventsForTask({ ...t, dueDate: '2027-01-01T15:00:00Z' }, true);
   for (const row of old) assert(!next.some((event) => event.id === row.id));
+});
+
+test('Android 7 retains ordinary reminders without claiming periodic native support', async () => {
+  const { state, api } = harness(); state.platform = 'android'; state.supported = false;
+  const t = { ...task(), reminderType: 'constant', reminderVersion: 2, reminderStartMinutes: 60, reminderIntervalMinutes: 30 };
+  const result = await api.syncTaskReminderNotifications([t]);
+  assert.equal(state.pending.length, 1);
+  assert.equal(state.pending[0].schedule.at.toISOString(), t.dueDate);
+  assert.equal(state.overlays.length, 0);
+  assert.match(result.error, /Android 8/);
 });

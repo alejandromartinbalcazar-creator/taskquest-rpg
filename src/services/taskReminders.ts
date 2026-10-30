@@ -51,7 +51,7 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     const futureEvents = snapshot.flatMap((task) => reminderEventsForTask(task, exact, now)).filter((row) => row.at > now);
     const capacityError = futureEvents.length > plan.filter((row) => row.at > now).length
       ? 'Hay demasiados avisos. Se priorizaron los de la hora límite; algunos anticipos no se programaron.' : undefined;
-    if (Capacitor.getPlatform() === 'android') {
+    if (Capacitor.getPlatform() === 'android' && presentation?.supported !== false) {
       try {
         // Native delivery owns the alarm, notification and presentation together.
         // No second Capacitor alarm is left racing the same reminder.
@@ -67,6 +67,9 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
         console.warn('No se pudo programar el modo de alarma:', error);
         deliveryError = 'El planificador de Android falló. Se usarán avisos únicos; la repetición requiere reintentar la programación.';
       }
+    }
+    if (!deliveryError && plan.some((row) => row.kind === 'repeat')) {
+      deliveryError = 'La repetición requiere Android 8 o posterior. Se conserva el aviso de la hora límite.';
     }
     const usedIds = new Set([...pendingResult.notifications, ...deliveredResult.notifications]
       .filter((item) => !isTaskReminder(item)).map((item) => item.id));
