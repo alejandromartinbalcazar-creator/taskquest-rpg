@@ -1191,7 +1191,9 @@ export class AudioManager {
 
     const padGain = ctx.createGain();
     padGain.gain.setValueAtTime(0.001, now);
-    padGain.gain.linearRampToValueAtTime(isBoss ? 0.18 : 0.14, now + 1.2);
+    // El pad era la fuente del zumbido constante: queda como una textura casi imperceptible.
+    // La identidad musical ahora viene de frases espaciadas, no de un tono sostenido.
+    padGain.gain.linearRampToValueAtTime(isBoss ? 0.07 : 0.012, now + 1.8);
 
     osc1.connect(padFilter);
     osc2.connect(padFilter);
@@ -1205,14 +1207,19 @@ export class AudioManager {
     // -------------------------------------------------------------
     // Capa 2: Secuenciador Rítmico y Melódico Procedural (105 BPM o 128 BPM)
     // -------------------------------------------------------------
-    const bpm = isBoss ? 128 : 105;
-    const stepIntervalMs = Math.round(((60 / bpm) / 4) * 1000); // Duración de semicorchea (16th note)
+    const bpm = isBoss ? 112 : 70;
+    // Exploración usa pulsos lentos: evita el patrón mecánico y reduce los nodos WebAudio en móvil.
+    const stepIntervalMs = isBoss ? Math.round(((60 / bpm) / 4) * 1000) : 850;
     let step = 0;
+    let section = 0;
 
     // Escala Mayor Pentatónica / Dórica Heroica para Exploración: C4, D4, E4, G4, A4, C5
     const exploreMelody = [
       261.63, 0, 329.63, 0, 392.00, 0, 440.00, 392.00, // C4, E4, G4, A4, G4
-      329.63, 0, 293.66, 0, 392.00, 440.00, 523.25, 0  // E4, D4, G4, A4, C5
+      329.63, 0, 293.66, 0, 392.00, 440.00, 523.25, 0,
+      392.00, 0, 329.63, 293.66, 261.63, 0, 293.66, 0,
+      329.63, 392.00, 0, 440.00, 392.00, 0, 329.63, 0,
+      293.66, 261.63, 0, 392.00, 440.00, 523.25, 440.00, 0
     ];
 
     // Arpegios Dórico/Menor de Batalla para Boss a 128 BPM:
@@ -1241,14 +1248,6 @@ export class AudioManager {
         if (step % 2 === 1) {
           this.playSyntheticHat(tNow, 0.03, 0.04);
         }
-      } else {
-        // Exploración 105 BPM: Pulso rítmico suave estilo marcha (bombo pasos 0 y 8, chasquido pasos 4 y 12)
-        if (step === 0 || step === 8) {
-          this.playSyntheticKick(tNow, 115, 42, 0.09, 0.13);
-        }
-        if (step === 4 || step === 12) {
-          this.playSyntheticSnare(tNow, 1600, 0.04, 0.045);
-        }
       }
 
       // B. MELODÍA / ARPEGIOS HEROICOS
@@ -1259,14 +1258,18 @@ export class AudioManager {
           this.playHeroicLead(tNow, noteFreq, 'sawtooth', 0.10, 0.09, true);
         }
       } else {
-        // Melodía épica de exploración en onda triangular cálida
-        const noteFreq = exploreMelody[step % exploreMelody.length];
+        // Frases muy separadas y variables: sin percusión constante ni bucle corto audible.
+        const phraseOffset = (section * 7) % exploreMelody.length;
+        const noteFreq = exploreMelody[(step + phraseOffset) % exploreMelody.length];
         if (noteFreq > 0) {
-          this.playHeroicLead(tNow, noteFreq, 'triangle', 0.16, 0.08, false);
+          const octave = section % 5 === 4 ? 0.5 : section % 4 === 2 ? 2 : 1;
+          this.playHeroicLead(tNow, noteFreq * octave, section % 2 === 0 ? 'triangle' : 'sine', 0.62, 0.035, false);
         }
       }
 
-      step = (step + 1) % 16;
+      step += 1;
+      if (!isBoss && step % 12 === 0) section = (section + 1) % 12;
+      if (step >= (isBoss ? 16 : exploreMelody.length)) step = 0;
     }, stepIntervalMs);
 
     this.ambientState = {

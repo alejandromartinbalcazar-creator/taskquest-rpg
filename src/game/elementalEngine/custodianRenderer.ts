@@ -13,24 +13,26 @@ export function drawThresholdCustodian(
   now: number
 ) {
   const cs = boss.custodianState;
-  const r = boss.radius;
+  const r = boss.visualRadius ?? boss.radius;
+  const P = Math.max(1, Math.round(r / 16));
   const phase = cs?.currentPhase || 1;
   const isVulnerable = cs?.isShieldBroken || false;
   const isDefeated = cs?.isDefeated || false;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(boss.x, boss.y);
+  ctx.translate(Math.round(boss.x), Math.round(boss.y));
 
   // 1. SECUENCIA DE DERROTA: COLAPSO EN ESCOMBROS
   if (isDefeated) {
+    ctx.scale(2, 2);
     drawDefeatedRubble(ctx, boss, now);
     ctx.restore();
     return;
   }
 
-  // Píxel virtual escalado para proporciones monumentales de 48x48
-  const P = Math.max(1, Math.round(r / 16));
+  // The bottom of the torso, shadow and navigation footprint meet at boss.y.
+  ctx.translate(0, -17 * P);
 
   // 2. RUNA DE LEVITACIÓN Y SOMBRA ISOMÉTRICA EN EL SUELO (PIXEL ART)
   ctx.save();
@@ -377,6 +379,7 @@ function drawFloatingGauntlet(
   ctx.save();
   ctx.translate(Math.round(g.x), Math.round(g.y));
   ctx.rotate(g.angle);
+  ctx.scale(2, 2);
 
   const OUTLINE = '#0f172a';
   const STONE_DARK = hitFlash > 0 ? '#ffffff' : '#27272a';
@@ -611,10 +614,10 @@ export function drawCustodianHUD(
   const isVulnerable = cs?.isShieldBroken || false;
   const now = performance.now();
 
-  const barW = Math.min(width * 0.72, 480);
-  const barH = 16;
+  const barW = Math.min(width * 0.45, 340);
+  const barH = 10;
   const barX = Math.round(width / 2 - barW / 2);
-  const barY = 32;
+  const barY = 66;
 
   const hpPct = Math.max(0, boss.hp / boss.maxHp);
 
@@ -678,16 +681,16 @@ export function drawCustodianHUD(
   let statusColor = '#ffffff';
 
   if (isVulnerable) {
-    statusText = '¡ESCUDO QUEBRADO! ¡VULNERABLE A DAÑO CRITICO x2.0!';
+    statusText = 'Vulnerable ×2';
     statusColor = '#facc15';
   } else if (phase === 1) {
-    statusText = `Escudo de Magma (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 90}) — Contrarresta: Hielo`;
+    statusText = `Escudo ${Math.round(cs?.shieldHp || 0)} · Usa hielo`;
     statusColor = '#38bdf8';
   } else if (phase === 2) {
-    statusText = `Coraza Glacial (${Math.round(cs?.shieldHp || 0)}/${cs?.maxShieldHp || 100}) — Contrarresta: Fuego`;
+    statusText = `Coraza ${Math.round(cs?.shieldHp || 0)} · Usa fuego`;
     statusColor = '#fb923c';
   } else {
-    statusText = 'Sobrecarga de Vacio (Furia) — Ataca con Tierra para Romper Postura';
+    statusText = 'Furia · Usa tierra';
     statusColor = '#e879f9';
   }
 

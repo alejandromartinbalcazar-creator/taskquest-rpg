@@ -6,7 +6,12 @@ export type TaskDifficulty = 'facil' | 'media' | 'dificil' | 'epica';
 
 export type ReminderType =
   | 'none'
+  | 'absolute'
   | 'at_due'
+  | '5_minutes_before'
+  | '10_minutes_before'
+  | '30_minutes_before'
+  | '1_hour_before'
   | '1_day_before'
   | '2_days_before'
   | '3_days_before'
@@ -20,6 +25,7 @@ export type TaskRecurrence =
   | 'weekly'
   | 'monthly'
   | 'yearly'
+  | 'weekdays'
   | 'custom_days';
 
 export interface Task {
@@ -33,6 +39,13 @@ export interface Task {
   dueDate: string; // ISO string
   reminderType?: ReminderType;
   reminderCustomMinutes?: number;
+  /** Independent local reminder time in ISO format. */
+  reminderAt?: string;
+  /** V2 enables real periodic reminders; missing version preserves legacy constant. */
+  reminderVersion?: 2;
+  reminderStartMinutes?: number;
+  reminderIntervalMinutes?: number;
+  reminderStoppedDueDate?: string;
   recurrence?: TaskRecurrence;
   recurrenceDays?: number[]; // [1, 2, 3, 4, 5, 6, 0] donde 1=Lunes, 2=Martes... 0=Domingo
   completed: boolean;
@@ -130,6 +143,9 @@ export interface Player {
   graceShieldCharges?: number;
   highPriorityTasksCompleted?: number;
   lastCompletedDate?: string;
+  /** Recent durable widget commands already applied to this save. */
+  processedWidgetActions?: string[];
+  tutorialCompleted?: boolean;
 }
 
 export interface DelevelRecord {

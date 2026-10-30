@@ -10,6 +10,7 @@
         android:theme="@style/AppTheme">
 
         <activity
+            android:screenOrientation="unspecified"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
@@ -27,9 +28,28 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="@string/custom_url_scheme" android:host="auth-callback" />
+                <data android:scheme="@string/custom_url_scheme" android:host="widget" />
             </intent-filter>
 
         </activity>
+
+        <activity android:name=".ReminderAlarmActivity" android:exported="false"
+            android:theme="@style/AppTheme.ReminderAlarm" android:showWhenLocked="true" android:turnScreenOn="true"
+            android:launchMode="singleTop" android:excludeFromRecents="true" android:taskAffinity="com.taskquest.rpg.reminder" />
+        <receiver android:name=".ReminderAlarmActionReceiver" android:exported="false" />
+        <activity android:name=".WidgetConfigurationActivity" android:exported="true" android:theme="@style/AppTheme.ReminderAlarm">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+        <receiver android:name=".WidgetActionReceiver" android:exported="false" />
+        <receiver android:name=".WidgetCalendarReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.CONFIGURATION_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -40,9 +60,37 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <receiver android:name=".FocusMissionWidgetProvider" android:exported="true" android:label="FocusMission · Reino">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_medieval_info" />
+        </receiver>
+        <receiver android:name=".FocusMissionMinimalWidgetProvider" android:exported="true" android:label="FocusMission · Minimal">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_minimal_info" />
+        </receiver>
+        <receiver android:name=".FocusMissionAuroraWidgetProvider" android:exported="true" android:label="FocusMission · Aurora">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_aurora_info" />
+        </receiver>
+        <service android:name=".WidgetTaskRemoteViewsService" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />
+        <service android:name=".ReminderOverlayService" android:exported="false" android:foregroundServiceType="shortService" />
+        <receiver android:name=".ReminderOverlayReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

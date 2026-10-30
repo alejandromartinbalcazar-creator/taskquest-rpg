@@ -3,14 +3,14 @@ import { ElementType, SpellRecipe, SpellCastType } from './types';
 export const RECIPES: Record<SpellCastType, SpellRecipe> = {
   basic_spark: {
     id: 'basic_spark',
-    name: 'Chispa Arcana',
+    name: 'Ráfaga de Viento',
     elements: [],
-    description: 'Proyectil mágico básico rápido de energía pura.',
-    icon: '✨',
-    color: '#94a3b8',
-    secondaryColor: '#cbd5e1',
-    damage: 16,
-    knockback: 1.5,
+    description: 'Un vórtice de aire que empuja y aturde brevemente, sin causar daño.',
+    icon: '💨',
+    color: '#cffafe',
+    secondaryColor: '#f1f5f9',
+    damage: 0,
+    knockback: 110,
     cooldownMs: 0,
   },
 

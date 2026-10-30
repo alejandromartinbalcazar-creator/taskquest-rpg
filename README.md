@@ -1,5 +1,7 @@
 # ⚔️ FocusMission - Convierte tus tareas en misiones
 
+> **Guía de desarrollo:** desde octubre de 2026 usamos especificaciones ligeras para los cambios relevantes. Consulta [el flujo SDD](docs/sdd/flujo.md), [la visión](docs/sdd/vision.md) y [el estado revisado del proyecto](docs/sdd/estado-actual.md). Algunas descripciones históricas de este README pueden estar desactualizadas; comprueba el código antes de asumir que una función está terminada.
+
 App para gestionar tu vida, superar la procrastinación y fortalecer a tu héroe mediante tus tareas reales.
 
 ## 🚀 Cómo usarla e instalarla en tu Android (Sin sobrecargar tu laptop)

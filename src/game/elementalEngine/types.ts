@@ -204,6 +204,7 @@ export type ObstacleType =
   | 'ice_wall'
   | 'crate'
   | 'barrel'
+  | 'vessel'
   | 'camp_tent'
   | 'energized_crystal'
   | 'permafrost_spike' // Estaca de Hielo+Tierra rompible con fuego/tierra
@@ -235,6 +236,8 @@ export interface PhysicalObstacle {
   doorDirection?: 'north' | 'south' | 'east' | 'west';
   isOpened?: boolean;
   chestReward?: RelicReward;
+  vesselReward?: 'charged' | 'health';
+  vesselRewardClaimed?: boolean;
 }
 
 export interface ElectricArc {
@@ -353,6 +356,10 @@ export interface GameEnemy {
   vx: number;
   vy: number;
   radius: number;
+  /** Optional body dimensions, independent of the ground-contact radius. */
+  visualRadius?: number;
+  damageRadius?: number;
+  damageOffsetY?: number;
   hp: number;
   maxHp: number;
   attackPower: number;
@@ -371,6 +378,10 @@ export interface GameEnemy {
   facingAngle?: number;
   phase?: number;
   hitFlash: number;
+  /** En rutas con niebla de guerra el enemigo no existe para la IA hasta ver la antorcha. */
+  isRevealed?: boolean;
+  /** Tramo de expedición al que pertenece; permite cerrar/desbloquear arenas por guardia. */
+  arenaIndex?: number;
   // Mecánicas especiales del Gólem de Escoria (Pyre Golem)
   cooledDownTimer?: number;    // Magma enfriado por Hielo (3s) -> grietas grises/ceniza, -50% vel, Tierra hace crítico contundente
   frenzyTimer?: number;        // Frenesí al recibir Fuego -> aumento temporal de velocidad
@@ -902,6 +913,7 @@ export interface EternalPermafrostFortressEntity {
   burstProgress: number; // 0..1
   shards: EternalPermafrostShard[];
   hitEnemyIds: Set<string>;
+  absorbedHits?: number;
   finished: boolean;
 }
 

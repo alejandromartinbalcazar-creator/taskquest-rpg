@@ -9,10 +9,26 @@ const KEYS = {
 };
 
 export class StorageService {
+  private static recoverCompletion(): void {
+    const raw = localStorage.getItem('taskquest_completion_journal_v1');
+    if (!raw) return;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot.player || !Array.isArray(snapshot.tasks)) throw new Error('No se pudo recuperar el completado guardado.');
+    localStorage.setItem(KEYS.PLAYER, JSON.stringify(snapshot.player));
+    localStorage.setItem(KEYS.TASKS, JSON.stringify(snapshot.tasks));
+    localStorage.removeItem('taskquest_completion_journal_v1');
+  }
+
+  public static saveCompletion(player: Player, tasks: Task[]): void {
+    localStorage.setItem('taskquest_completion_journal_v1', JSON.stringify({ player, tasks }));
+    this.recoverCompletion();
+  }
   // Cargar jugador
   public static getPlayer(): Player {
     try {
-      const data = localStorage.getItem(KEYS.PLAYER);
+      const pending = localStorage.getItem('taskquest_completion_journal_v1');
+      try { this.recoverCompletion(); } catch { /* A full disk must not replace the recoverable snapshot with defaults. */ }
+      const data = pending ? JSON.stringify(JSON.parse(pending).player) : localStorage.getItem(KEYS.PLAYER);
       if (data) {
         const parsed = JSON.parse(data);
         return {
@@ -42,7 +58,9 @@ export class StorageService {
   // Cargar tareas
   public static getTasks(): Task[] {
     try {
-      const data = localStorage.getItem(KEYS.TASKS);
+      const pending = localStorage.getItem('taskquest_completion_journal_v1');
+      try { this.recoverCompletion(); } catch { /* Read the journal until recovery can finish. */ }
+      const data = pending ? JSON.stringify(JSON.parse(pending).tasks) : localStorage.getItem(KEYS.TASKS);
       if (data) return JSON.parse(data);
     } catch (e) {
       console.error('Error loading tasks', e);
@@ -336,7 +354,8 @@ export class StorageService {
   public static redeemHonorDebt(
     player: Player,
     tasks: Task[],
-    taskId: string
+    taskId: string,
+    persist = true
   ): { updatedPlayer: Player; updatedTasks: Task[]; recoveredExp: number } {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || !task.isHonorDebt) {
@@ -392,8 +411,7 @@ export class StorageService {
       totalTasksCompleted: player.totalTasksCompleted + 1,
     };
 
-    this.savePlayer(updatedPlayer);
-    this.saveTasks(updatedTasks);
+    if (persist) { this.savePlayer(updatedPlayer); this.saveTasks(updatedTasks); }
 
     return { updatedPlayer, updatedTasks, recoveredExp };
   }

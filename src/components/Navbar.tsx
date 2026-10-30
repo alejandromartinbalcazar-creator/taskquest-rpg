@@ -1,20 +1,18 @@
 import React from 'react';
-import { Shield, CheckSquare, Sparkles, Castle, BarChart3 } from 'lucide-react';
+import { CheckSquare, Sparkles, Castle, BarChart3 } from 'lucide-react';
 
-export type TabType = 'character' | 'tasks' | 'skills' | 'dungeon' | 'stats';
+export type TabType = 'tasks' | 'focus' | 'dungeon' | 'stats';
 
 interface NavbarProps {
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
   pendingTasksCount: number;
-  availableSp: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onSelectTab,
   pendingTasksCount,
-  availableSp,
 }) => {
   const tabs = [
     {
@@ -25,23 +23,16 @@ export const Navbar: React.FC<NavbarProps> = ({
       badgeColor: 'bg-emerald-500',
     },
     {
-      id: 'skills' as TabType,
-      label: 'Skills',
+      id: 'focus' as TabType,
+      label: 'Concentración',
       icon: Sparkles,
-      badge: availableSp > 0 ? `${availableSp} SP` : null,
-      badgeColor: 'bg-purple-600',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'dungeon' as TabType,
       label: 'Mazmorra',
       icon: Castle,
-      badge: null,
-      badgeColor: '',
-    },
-    {
-      id: 'character' as TabType,
-      label: 'Héroe',
-      icon: Shield,
       badge: null,
       badgeColor: '',
     },
@@ -55,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0f17] border-t-4 border-[#18181b] outline-1 outline-[#334155] shadow-[0_-4px_0_0_#000000] pb-safe">
+    <nav className="focusmission-navbar fixed bottom-0 left-0 right-0 z-40 border-t-2 border-violet-950 bg-[#0c1028] shadow-[0_-3px_0_#07081a]">
       <div className="max-w-xl mx-auto flex items-center justify-around py-2 px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -65,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
-              className={`relative flex flex-col items-center justify-center flex-1 py-1 px-1 transition-all ${
+              className={`relative flex flex-col items-center justify-center flex-1 min-h-12 py-1 px-1 transition-all ${
                 isActive
                   ? 'text-amber-400 font-bold'
                   : 'text-stone-400 hover:text-stone-200'

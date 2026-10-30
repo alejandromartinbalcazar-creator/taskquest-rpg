@@ -1,28 +1,35 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Player, Task, DungeonFloor, StatType, ElementSkillNode, FusedSpell, DelevelEvent, HeroMilestone } from './types';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Player, Task, DungeonFloor, StatType, DelevelEvent, HeroMilestone } from './types';
 import { StorageService } from './services/storageService';
 import { sound } from './services/soundService';
 import { HeroHeader } from './components/HeroHeader';
 import { Navbar, TabType } from './components/Navbar';
 import { TaskView } from './components/TaskView';
-import { SkillsView } from './components/SkillsView';
 import { DungeonView } from './components/DungeonView';
-import { CharacterView } from './components/CharacterView';
 import { StatsView } from './components/StatsView';
+import { ConcentrationTreeView } from './components/ConcentrationTreeView';
 import { ApkExportModal } from './components/ApkExportModal';
 import { DelevelModal } from './components/DelevelModal';
 import { ChangelogModal } from './components/ChangelogModal';
 import { HeroProgressModal } from './components/HeroProgressModal';
-import { checkAndUnlockMilestones } from './data/heroMilestones';
 import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
+import { syncTaskReminderNotifications, type ReminderSyncStatus } from './services/taskReminders';
+import { taskIdFromReminderExtra, reminderOccurrenceTask } from './services/reminderPlan';
+import { pendingOverlayActions, acknowledgeOverlayActions, listenForReminderAlarm, dismissReminderAlarm, type OverlayAction } from './services/reminderOverlay';
+import { MissionReminderSheet } from './components/MissionReminderSheet';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import confetti from 'canvas-confetti';
+import { completeTaskState } from './services/taskCompletion';
+import { syncTasksToAndroidWidget, acknowledgeWidgetActions, actionableWidgetCommands, widgetSectionForTask, type WidgetCommand } from './services/androidWidget';
 
 export function App() {
   const [player, setPlayer] = useState<Player>(() => StorageService.getPlayer());
   const [tasks, setTasks] = useState<Task[]>(() => StorageService.getTasks());
   const [dungeons, setDungeons] = useState<DungeonFloor[]>(() => StorageService.getDungeons());
-  const [currentTab, setCurrentTab] = useState<TabType>('tasks');
+  const [currentTab, setCurrentTab] = useState<TabType>(() => player.tutorialCompleted ? 'tasks' : 'dungeon');
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isDamagedAnimation, setIsDamagedAnimation] = useState(false);
   const [delevelModalEvent, setDelevelModalEvent] = useState<DelevelEvent | null>(null);
@@ -30,6 +37,50 @@ export function App() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [levelUpToast, setLevelUpToast] = useState<{ level: number; hpGain: number; dmgGain: number } | null>(null);
   const [milestoneToast, setMilestoneToast] = useState<HeroMilestone | null>(null);
+  const [reminderStatus, setReminderStatus] = useState<ReminderSyncStatus>({ permission: 'unsupported', exact: false, scheduledTaskIds: [] });
+  const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
+  const [reminderPrompts, setReminderPrompts] = useState<{ taskId: string; dueDate: string; eventId?: number }[]>([]);
+  const [nativeOverlayActions, setNativeOverlayActions] = useState<OverlayAction[]>([]);
+  const completedReminderOccurrences = useRef(new Set<string>());
+  const refreshAlarmsOnLaunch = useRef(true);
+  const [reminderSettingsVersion, setReminderSettingsVersion] = useState(0);
+  const [widgetFilter, setWidgetFilter] = useState<string | null>(null);
+  const [widgetCreateRequested, setWidgetCreateRequested] = useState(false);
+  const [widgetActions, setWidgetActions] = useState<WidgetCommand[]>([]);
+  const [widgetRefresh, setWidgetRefresh] = useState(0);
+  const [widgetReconciling, setWidgetReconciling] = useState(Capacitor.getPlatform() === 'android');
+  const [widgetError, setWidgetError] = useState('');
+  const widgetProcessing = useRef(false);
+
+  // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
+  useEffect(() => {
+    try {
+      const orientation = window.screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> };
+      void orientation.lock?.('portrait').catch(() => {});
+    } catch {
+      // Algunos navegadores solo permiten bloquear orientación en modo instalado o pantalla completa.
+    }
+  }, []);
+
+  // El widget abre la app directamente en Misiones; el botón + abre el formulario.
+  useEffect(() => {
+    const handleWidgetUrl = (url: string) => {
+      if (!url.startsWith('com.taskquest.rpg://widget')) return;
+      setCurrentTab('tasks');
+      setWidgetFilter(null);
+      const params = new URL(url).searchParams;
+      if (params.get('action') === 'section' && ['today', 'overdue', 'tomorrow'].includes(params.get('section') || '')) setWidgetFilter(params.get('section'));
+      if (params.get('action') === 'add-task') {
+        setWidgetCreateRequested(true);
+      }
+      if (params.get('action') === 'edit-task' && params.get('taskId')) {
+        setReminderTaskId(params.get('taskId')!);
+      }
+    };
+    void CapacitorApp.getLaunchUrl().then((launch) => launch?.url && handleWidgetUrl(launch.url));
+    const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => handleWidgetUrl(url));
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
 
   const localSnapshot = useMemo<CloudSaveSnapshot>(() => ({
     schemaVersion: 1,
@@ -48,6 +99,25 @@ export function App() {
     snapshot: localSnapshot,
     onApplyCloudSave: applyCloudSnapshot,
   });
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android' || !cloudSync.widgetSourceReady) return;
+    let active = true;
+    const source = cloudSync.userId || 'device';
+    void syncTasksToAndroidWidget(tasks, source).then((commands) => {
+      if (!active) return;
+      const actions = actionableWidgetCommands(commands, player, tasks, source);
+      setWidgetActions((previous) => JSON.stringify(previous) === JSON.stringify(actions) ? previous : actions);
+      setWidgetReconciling(actions.length > 0); setWidgetError('');
+    }).catch(() => { if (active) { setWidgetError('El widget conserva sus cambios pendientes. Vuelve a abrir la app para intentar sincronizarlos.'); setWidgetReconciling(false); } });
+    return () => { active = false; };
+  }, [tasks, player.processedWidgetActions, cloudSync.userId, cloudSync.widgetSourceReady, widgetRefresh]);
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => { if (isActive) { setWidgetReconciling(true); setWidgetRefresh((version) => version + 1); } });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
 
   // Auto-cerrar alertas emergentes
   useEffect(() => {
@@ -74,6 +144,73 @@ export function App() {
   }, [tasks]);
 
   useEffect(() => {
+    const refresh = () => setReminderSettingsVersion((version) => version + 1);
+    window.addEventListener('focusmission:reminder-settings-changed', refresh);
+    return () => window.removeEventListener('focusmission:reminder-settings-changed', refresh);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshExisting = refreshAlarmsOnLaunch.current;
+    refreshAlarmsOnLaunch.current = false;
+    void syncTaskReminderNotifications(tasks, { refreshExisting }).then((status) => { if (active) setReminderStatus(status); });
+    return () => { active = false; };
+  }, [tasks, reminderSettingsVersion]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+      const taskId = taskIdFromReminderExtra(notification.extra);
+      if (!taskId) return;
+      setCurrentTab('tasks');
+      const dueDate = (notification.extra as { dueDate?: unknown })?.dueDate;
+      if (typeof dueDate === 'string') {
+        setReminderPrompts((previous) => previous.some((item) => item.eventId === notification.id) ? previous : [...previous, { taskId, dueDate, eventId: notification.id }]);
+      } else setReminderTaskId(taskId);
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = LocalNotifications.addListener('localNotificationReceived', (notification) => {
+      const taskId = taskIdFromReminderExtra(notification.extra);
+      const extra = notification.extra as { dueDate?: unknown } | undefined;
+      if (taskId && typeof extra?.dueDate === 'string' && document.visibilityState === 'visible') {
+        const dueDate = extra.dueDate;
+        setReminderPrompts((previous) => previous.some((item) => item.eventId === notification.id) ? previous : [...previous, { taskId, dueDate, eventId: notification.id }]);
+      }
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = listenForReminderAlarm(({ taskId, dueDate, eventId }) => {
+      setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate && item.eventId === eventId) ? previous : [...previous, { taskId, dueDate, eventId }]);
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    const read = () => { void pendingOverlayActions().then((actions) => { if (active) setNativeOverlayActions(actions); }).catch(console.warn); };
+    read();
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => { if (isActive) read(); });
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    const listener = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) void syncTaskReminderNotifications(tasks).then((status) => { if (active) setReminderStatus(status); });
+    });
+    return () => { active = false; void listener.then((handle) => handle.remove()); };
+  }, [tasks]);
+
+  useEffect(() => {
     StorageService.saveDungeons(dungeons);
   }, [dungeons]);
 
@@ -94,10 +231,11 @@ export function App() {
   }, [player, tasks]);
 
   useEffect(() => {
+    if (widgetReconciling || !cloudSync.widgetSourceReady) return;
     checkTaskPenalties();
     const interval = setInterval(checkTaskPenalties, 15000); // Chequeo cada 15 segundos
     return () => clearInterval(interval);
-  }, [checkTaskPenalties]);
+  }, [checkTaskPenalties, widgetReconciling, cloudSync.widgetSourceReady]);
 
   // Manejador de Ganancia de EXP y Level Up
   const grantExp = (amount: number, goldAmount: number = 0) => {
@@ -151,123 +289,61 @@ export function App() {
 
   // Completar Tarea
   const handleCompleteTask = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.completed) return;
-
-    sound.playTaskComplete();
-    confetti({ particleCount: 50, spread: 60 });
-
-    // Actualizar racha y contadores de progreso
-    const todayStr = new Date().toISOString().slice(0, 10);
-    let streak = player.cleanStreakDays || 1;
-    if (!player.lastCompletedDate) {
-      streak = 1;
-    } else {
-      const lastDateStr = player.lastCompletedDate.slice(0, 10);
-      if (lastDateStr !== todayStr) {
-        const diffDays = Math.round(
-          (new Date(todayStr).getTime() - new Date(lastDateStr).getTime()) / (24 * 3600 * 1000)
-        );
-        if (diffDays === 1) {
-          streak += 1;
-        } else if (diffDays > 1) {
-          streak = 1;
-        }
-      }
-    }
-
-    const isHighPriority = task.difficulty === 'dificil' || task.difficulty === 'epica';
-    const nextTotalTasks = (player.totalTasksCompleted || 0) + 1;
-    const nextHighPriorityTasks = (player.highPriorityTasksCompleted || 0) + (isHighPriority ? 1 : 0);
-
-    // Evaluar Hitos del Héroe
-    const milestoneEval = checkAndUnlockMilestones({
-      ...player,
-      cleanStreakDays: streak,
-      totalTasksCompleted: nextTotalTasks,
-      highPriorityTasksCompleted: nextHighPriorityTasks,
-      lastCompletedDate: new Date().toISOString(),
-    });
-
-    if (milestoneEval.newlyUnlocked.length > 0) {
-      sound.playMilestoneUnlock();
-      confetti({
-        particleCount: 80,
-        spread: 100,
-        origin: { y: 0.4 },
-      });
-      setMilestoneToast(milestoneEval.newlyUnlocked[0]);
-    }
-
-    // Actualizar jugador con hitos y progreso
-    setPlayer((prev) => {
-      const stats = { ...prev.stats };
-      const chosen = task.statAffinity;
-
-      (['attack', 'speed', 'defense', 'knowledge'] as StatType[]).forEach((s) => {
-        if (s === chosen) {
-          stats[s] = (stats[s] || 10) + 3;
-        } else {
-          stats[s] = (stats[s] || 10) + 1;
-        }
-      });
-
-      // Bono de Conocimiento -> Skill Points
-      const extraSP = chosen === 'knowledge' && stats.knowledge % 5 === 0 ? 1 : 0;
-      // Bono de Resistencia -> Max HP
-      const extraMaxHp = chosen === 'defense' ? 2 : 0;
-
-      return {
-        ...milestoneEval.updatedPlayer,
-        dungeonKeys: prev.dungeonKeys + 1,
-        skillPoints: milestoneEval.updatedPlayer.skillPoints + extraSP,
-        maxHp: milestoneEval.updatedPlayer.maxHp + extraMaxHp,
-        currentHp: Math.min(milestoneEval.updatedPlayer.maxHp + extraMaxHp, milestoneEval.updatedPlayer.currentHp + 10),
-        stats,
-      };
-    });
-
-    // Otorgar EXP y Oro
-    grantExp(task.expReward, task.goldReward);
-
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === taskId) {
-          if (t.recurrence === 'daily') {
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'weekly') {
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + 7);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'monthly') {
-            const nextDate = new Date();
-            nextDate.setMonth(nextDate.getMonth() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'yearly') {
-            const nextDate = new Date();
-            nextDate.setFullYear(nextDate.getFullYear() + 1);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          } else if (t.recurrence === 'custom_days' && t.recurrenceDays && t.recurrenceDays.length > 0) {
-            // Buscar el próximo día seleccionado de la semana
-            const todayDay = new Date().getDay();
-            let daysToAdd = 1;
-            while (daysToAdd <= 7) {
-              const targetDay = (todayDay + daysToAdd) % 7;
-              if (t.recurrenceDays.includes(targetDay)) break;
-              daysToAdd++;
-            }
-            const nextDate = new Date();
-            nextDate.setDate(nextDate.getDate() + daysToAdd);
-            return { ...t, completed: false, dueDate: nextDate.toISOString(), penalizedCount: 0 };
-          }
-          return { ...t, completed: true, completedAt: new Date().toISOString() };
-        }
-        return t;
-      })
-    );
+    const task = tasks.find((item) => item.id === taskId && !item.completed);
+    if (!task) return;
+    const occurrence = JSON.stringify([task.id, task.dueDate]);
+    if (completedReminderOccurrences.current.has(occurrence)) return;
+    const result = completeTaskState(player, tasks, taskId);
+    if (!result) return;
+    try { StorageService.saveCompletion(result.player, result.tasks); }
+    catch { setWidgetError('No se pudo guardar el completado. Inténtalo otra vez.'); return; }
+    completedReminderOccurrences.current.add(occurrence);
+    setPlayer(result.player); setTasks(result.tasks);
+    sound.playTaskComplete(); confetti({ particleCount: 50, spread: 60 });
+    if (result.milestones.length) { sound.playMilestoneUnlock(); setMilestoneToast(result.milestones[0]); }
+    if (result.levelUp) { sound.playLevelUp(); setLevelUpToast({ level: result.player.level, hpGain: 15, dmgGain: 4 }); }
   };
+
+  useEffect(() => {
+    if (!cloudSync.widgetSourceReady || widgetProcessing.current || widgetActions.length === 0) return;
+    const action = widgetActions[0], source = cloudSync.userId || 'device';
+    if (action.source !== source) { setWidgetActions([]); return; }
+    widgetProcessing.current = true;
+    const result = completeTaskState(player, tasks, action.taskId, { action });
+    const nextTasks = result?.tasks || tasks;
+    let confirmed = false;
+    try {
+      if (result) {
+        StorageService.saveCompletion(result.player, result.tasks);
+        setPlayer(result.player); setTasks(result.tasks);
+      }
+      void acknowledgeWidgetActions([action.key], nextTasks, source).then(() => {
+        confirmed = true;
+        setWidgetActions((previous) => previous.filter((item) => item.key !== action.key));
+        setWidgetError('');
+      }).catch(() => setWidgetError('La misión está guardada. Queda pendiente confirmar el widget.'))
+        .finally(() => { widgetProcessing.current = false; if (confirmed) setWidgetRefresh((value) => value + 1); });
+    } catch {
+      widgetProcessing.current = false;
+      setWidgetError('No se pudieron guardar los cambios del widget. Sus acciones siguen pendientes.');
+    }
+  }, [widgetActions, tasks, player, cloudSync.userId, cloudSync.widgetSourceReady, widgetRefresh]);
+  useEffect(() => {
+    if (widgetReconciling || ['checking', 'syncing', 'needs_choice'].includes(cloudSync.status)) return;
+    // Persisted native commands are acknowledged only after React has saved the
+    // completed occurrence (or it is already stale). A crash can safely retry.
+    const first = nativeOverlayActions[0];
+    if (!first) return;
+    const task = reminderOccurrenceTask(tasks, first);
+    if (task) {
+      setCurrentTab('tasks');
+      handleCompleteTask(task.id);
+    } else {
+      void acknowledgeOverlayActions([first.key]).then(() => {
+        setNativeOverlayActions((previous) => previous.filter((action) => action.key !== first.key));
+      }).catch(console.warn);
+    }
+  }, [nativeOverlayActions, tasks, cloudSync.status, widgetReconciling]);
 
   // Añadir Tarea (Limpio, con recurrencia)
   const handleAddTask = (newTaskData: Omit<Task, 'id' | 'completed'>) => {
@@ -286,63 +362,10 @@ export function App() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   };
 
-  // Desbloquear Habilidad en el Árbol
-  const handleUnlockSkill = (skillId: string, costSP: number) => {
-    if (player.skillPoints < costSP) return;
-
-    sound.playTaskComplete();
-    setPlayer((prev) => ({
-      ...prev,
-      skillPoints: prev.skillPoints - costSP,
-      unlockedSkills: [...prev.unlockedSkills, skillId],
-    }));
+  const handleUpdateTask = (taskId: string, updates: Omit<Task, 'id' | 'completed'>) => {
+    setTasks((prev) => prev.map((task) => task.id === taskId ? { ...task, ...updates } : task));
   };
 
-  // Desbloquear Fusión Elemental
-  const handleUnlockFusion = (fusionId: string) => {
-    setPlayer((prev) => {
-      if (prev.unlockedFusions.includes(fusionId)) return prev;
-      return {
-        ...prev,
-        unlockedFusions: [...prev.unlockedFusions, fusionId],
-      };
-    });
-  };
-
-  // Equipar Hechizo (hasta 3 slots)
-  const handleEquipSpell = (spell: ElementSkillNode | FusedSpell) => {
-    setPlayer((prev) => {
-      const alreadyEquipped = prev.equippedSpells.some((s) => s.id === spell.id);
-      if (alreadyEquipped) {
-        return {
-          ...prev,
-          equippedSpells: prev.equippedSpells.filter((s) => s.id !== spell.id),
-        };
-      }
-      // Mantener máximo 3
-      const updated = [spell, ...prev.equippedSpells.slice(0, 2)];
-      return {
-        ...prev,
-        equippedSpells: updated,
-      };
-    });
-  };
-
-  // Asignar Puntos de Atributo (Ataque, Velocidad, Resistencia, Conocimiento)
-  const handleAllocateStat = (stat: StatType) => {
-    if (player.skillPoints <= 0) return;
-    sound.playMicroStepDing();
-    setPlayer((prev) => ({
-      ...prev,
-      skillPoints: prev.skillPoints - 1,
-      stats: {
-        ...prev.stats,
-        [stat]: prev.stats[stat] + 1,
-      },
-      maxHp: stat === 'defense' ? prev.maxHp + 10 : prev.maxHp,
-      currentHp: stat === 'defense' ? prev.currentHp + 10 : prev.currentHp,
-    }));
-  };
 
   // Victoria en Mazmorra
   const handleBattleVictory = (floorNumber: number, expReward: number, goldReward: number) => {
@@ -410,18 +433,32 @@ export function App() {
     setDungeons(StorageService.getDungeons());
   };
 
+  const handleTutorialFinished = () => {
+    setPlayer((prev) => ({ ...prev, tutorialCompleted: true }));
+    // La puerta final del tutorial continúa directamente hacia el Nivel 1.
+    // DungeonView conserva la mazmorra activa y muestra la primera expedición.
+    setCurrentTab('dungeon');
+  };
+
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
+  // Las sesiones de concentración fortalecen únicamente la afinidad elegida.
+  // El tiempo se muestra al jugador, pero cada sesión completada entrega un punto claro y predecible.
+  const handleCompleteFocusSession = (affinity: StatType, _minutes: number) => {
+    setPlayer((prev) => ({
+      ...prev,
+      stats: {
+        ...prev.stats,
+        [affinity]: prev.stats[affinity] + 1,
+      },
+    }));
+  };
+
   return (
-    <div className="min-h-screen bg-[#090a10] text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
-      {/* Cabecera Superior del Héroe */}
+    <div className="min-h-screen min-h-dvh w-full bg-[#080b20] text-slate-100 font-sans selection:bg-violet-600 selection:text-white">
       <HeroHeader
         player={player}
-        tasks={tasks}
-        onOpenApkModal={() => setIsApkModalOpen(true)}
         onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
-        onOpenProgressModal={() => setIsProgressModalOpen(true)}
-        isDamagedAnimation={isDamagedAnimation}
       />
 
       {/* Alerta Ceremonial de Subida de Nivel */}
@@ -478,26 +515,31 @@ export function App() {
       )}
 
       {/* Vistas Principales */}
-      <main>
+      <main className="pb-24">
+        {widgetError && <p role="status" className="mx-auto max-w-xl px-4 py-2 text-sm text-amber-200">{widgetError}</p>}
+        {currentTab === 'tasks' && widgetFilter && <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-2 text-sm text-violet-200">
+          <span>{widgetFilter === 'today' ? 'Hoy' : widgetFilter === 'overdue' ? 'Vencidas' : 'Mañana'}</span>
+          <button type="button" className="underline" onClick={() => setWidgetFilter(null)}>Ver todas las misiones</button>
+        </div>}
         {currentTab === 'tasks' && (
           <TaskView
-            player={player}
-            tasks={tasks}
+            tasks={widgetFilter ? tasks.filter((task) => !task.completed && widgetSectionForTask(task) === widgetFilter) : tasks}
+            reminderStatus={reminderStatus}
+            externalTaskId={cloudSync.widgetSourceReady ? reminderTaskId : null}
+            externalNewTask={cloudSync.widgetSourceReady && widgetCreateRequested}
+            onExternalNewTaskHandled={() => setWidgetCreateRequested(false)}
+            onExternalTaskHandled={() => setReminderTaskId(null)}
             onCompleteTask={handleCompleteTask}
             onAddTask={handleAddTask}
             onDeleteTask={handleDeleteTask}
+            onUpdateTask={handleUpdateTask}
             onFailTask={handleFailTask}
             onRedeemHonorDebt={handleRedeemHonorDebt}
           />
         )}
 
-        {currentTab === 'skills' && (
-          <SkillsView
-            player={player}
-            onUnlockSkill={handleUnlockSkill}
-            onUnlockFusion={handleUnlockFusion}
-            onEquipSpell={handleEquipSpell}
-          />
+        {currentTab === 'focus' && (
+          <ConcentrationTreeView player={player} onCompleteSession={handleCompleteFocusSession} />
         )}
 
         {currentTab === 'dungeon' && (
@@ -507,15 +549,7 @@ export function App() {
             onBattleVictory={handleBattleVictory}
             onTakeBattleDamage={handleTakeBattleDamage}
             onConsumeKey={handleConsumeKey}
-          />
-        )}
-
-        {currentTab === 'character' && (
-          <CharacterView
-            player={player}
-            onUpdateName={handleUpdateHeroName}
-            onAllocateStat={handleAllocateStat}
-            onOpenProgressModal={() => setIsProgressModalOpen(true)}
+            onTutorialFinished={handleTutorialFinished}
           />
         )}
 
@@ -530,13 +564,26 @@ export function App() {
         )}
       </main>
 
-      {/* Barra de Navegación Inferior */}
       <Navbar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         pendingTasksCount={pendingTasksCount}
-        availableSp={player.skillPoints}
       />
+
+      {reminderPrompts.length > 0 && (() => {
+        const prompt = reminderPrompts.find((item) => reminderOccurrenceTask(tasks, item));
+        const task = prompt && reminderOccurrenceTask(tasks, prompt);
+        if (!task) return null;
+        const dismiss = () => {
+          void dismissReminderAlarm(task.id, task.dueDate, prompt?.eventId).catch(console.warn);
+          setReminderPrompts((previous) => previous.filter((item) => item !== prompt));
+        };
+        return (
+          <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} onOpen={() => {
+            dismiss(); setWidgetFilter(null); setCurrentTab('tasks'); setReminderTaskId(task.id);
+          }} />
+        );
+      })()}
 
       {/* Modal para Obtener APK y Modo PWA para Android */}
       <ApkExportModal

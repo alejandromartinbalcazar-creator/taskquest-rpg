@@ -1,3 +1,4 @@
+import { collectVesselRewards, type VesselReward } from './vessels';
 import {
   PhysicalObstacle,
   TerrainZone,
@@ -97,6 +98,7 @@ export const DUNGEON_RELICS: RelicReward[] = [
 
 // Gestor de Físicas, Terrenos y Salas de la Mazmorra
 export class TerrainManager {
+  public vesselRewards: VesselReward[] = [];
   public obstacles: PhysicalObstacle[] = [];
   public terrainZones: TerrainZone[] = [];
   public electricArcs: ElectricArc[] = [];
@@ -107,6 +109,7 @@ export class TerrainManager {
 
   // Configura la arquitectura y obstáculos de una sala específica
   public setupRoomTerrain(roomType: RoomType) {
+    this.vesselRewards = [];
     this.obstacles = [];
     this.terrainZones = [];
     this.electricArcs = [];
@@ -626,6 +629,7 @@ export class TerrainManager {
     }
 
     // 1. Limpieza de obstáculos destruidos
+    this.vesselRewards.push(...collectVesselRewards(this.obstacles));
     this.obstacles = this.obstacles.filter((obs) => obs.hp > 0);
 
     // 2. Cristales energizados conectando arcos eléctricos entre sí

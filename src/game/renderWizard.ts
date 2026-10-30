@@ -14,8 +14,9 @@ export interface WizardRenderOptions {
   recoilX?: number; // desplazamiento por retroceso de ataque
   recoilY?: number;
   castFlashColor?: string; // tinte o destello elemental al castear
-  activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma';
+  activeElement?: 'fire' | 'lightning' | 'earth' | 'ice' | 'plasma' | 'magma' | 'wind';
   time?: number; // para ciclos de animación escalonados
+  anchorFeet?: boolean;
 }
 
 export function drawWizardSprite({
@@ -33,6 +34,7 @@ export function drawWizardSprite({
   castFlashColor,
   activeElement = 'fire',
   time = Date.now() / 1000,
+  anchorFeet = false,
 }: WizardRenderOptions) {
   ctx.save();
 
@@ -47,7 +49,7 @@ export function drawWizardSprite({
 
   // Posicionamiento de base entera para evitar subpíxeles borrosos
   const baseX = Math.round(x + recoilX);
-  const baseY = Math.round(y + recoilY);
+  const baseY = Math.round(y + recoilY) - (anchorFeet ? 10 * P : 0);
   ctx.translate(baseX, baseY);
 
   // Orientación horizontal izquierda / derecha (Flip en eje X)
@@ -110,6 +112,7 @@ export function drawWizardSprite({
     ice: { gemLight: '#e0f2fe', gemDark: '#0284c7', eyeColor: '#67e8f9' },
     plasma: { gemLight: '#f5d0fe', gemDark: '#a855f7', eyeColor: '#c084fc' },
     magma: { gemLight: '#fef08a', gemDark: '#dc2626', eyeColor: '#f87171' },
+    wind: { gemLight: '#f8fafc', gemDark: '#a5f3fc', eyeColor: '#cffafe' },
   };
   const gemInfo = elementGemColors[activeElement] || elementGemColors.fire;
 
@@ -200,8 +203,10 @@ export function drawWizardSprite({
   ctx.fillRect(-6 * P, ty - 13 * P, 1 * P, 1 * P);
 
   // 6. BÁCULO RÚNICO CON GEMA ARDIENTE CUADRADA QUE PULSA EN 2 ESTADOS
-  const staffX = 5 * P + staffTilt * P;
-  const staffY = ty + 1 * P;
+  // Al castear, el báculo da un golpe corto hacia delante y vuelve a su postura.
+  const castStaffShift = castAnimProgress > 0 ? Math.round((1 - castAnimProgress) * 5) + 2 : 0;
+  const staffX = 5 * P + staffTilt * P + castStaffShift * P;
+  const staffY = ty + 1 * P - (castAnimProgress > 0 ? Math.round((1 - castAnimProgress) * 2) * P : 0);
 
   // A. Mango de madera oscura (bloques de 1 píxel de ancho con sombra)
   ctx.fillStyle = OUTLINE;
@@ -235,6 +240,22 @@ export function drawWizardSprite({
     ctx.fillRect(staffX, staffY - 12 * P, 2 * P, 2 * P);
     ctx.fillStyle = gemInfo.gemLight;
     ctx.fillRect(staffX, staffY - 12 * P, 1 * P, 1 * P);
+  }
+
+  // Small stepped air currents unfurl from the staff during a wind cast.
+  if (activeElement === 'wind' && castAnimProgress > 0) {
+    const frame = Math.min(2, Math.floor((1 - castAnimProgress) * 3));
+    ctx.globalAlpha = castAnimProgress * 0.8;
+    ctx.strokeStyle = '#cffafe';
+    ctx.lineWidth = P;
+    for (let ribbon = 0; ribbon < 2; ribbon++) {
+      const y = staffY - (12 + ribbon * 2) * P;
+      ctx.beginPath(); ctx.moveTo(staffX + 2 * P, y);
+      ctx.lineTo(staffX + (4 + frame) * P, y - P);
+      ctx.lineTo(staffX + (7 + frame) * P, y - P);
+      ctx.lineTo(staffX + (9 + frame) * P, y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // 7. DESTELLO ELEMENTAL AL CASTEAR (Flash angular en píxeles, sin degradado difuminado)

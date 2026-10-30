@@ -15,6 +15,9 @@ export enum TileType {
   ENEMY_LURKER = '3',
   GATE = 'D',
   BOSS_ARENA = 'B',
+  TREASURE = 'T',
+  REST = 'R',
+  MOSS = '%',
 }
 
 export interface TilemapSpawn {
@@ -71,6 +74,8 @@ export interface FrustumBounds {
 }
 
 export class Tilemap {
+  /** Fondo artesanal opcional; conserva la física del mapa pero reemplaza su suelo vectorial. */
+  public backgroundKey: 'level1-trail' | 'level2-ice' | null = null;
   public cols: number = 0;
   public rows: number = 0;
   public width: number = 0;
@@ -178,6 +183,9 @@ export class Tilemap {
           minBy = Math.min(minBy, r * TILE_HEIGHT);
           maxBy = Math.max(maxBy, (r + 1) * TILE_HEIGHT);
           rowTiles.push(TileType.BOSS_ARENA);
+        } else if (char === TileType.TREASURE || char === TileType.REST || char === TileType.MOSS) {
+          // Marcadores decorativos de las plantillas de expedición; son transitables.
+          rowTiles.push(char);
         } else {
           rowTiles.push(char);
         }
@@ -449,6 +457,12 @@ export class Tilemap {
         if (tile === TileType.CHECKPOINT) {
           const cp = this.checkpoints.find((item) => item.col === c && item.row === r);
           this.drawCheckpointAltar(ctx, tx + TILE_WIDTH / 2, ty + TILE_HEIGHT / 2, cp?.isActive || false, time);
+        } else if (tile === TileType.TREASURE) {
+          this.drawTreasureCache(ctx, tx + TILE_WIDTH / 2, ty + TILE_HEIGHT / 2, time);
+        } else if (tile === TileType.REST) {
+          this.drawRestShrine(ctx, tx + TILE_WIDTH / 2, ty + TILE_HEIGHT / 2, time);
+        } else if (tile === TileType.MOSS) {
+          this.drawMossPatch(ctx, tx, ty);
         }
       }
     }
@@ -796,6 +810,50 @@ export class Tilemap {
     ctx.fillRect(x + 4, y + 2, 10, 4);
     ctx.fillRect(x + 22, y + 2, 14, 6);
     ctx.fillRect(x + 44, y + 2, 12, 4);
+  }
+
+  private drawTreasureCache(ctx: CanvasRenderingContext2D, cx: number, cy: number, time: number): void {
+    const blink = Math.floor(time / 260) % 2 === 0;
+    ctx.save();
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.16)';
+    ctx.fillRect(cx - 26, cy - 22, 52, 42);
+    ctx.fillStyle = '#151525';
+    ctx.fillRect(cx - 18, cy - 8, 36, 22);
+    ctx.fillStyle = '#92400e';
+    ctx.fillRect(cx - 16, cy - 6, 32, 18);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(cx - 17, cy - 10, 34, 7);
+    ctx.fillRect(cx - 2, cy - 8, 4, 22);
+    ctx.fillStyle = '#fef3c7';
+    ctx.fillRect(cx - 14, cy - 8, 28, 2);
+    if (blink) { ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 1, cy - 16, 3, 3); }
+    ctx.restore();
+  }
+
+  private drawRestShrine(ctx: CanvasRenderingContext2D, cx: number, cy: number, time: number): void {
+    const pulse = 0.45 + (Math.sin(time / 280) + 1) * 0.18;
+    ctx.save();
+    ctx.fillStyle = `rgba(74, 222, 128, ${pulse})`;
+    ctx.fillRect(cx - 16, cy - 24, 32, 36);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(cx - 12, cy - 14, 24, 26);
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(cx - 10, cy - 12, 20, 22);
+    ctx.fillStyle = '#86efac';
+    ctx.fillRect(cx - 3, cy - 20, 6, 28);
+    ctx.fillRect(cx - 9, cy - 4, 18, 4);
+    ctx.fillStyle = '#f0fdf4';
+    ctx.fillRect(cx - 1, cy - 14, 2, 14);
+    ctx.restore();
+  }
+
+  private drawMossPatch(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.fillStyle = '#14532d';
+    ctx.fillRect(x + 10, y + 32, 42, 12);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(x + 15, y + 28, 8, 7);
+    ctx.fillRect(x + 31, y + 25, 7, 10);
+    ctx.fillRect(x + 43, y + 30, 5, 6);
   }
 
   private drawCheckpointAltar(

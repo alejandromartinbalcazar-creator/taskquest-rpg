@@ -23,6 +23,8 @@ export type CloudSyncStatus =
   | 'error';
 
 export interface CloudSyncControls {
+  userId: string | null;
+  widgetSourceReady: boolean;
   configured: boolean;
   userEmail: string | null;
   status: CloudSyncStatus;
@@ -46,6 +48,8 @@ function messageForError(error: unknown): string {
 }
 
 export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions): CloudSyncControls {
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+  const [initializedUserId, setInitializedUserId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<CloudSyncStatus>(
     isSupabaseConfigured ? 'signed_out' : 'not_configured',
@@ -66,6 +70,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
     if (!supabase) return;
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthReady(true);
       setUser(session?.user ?? null);
       setError(null);
       if (!session) {
@@ -79,6 +84,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
     });
 
     void supabase.auth.getSession().then(({ data: sessionData, error: sessionError }) => {
+      setAuthReady(true);
       if (sessionError) {
         setError(messageForError(sessionError));
         setStatus('error');
@@ -158,8 +164,15 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         if (cancelled) return;
 
         if (existing) {
-          setRemoteSave(existing);
-          setStatus('needs_choice');
+          // La nube es la fuente de verdad al iniciar sesión. Evita que una copia
+          // local antigua reemplace por accidente el progreso más reciente.
+          onApplyCloudSave(existing.saveData);
+          revisionRef.current = existing.revision;
+          savedPayloadRef.current = JSON.stringify(existing.saveData);
+          setRemoteSave(null);
+          setLastSyncedAt(existing.updatedAt);
+          setCloudReady(true); setInitializedUserId(userId);
+          setStatus('synced');
           return;
         }
 
@@ -168,7 +181,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         revisionRef.current = created.revision;
         savedPayloadRef.current = JSON.stringify(snapshotRef.current);
         setLastSyncedAt(created.updatedAt);
-        setCloudReady(true);
+        setCloudReady(true); setInitializedUserId(userId);
         setStatus('synced');
       } catch (initialError) {
         if (cancelled) return;
@@ -177,8 +190,12 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         try {
           const rowCreatedElsewhere = await loadCloudSave(userId);
           if (rowCreatedElsewhere) {
-            setRemoteSave(rowCreatedElsewhere);
-            setStatus('needs_choice');
+            onApplyCloudSave(rowCreatedElsewhere.saveData);
+            revisionRef.current = rowCreatedElsewhere.revision;
+            savedPayloadRef.current = JSON.stringify(rowCreatedElsewhere.saveData);
+            setLastSyncedAt(rowCreatedElsewhere.updatedAt);
+            setCloudReady(true); setInitializedUserId(userId);
+            setStatus('synced');
             return;
           }
         } catch {
@@ -186,7 +203,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
         }
 
         setError(messageForError(initialError));
-        setStatus(navigator.onLine ? 'error' : 'offline');
+        setInitializedUserId(userId); setStatus(navigator.onLine ? 'error' : 'offline');
       }
     };
 
@@ -194,7 +211,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [onApplyCloudSave, userId]);
 
   const syncLatest = useCallback(async () => {
     if (!supabase || !userId || !cloudReady) return;
@@ -233,7 +250,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
       } while (syncQueuedRef.current);
     } catch (syncError) {
       setError(messageForError(syncError));
-      setStatus(navigator.onLine ? 'error' : 'offline');
+      setInitializedUserId(userId); setStatus(navigator.onLine ? 'error' : 'offline');
     } finally {
       syncLockRef.current = false;
     }
@@ -296,7 +313,7 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
     setLastSyncedAt(remoteSave.updatedAt);
     setRemoteSave(null);
     setError(null);
-    setCloudReady(true);
+    setCloudReady(true); setInitializedUserId(userId);
     setStatus('synced');
   }, [onApplyCloudSave, remoteSave]);
 
@@ -317,15 +334,17 @@ export function useCloudSync({ snapshot, onApplyCloudSave }: UseCloudSyncOptions
       savedPayloadRef.current = JSON.stringify(snapshotRef.current);
       setLastSyncedAt(updated.updatedAt);
       setRemoteSave(null);
-      setCloudReady(true);
+      setCloudReady(true); setInitializedUserId(userId);
       setStatus('synced');
     } catch (uploadError) {
       setError(messageForError(uploadError));
-      setStatus(navigator.onLine ? 'error' : 'offline');
+      setInitializedUserId(userId); setStatus(navigator.onLine ? 'error' : 'offline');
     }
   }, [remoteSave, userId]);
 
   return {
+    userId,
+    widgetSourceReady: authReady && (!userId || (initializedUserId === userId && (cloudReady || status === 'offline' || status === 'error'))),
     configured: isSupabaseConfigured,
     userEmail: user?.email ?? null,
     status,

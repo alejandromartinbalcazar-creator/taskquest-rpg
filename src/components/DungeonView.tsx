@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Player, DungeonFloor } from '../types';
 import { LandscapeCombatView } from '../game/elementalEngine/LandscapeCombatView';
-import { Castle, Sword, Key, AlertTriangle } from 'lucide-react';
+import { createLevel1CampaignRoute, getRouteSummary } from '../game/expedition/campaignRoute';
+import { Castle, Sword, Key, AlertTriangle, Lock, GraduationCap } from 'lucide-react';
 
 interface DungeonViewProps {
   player: Player;
@@ -9,6 +10,7 @@ interface DungeonViewProps {
   onBattleVictory: (floorNumber: number, expReward: number, goldReward: number) => void;
   onTakeBattleDamage: (damage: number) => void;
   onConsumeKey: () => void;
+  onTutorialFinished: () => void;
 }
 
 export const DungeonView: React.FC<DungeonViewProps> = ({
@@ -17,8 +19,11 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   onBattleVictory,
   onTakeBattleDamage,
   onConsumeKey,
+  onTutorialFinished,
 }) => {
   const [activeFloor, setActiveFloor] = useState<DungeonFloor | null>(null);
+  // Se crea una única ruta persistente; la misma semilla permite reproducirla al volver a entrar.
+  const [level1Route] = useState(() => createLevel1CampaignRoute());
 
   const handleStartFloor = (floor: DungeonFloor) => {
     if (player.currentHp <= 0) {
@@ -35,8 +40,24 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
   };
 
   const handleExitDungeon = () => {
+    if (activeFloor?.floorNumber === 0) {
+      onTutorialFinished();
+      // El portal del tutorial lleva de inmediato a la primera expedición real.
+      setActiveFloor(dungeons.find((floor) => floor.floorNumber === 1) ?? null);
+      return;
+    }
     setActiveFloor(null);
   };
+  const tutorialFloor: DungeonFloor = {
+    ...(dungeons[0] || { floorNumber: 0, name: 'Tutorial', description: '', recommendedLevel: 1, enemy: { id: 'tutorial', name: 'Espectro de práctica', title: 'Aprende a luchar', avatar: '🎯', hp: 80, maxHp: 80, attack: 2, defense: 0, weakness: 'fire', expReward: 0, goldReward: 0 }, isBoss: false, cleared: false }),
+    floorNumber: 0, name: 'Tutorial: Sendero del Mago', description: 'Aprende a moverte, atacar y combinar elementos.',
+  };
+  useEffect(() => {
+    if (!player.tutorialCompleted) setActiveFloor(tutorialFloor);
+  // Solo reacciona al estado de tutorial; tutorialFloor es una definición local estable en contenido.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.tutorialCompleted]);
+  const levels = Array.from({ length: 20 }, (_, index) => index + 1);
 
   // Si está jugando el piso activo en tiempo real:
   if (activeFloor) {
@@ -47,6 +68,8 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         onExit={handleExitDungeon}
         onVictory={onBattleVictory}
         onPlayerTakeDamage={onTakeBattleDamage}
+        isTutorial={activeFloor.floorNumber === 0}
+        campaignRoute={activeFloor.floorNumber === 1 ? level1Route : undefined}
       />
     );
   }
@@ -71,44 +94,20 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         </div>
       </div>
 
-      {/* Botón Destacado: Prueba Directa en Navegador / Modo Práctica */}
       <div className="retro-box-gold p-3 flex items-center justify-between">
         <div className="space-y-0.5">
           <div className="font-pixel-title text-[9px] text-amber-300 flex items-center gap-1.5">
-            <span>⚔️ PROBAR MOTOR DE COMBATE</span>
-            <span className="retro-badge bg-purple-950 text-purple-300 border-purple-500">PC / MOBILE</span>
+            <span>✦ TUTORIAL OPCIONAL</span>
           </div>
           <div className="font-pixel-text text-sm text-stone-200">
-            Entra gratis al combate para probar los hechizos, el dash y el ataque cargado.
+            Aprende movimiento, afinidades elementales y combate sin gastar llave.
           </div>
         </div>
         <button
-          onClick={() => {
-            const floorToUse = dungeons[0] || {
-              floorNumber: 1,
-              name: 'Atrio de Entrada',
-              description: 'Sala de entrenamiento elemental',
-              recommendedLevel: 1,
-              enemy: {
-                id: 'practice-target',
-                name: 'Enemigo de Práctica',
-                title: 'Objetivo',
-                avatar: '🎯',
-                hp: 180,
-                maxHp: 180,
-                attack: 8,
-                defense: 2,
-                expReward: 50,
-                goldReward: 25,
-              },
-              isBoss: false,
-              cleared: false,
-            };
-            setActiveFloor(floorToUse);
-          }}
+          onClick={() => setActiveFloor(tutorialFloor)}
           className="retro-btn-gold px-3 py-2 shrink-0 flex items-center gap-1 text-[8px]"
         >
-          <span>PROBAR AHORA</span>
+          <GraduationCap className="w-3 h-3" /><span>ENTRAR</span>
         </button>
       </div>
 
@@ -122,43 +121,62 @@ export const DungeonView: React.FC<DungeonViewProps> = ({
         </div>
       )}
 
-      {/* Lista de Mazmorras estilo RPG de Piedra */}
+      {/* Campaña: los niveles futuros ya existen como destino y se desbloquean por progreso real. */}
       <div className="space-y-3">
-        {dungeons.map((floor) => (
+        {levels.map((level) => {
+          const floor = dungeons.find((item) => item.floorNumber === level);
+          const previousFloor = dungeons.find((item) => item.floorNumber === level - 1);
+          const unlocked = level === 1 || !!previousFloor?.cleared;
+          const title = level === 1
+            ? 'Nivel 1: Bosque Profundo'
+            : level === 2
+              ? 'Nivel 2: Campamento Glacial'
+              : `Nivel ${level}: Región por descubrir`;
+          const description = level === 1
+            ? 'La primera expedición real: combate, tesoros y guardián.'
+            : level === 2
+              ? 'Un campamento congelado custodiado solo por acechadores de hielo.'
+              : `Completa misiones para abrir esta expedición.`;
+          return (
           <div
-            key={floor.floorNumber}
+            key={level}
             className={`${
-              floor.cleared
+              floor?.cleared
                 ? 'retro-box-stone outline-emerald-500'
                 : 'retro-box-stone'
-            } p-3`}
+            } p-3 ${!unlocked ? 'opacity-60' : ''}`}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="text-2xl p-2 bg-[#0f172a] border-2 border-[#18181b] shadow-[2px_2px_0px_#000]">
-                  {floor.enemy.avatar}
+                  {unlocked ? (floor?.enemy.avatar || '🌲') : '🔒'}
                 </span>
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="retro-badge bg-amber-950 text-amber-300 border-amber-600">
-                      Piso {floor.floorNumber}
+                      {unlocked ? `Nivel ${level}` : 'BLOQUEADO'}
                     </span>
-                    <h4 className="font-pixel-title text-[9px] text-stone-100">{floor.name}</h4>
+                    <h4 className="font-pixel-title text-[9px] text-stone-100">{title}</h4>
                   </div>
-                  <p className="font-pixel-text text-sm text-stone-300 mt-0.5">{floor.description}</p>
+                  <p className="font-pixel-text text-sm text-stone-300 mt-0.5">{description}</p>
+                  {level === 1 && (
+                    <p className="font-pixel-text text-xs text-emerald-300 mt-1">
+                      {getRouteSummary(level1Route.run)} · Ruta {level1Route.seedLabel}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <button
-                onClick={() => handleStartFloor(floor)}
-                className="retro-btn-gold px-3 py-1.5 flex items-center gap-1 text-[8px] shrink-0"
+                disabled={!unlocked || !floor}
+                onClick={() => floor && handleStartFloor(floor)}
+                className={`${unlocked ? 'retro-btn-gold' : 'retro-btn-stone'} px-3 py-1.5 flex items-center gap-1 text-[8px] shrink-0`}
               >
-                <Sword className="w-3 h-3" />
-                <span>Luchar</span>
+                {unlocked ? <Sword className="w-3 h-3" /> : <Lock className="w-3 h-3" />}<span>{unlocked ? 'Entrar' : 'Misiones'}</span>
               </button>
             </div>
           </div>
-        ))}
+        )})}
       </div>
     </div>
   );
