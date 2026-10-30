@@ -24,7 +24,7 @@ const task = (id = 'mission-1') => ({ id, title: 'Estudiar', description: 'Repas
   statAffinity: 'knowledge', difficulty: 'media', expReward: 10, goldReward: 2 });
 
 function harness() {
-  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false };
+  const state = { permission: 'granted', exact: 'granted', pending: [], delivered: [], scheduleCalls: [], cancelled: [], removed: [], overlays: [], overlayError: false, nativeEnabled: false, channelId: undefined };
   const plugin = {
     checkPermissions: async () => ({ display: state.permission }),
     requestPermissions: async () => ({ display: state.permission }),
@@ -51,7 +51,14 @@ function harness() {
     '@capacitor/core': { Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } },
     '@capacitor/local-notifications': { LocalNotifications: plugin },
     './reminderPlan': plan,
-    './reminderOverlay': { syncReminderOverlays: async (items) => { if (state.overlayError) throw new Error('overlay unavailable'); state.overlays = items; } },
+    './reminderOverlay': {
+      getReminderOverlayStatus: async () => ({ enabled: state.nativeEnabled, channelId: state.channelId }),
+      syncReminderOverlays: async (items) => {
+        if (state.overlayError) throw new Error('overlay unavailable');
+        state.overlays = items;
+        return { scheduledTaskIds: state.nativeEnabled ? items.filter((item) => item.at > Date.now()).map((item) => item.taskId) : [] };
+      },
+    },
   });
   return { state, api };
 }
@@ -200,4 +207,56 @@ test('the capacity limit keeps the nearest reminders instead of the first identi
   assert.equal(state.pending.length, 450);
   assert(result.scheduledTaskIds.includes('task-450'));
   assert(!result.scheduledTaskIds.includes('task-0'));
+});
+
+test('native alarm mode migrates scheduled tasks without leaving a duplicate Capacitor alarm', async () => {
+  const { state, api } = harness();
+  await api.syncTaskReminderNotifications([task()]);
+  assert.equal(state.pending.length, 1);
+  state.nativeEnabled = true;
+  const result = await api.syncTaskReminderNotifications([task()]);
+  assert.equal(state.pending.length, 0);
+  assert.equal(state.overlays.length, 1);
+  assert.deepEqual(result.scheduledTaskIds, [task().id]);
+  assert.equal(state.scheduleCalls.length, 1);
+  await api.syncTaskReminderNotifications([{ ...task(), completed: true }]);
+  assert.deepEqual(state.overlays, []);
+});
+
+test('disabling alarm mode restores the ordinary notification with the chosen channel', async () => {
+  const { state, api } = harness(); state.nativeEnabled = true;
+  await api.syncTaskReminderNotifications([task()]);
+  assert.equal(state.pending.length, 0);
+  state.nativeEnabled = false; state.channelId = 'silent-vibrate';
+  await api.syncTaskReminderNotifications([task()]);
+  assert.equal(state.pending.length, 1);
+  assert.equal(state.pending[0].channelId, 'silent-vibrate');
+  state.channelId = 'sound-still';
+  await api.syncTaskReminderNotifications([task()]);
+  assert.equal(state.pending.length, 1);
+  assert.equal(state.pending[0].channelId, 'sound-still');
+  assert.equal(state.scheduleCalls.length, 2);
+});
+
+test('native planning uses task dates without any delivered callback and keeps future missions first', () => {
+  const tasks = Array.from({ length: 450 }, (_, index) => ({ ...task(`past-${index}`), reminderAt: new Date(Date.now() - 60000).toISOString() }));
+  tasks.push(task('next'));
+  const rows = plan.nativeReminderPlan(tasks, true);
+  assert.equal(rows.length, 450);
+  assert.equal(rows[0].taskId, 'next');
+  assert.equal(rows[0].at, new Date(future).getTime());
+  assert.equal(rows[0].title, 'Estudiar');
+  assert.equal(rows[0].dueDate, future);
+  assert.deepEqual(plan.nativeReminderPlan([{ ...task(), completed: true }, { ...task('none'), reminderType: 'none' }], true), []);
+});
+
+test('alarm mode failure reports the limitation while retaining the ordinary fallback', async () => {
+  const { state, api } = harness(); state.nativeEnabled = true; state.overlayError = true;
+  const warning = console.warn; console.warn = () => {};
+  try {
+    const result = await api.syncTaskReminderNotifications([task()]);
+    assert.match(result.error, /modo de alarma/i);
+    assert.equal(state.pending.length, 1);
+    assert.equal(result.permission, 'granted');
+  } finally { console.warn = warning; }
 });

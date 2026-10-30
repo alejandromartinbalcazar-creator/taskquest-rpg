@@ -21,4 +21,10 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+    <style name="AppTheme.ReminderAlarm" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#080B20</item>
+        <item name="android:statusBarColor">#080B20</item>
+        <item name="android:navigationBarColor">#080B20</item>
+        <item name="android:colorAccent">#FBBF24</item>
+    </style>
 </resources>

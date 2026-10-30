@@ -1,4 +1,5 @@
 import type { Task } from '../types';
+import type { OverlayReminder } from './reminderOverlay';
 
 export const REMINDER_TAG = 'focusmission-task-reminder';
 export const MAX_PENDING_REMINDERS = 450;
@@ -41,4 +42,22 @@ export function reminderDateForTask(task: Task): Date | null {
 export function taskReminderSignature(task: Task, exact: boolean): string {
   return JSON.stringify([2, task.id, task.dueDate, task.reminderType, task.reminderAt || '',
     task.reminderCustomMinutes || '', task.title, task.description || '', exact]);
+}
+
+/** Build the native plan directly from tasks, never from WebView notification callbacks. */
+export function nativeReminderPlan(tasks: Task[], exact: boolean, now = Date.now()): OverlayReminder[] {
+  const rows = tasks.filter((task) => !task.completed).flatMap((task) => {
+    const at = reminderDateForTask(task)?.getTime();
+    return at === undefined ? [] : [{ id: notificationIdForTask(task.id), taskId: task.id, dueDate: task.dueDate,
+      signature: taskReminderSignature(task, exact), title: task.title,
+      body: task.description?.trim() || 'Tu misión te espera.', at, constant: task.reminderType === 'constant' }];
+  });
+  // Keep the nearest future alarms first. Past records only retain notification
+  // identities and fired receipts; they must not crowd out tomorrow's missions.
+  rows.sort((a, b) => Number(a.at <= now) - Number(b.at <= now) || a.at - b.at || a.taskId.localeCompare(b.taskId));
+  const used = new Set<number>();
+  return rows.slice(0, MAX_PENDING_REMINDERS).map((row) => {
+    while (used.has(row.id)) row.id = row.id === 2_147_483_646 ? 1 : row.id + 1;
+    used.add(row.id); return row;
+  });
 }

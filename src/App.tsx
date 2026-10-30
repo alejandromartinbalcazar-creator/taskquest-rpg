@@ -17,7 +17,7 @@ import { CloudSaveSnapshot } from './services/cloudSaveService';
 import { useCloudSync } from './hooks/useCloudSync';
 import { syncTaskReminderNotifications, type ReminderSyncStatus } from './services/taskReminders';
 import { taskIdFromReminderExtra, reminderOccurrenceTask } from './services/reminderPlan';
-import { pendingOverlayActions, acknowledgeOverlayActions, type OverlayAction } from './services/reminderOverlay';
+import { pendingOverlayActions, acknowledgeOverlayActions, listenForReminderAlarm, dismissReminderAlarm, type OverlayAction } from './services/reminderOverlay';
 import { MissionReminderSheet } from './components/MissionReminderSheet';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
@@ -43,6 +43,7 @@ export function App() {
   const [nativeOverlayActions, setNativeOverlayActions] = useState<OverlayAction[]>([]);
   const completedReminderOccurrences = useRef(new Set<string>());
   const refreshAlarmsOnLaunch = useRef(true);
+  const [reminderSettingsVersion, setReminderSettingsVersion] = useState(0);
 
   // El Home se presenta en vertical; la mazmorra cambia a horizontal al abrirse.
   useEffect(() => {
@@ -116,12 +117,18 @@ export function App() {
   }, [tasks]);
 
   useEffect(() => {
+    const refresh = () => setReminderSettingsVersion((version) => version + 1);
+    window.addEventListener('focusmission:reminder-settings-changed', refresh);
+    return () => window.removeEventListener('focusmission:reminder-settings-changed', refresh);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     const refreshExisting = refreshAlarmsOnLaunch.current;
     refreshAlarmsOnLaunch.current = false;
     void syncTaskReminderNotifications(tasks, { refreshExisting }).then((status) => { if (active) setReminderStatus(status); });
     return () => { active = false; };
-  }, [tasks]);
+  }, [tasks, reminderSettingsVersion]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -146,6 +153,14 @@ export function App() {
         const dueDate = extra.dueDate;
         setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
       }
+    });
+    return () => { void listener.then((handle) => handle.remove()); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = listenForReminderAlarm(({ taskId, dueDate }) => {
+      setReminderPrompts((previous) => previous.some((item) => item.taskId === taskId && item.dueDate === dueDate) ? previous : [...previous, { taskId, dueDate }]);
     });
     return () => { void listener.then((handle) => handle.remove()); };
   }, []);
@@ -586,7 +601,10 @@ export function App() {
       {reminderPrompts.length > 0 && (() => {
         const task = reminderPrompts.map((prompt) => reminderOccurrenceTask(tasks, prompt)).find(Boolean);
         if (!task) return null;
-        const dismiss = () => setReminderPrompts((previous) => previous.filter((prompt) => prompt.taskId !== task.id || prompt.dueDate !== task.dueDate));
+        const dismiss = () => {
+          void dismissReminderAlarm(task.id, task.dueDate).catch(console.warn);
+          setReminderPrompts((previous) => previous.filter((prompt) => prompt.taskId !== task.id || prompt.dueDate !== task.dueDate));
+        };
         return (
           <MissionReminderSheet task={task} onClose={dismiss} onDone={() => { dismiss(); handleCompleteTask(task.id); }} />
         );

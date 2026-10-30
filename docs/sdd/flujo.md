@@ -6,7 +6,7 @@ SDD significa acordar y conservar una descripción comprobable de lo que se quie
 
 1. **Entender:** revisar el código afectado y anotar el problema, la experiencia deseada y las dudas. Separar lo existente de lo propuesto.
 2. **Especificar:** crear `specs/NNN-nombre/spec.md` usando la plantilla. Describir qué verá y podrá hacer el usuario, criterios observables, casos límite y qué queda fuera. Aclarar con el usuario las decisiones que cambien materialmente el resultado.
-3. **Planificar:** completar `plan.md` con archivos involucrados, datos, compatibilidad, riesgos, permisos, pruebas y pasos pequeños. La especificación describe el resultado; el plan explica cómo alcanzarlo.
+3. **Revisar y planificar:** presentar la especificación al usuario con un resumen legible y los límites antes de implementar. Esperar su aprobación explícita; si ya la dio en la conversación, no pedirla otra vez. Después completar `plan.md` con archivos involucrados, datos, compatibilidad, riesgos, permisos, pruebas y pasos pequeños. La especificación describe el resultado; el plan explica cómo alcanzarlo.
 4. **Dividir:** preparar `tasks.md` con tareas ordenadas, verificables y asociadas a los criterios. No marcar ninguna como terminada antes de comprobarla.
 5. **Construir y comprobar:** implementar por incrementos; ejecutar compilación y pruebas pertinentes. Para apariencia y controles, probar en la aplicación; para capacidades nativas, probar en el dispositivo o declarar la prueba pendiente.
 6. **Cerrar y mantener:** contrastar criterios, código y resultados; documentar evidencias y limitaciones. Si algo cambió, actualizar los documentos. Registrar en el PR lo necesario para revisar el resultado, cuando corresponda.

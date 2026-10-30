@@ -1,5 +1,8 @@
 # Aviso destacado de misiones
 
+## Resultado de la revisión con el usuario
+El usuario informa que la tarjeta aparece solo al entrar a FocusMission. La entrega externa no está validada y no cumple la necesidad confirmada de mostrar el aviso también desde el inicio, otras aplicaciones y el bloqueo. La exclusión del bloqueo descrita abajo no cubre el alcance deseado. La propuesta de corrección está en `specs/003-alarma-misiones/spec.md`, pendiente de revisión y aprobación antes de programar.
+
 ## Objetivo
 Al llegar un recordatorio, mostrar un aviso legible con la misión y las acciones «Realizado» y «Cerrar». Realizado utiliza el mismo proceso y recompensas que completar desde Misiones; Cerrar no modifica la misión.
 

@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import type { Task } from '../types';
-import { syncReminderOverlays, type OverlayReminder } from './reminderOverlay';
-import { MAX_PENDING_REMINDERS, REMINDER_TAG, notificationIdForTask, reminderDateForTask, taskReminderSignature } from './reminderPlan';
+import { getReminderOverlayStatus, syncReminderOverlays } from './reminderOverlay';
+import { MAX_PENDING_REMINDERS, REMINDER_TAG, nativeReminderPlan, notificationIdForTask, reminderDateForTask, taskReminderSignature } from './reminderPlan';
 
 export type ReminderPermission = 'granted' | 'denied' | 'unsupported';
 export interface ReminderSyncStatus {
@@ -44,6 +44,22 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     ]);
     const pending = pendingResult.notifications.filter(isTaskReminder);
     const delivered = deliveredResult.notifications.filter(isTaskReminder);
+    const presentation = await getReminderOverlayStatus().catch(() => null);
+    let deliveryError: string | undefined;
+    if (presentation?.enabled) {
+      try {
+        // Native delivery owns the alarm, notification and presentation together.
+        // No second Capacitor alarm is left racing the same reminder.
+        const native = await syncReminderOverlays(permission === 'granted' ? nativeReminderPlan(snapshot, exact) : []);
+        if (pending.length) await LocalNotifications.cancel({ notifications: pending.map(({ id }) => ({ id })) });
+        const obsolete = delivered.filter((notice) => !snapshot.some((task) => !task.completed && task.id === extraOf(notice).taskId));
+        if (obsolete.length) await LocalNotifications.removeDeliveredNotificationsById({ ids: obsolete.map(({ id }) => id) });
+        return { permission, exact, scheduledTaskIds: native.scheduledTaskIds };
+      } catch (error) {
+        console.warn('No se pudo programar el modo de alarma:', error);
+        deliveryError = 'El modo de alarma no se pudo programar. Revisa la configuración; se intentará la notificación habitual.';
+      }
+    }
     const usedIds = new Set([...pendingResult.notifications, ...deliveredResult.notifications]
       .filter((item) => !isTaskReminder(item)).map((item) => item.id));
     const pendingById = new Map(pending.map((item) => [item.id, item]));
@@ -62,7 +78,7 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
       usedIds.add(id);
       let at = reminderDateForTask(task);
       if (!at) continue;
-      const signature = taskReminderSignature(task, exact);
+      const signature = taskReminderSignature(task, exact) + (presentation?.channelId || '');
       const current = pendingById.get(id);
       const shown = deliveredById.get(id);
       const currentMatches = current && extraOf(current).taskId === task.id && extraOf(current).signature === signature;
@@ -92,6 +108,7 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
         id,
         title: `¡Misión pendiente: ${task.title}!`,
         body: task.description?.trim() || 'Tu misión te espera. ¡Completa la tarea para ganar tu recompensa!',
+        channelId: presentation?.channelId,
         schedule: { at, allowWhileIdle: true },
         isExactNotification: exact,
         ongoing: task.reminderType === 'constant',
@@ -106,22 +123,11 @@ export function syncTaskReminderNotifications(tasks: Task[], options: { refreshE
     if (cancelIds.length) await LocalNotifications.cancel({ notifications: cancelIds });
     if (removeIds.length) await LocalNotifications.removeDeliveredNotificationsById({ ids: removeIds });
     if (desired.length) await LocalNotifications.schedule({ notifications: desired });
-    // Mirror only alarms that were actually scheduled. Native overlays have their
-    // own explicit opt-in; failure must not disable the ordinary notification.
-    try {
-      const scheduled = (await LocalNotifications.getAll({ state: 'SCHEDULED' })).notifications;
-      const overlays: OverlayReminder[] = [];
-      for (const notice of scheduled.filter(isTaskReminder)) {
-        const extra = notice.extra as { taskId?: string; dueDate?: string; signature?: string };
-        const at = notice.schedule?.at ? new Date(notice.schedule.at).getTime() : NaN;
-        if (permission === 'granted' && extra.taskId && extra.dueDate && extra.signature && at > Date.now()) {
-          overlays.push({ id: notice.id, taskId: extra.taskId, dueDate: extra.dueDate, signature: extra.signature,
-            title: notice.title, body: notice.body, at });
-        }
-      }
-      await syncReminderOverlays(overlays);
-    } catch (error) { console.warn('No se pudieron sincronizar los avisos superpuestos:', error); }
-    return { permission, exact, scheduledTaskIds };
+    if (!deliveryError) {
+      try { await syncReminderOverlays(permission === 'granted' ? nativeReminderPlan(snapshot, exact) : []); }
+      catch (error) { console.warn('No se pudo actualizar la copia nativa de recordatorios:', error); }
+    }
+    return { permission, exact, scheduledTaskIds, ...(deliveryError ? { error: deliveryError } : {}) };
   });
   syncQueue = result.then(() => undefined, () => undefined);
   return result.catch((error) => {

@@ -49,7 +49,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon
 
       - name: Locate and Prepare APK
         run: |

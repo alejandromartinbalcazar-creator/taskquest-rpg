@@ -7,6 +7,7 @@ Estas instrucciones se aplican a este repositorio. Las peticiones actuales del u
 - Revisar el estado de Git y preservar cambios existentes y recursos del usuario. No reiniciar ni borrar trabajo ajeno.
 - Consultar `docs/sdd/vision.md` y `docs/sdd/estado-actual.md`; contrastar el estado descrito con el código relevante antes de afirmarlo.
 - Para una funcionalidad nueva, un cambio de comportamiento o un rediseño relevante, seguir `docs/sdd/flujo.md`. Crear o actualizar una especificación pequeña en `specs/` antes de programar. Una corrección puntual o cambio trivial no necesita tres documentos nuevos.
+- Presentar esa especificación al usuario con un resumen de la experiencia y sus límites y esperar su aprobación antes de implementar un cambio relevante. Una especificación escrita pero no presentada no cuenta como revisada. Si ya aprobó el alcance en la conversación, continuar sin pedir la misma aprobación otra vez. La investigación y la preparación de la especificación pueden avanzar antes de esa aprobación.
 - Separar hechos observados, decisiones y suposiciones. Preguntar cuando una decisión pendiente cambie materialmente el resultado y no pueda inferirse del contexto. No bloquear el trabajo independiente por una preferencia menor.
 - No presentar la visión futura como si ya estuviera implementada; no modificar funcionalidades ajenas sin justificación.
 
